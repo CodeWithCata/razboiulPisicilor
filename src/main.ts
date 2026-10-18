@@ -3,6 +3,7 @@ import { bindGameSize, GAME_BASE_HEIGHT, GAME_BASE_WIDTH } from './config/balanc
 import { usesTouchControls } from './core/device';
 import { initPwa } from './core/pwa';
 import { watchRelayout } from './core/relayout';
+import { watchRotateHint } from './core/rotateHint';
 import { watchViewport } from './core/viewport';
 import { BootScene } from './scenes/BootScene';
 import { GameOverScene } from './scenes/GameOverScene';
@@ -44,3 +45,8 @@ const game = new Phaser.Game({
 bindGameSize(game.scale); // GAME.width / GAME.height now follow the real canvas size
 watchViewport(game); // phones: follow the visible height (address bar in or out, turning the phone)
 watchRelayout(game); // menu and end screens are rebuilt when the screen size changes
+watchRotateHint(); // tap on the "turn your phone" page = try fullscreen + landscape (it used to be a dead end)
+// Tells the boot error reporter in index.html that the game started (it only reports errors before this).
+game.events.once(Phaser.Core.Events.READY, () => {
+  (window as unknown as { __varuReady?: boolean }).__varuReady = true;
+});

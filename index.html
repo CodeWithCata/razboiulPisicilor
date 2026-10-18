@@ -29,12 +29,37 @@
       /* Phones held upright: ask to turn the phone (the game pauses by itself, see config/pause.ts). */
       #rotate-hint { display: none; position: fixed; inset: 0; z-index: 10; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; box-sizing: border-box; text-align: center; background: #14182b; color: #fff3d6; font: 28px/1.3 'Lilita One', Impact, sans-serif; }
       #rotate-hint .turn { font-size: 72px; }
+      #rotate-hint .sub { font-size: 18px; opacity: 0.8; max-width: 420px; }
       @media (orientation: portrait) and (pointer: coarse) { #rotate-hint { display: flex; } }
     </style>
   </head>
   <body>
     <div id="game"></div>
-    <div id="rotate-hint"><div class="turn">&#x1F4F1;&#x21BB;</div><div>Întoarce telefonul pe orizontală ca să joci</div></div>
+<div id="boot-error"><div>Jocul nu a putut porni 😿 Fă o poză cu acest ecran și trimite-o.</div><pre></pre></div>
+    <div id="rotate-hint"><div class="turn">&#x1F4F1;&#x21BB;</div><div>Întoarce telefonul pe orizontală ca să joci</div><div class="sub">Nu se rotește? Oprește „Blocare orientare” (iPhone: Centrul de control; Android: setările rapide). Pe Android poți și să atingi ecranul.</div></div>
+    <style>
+      #boot-error { display: none; position: fixed; inset: 0; z-index: 20; box-sizing: border-box; padding: 20px; overflow: auto; background: #14182b; color: #fff3d6; font: 16px/1.4 system-ui, sans-serif; user-select: text; -webkit-user-select: text; }
+      #boot-error pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; color: #f5c518; }
+    </style>
+    <script>
+      /* If the game cannot start (old browser, blocked file, no WebGL) show WHY instead of a blank page. Only before the game is ready. */
+      (function () {
+        function show(msg) {
+          if (window.__varuReady) return;
+          var box = document.getElementById('boot-error');
+          if (!box) return;
+          box.style.display = 'block';
+          box.querySelector('pre').textContent += msg + '\n';
+        }
+        window.addEventListener('error', function (e) {
+          var t = e.target;
+          if (t && t !== window) { if (t.tagName === 'SCRIPT') show('Nu s-a putut incarca: ' + (t.src || '')); return; }
+          show((e.message || 'Eroare') + (e.filename ? '\n' + e.filename + ':' + e.lineno : ''));
+        }, true);
+        window.addEventListener('unhandledrejection', function (e) { show('Promise: ' + ((e.reason && e.reason.message) || e.reason)); });
+        setTimeout(function () { show('Jocul nu a pornit in 15 secunde. Browser: ' + navigator.userAgent); }, 15000);
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
