@@ -34,7 +34,9 @@ const game = new Phaser.Game({
   // smoothStep off: Phaser normally hands the game an AVERAGE of the last frame times. On a phone whose frames come unevenly
   // (8, 8, 16 ms...) that makes Varu advance the same distance every frame, so his speed on screen wobbles. Raw times fix it.
   fps: { smoothStep: false },
-  scale: { mode: Phaser.Scale.EXPAND, autoCenter: Phaser.Scale.CENTER_BOTH },
+  // fullscreenTarget: go fullscreen with #game ITSELF. Without it Phaser wraps the canvas in a new div and fullscreens that, but keeps
+  // measuring #game (inset by the notch / home bar), so the canvas stayed smaller than the screen and the rest showed black.
+  scale: { mode: Phaser.Scale.EXPAND, autoCenter: Phaser.Scale.CENTER_BOTH, fullscreenTarget: 'game' },
   // fixedStep off: physics moves things by the real time of each frame. With the default (60 fixed steps a second) a 90 or 120 Hz
   // phone shows Varu moving only every second frame, which looks choppy, and uneven when the refresh rate wanders.
   physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, fixedStep: false } },
