@@ -1,0 +1,130 @@
+import Phaser from 'phaser';
+import { poly } from '../assets/paint';
+import { BUFF_BADGES as B } from '../config/buffBadges';
+import { PICKUP_VISUALS } from '../config/pickups';
+import { FONT } from '../config/style';
+import type { Pt } from '../core/polyClip';
+import { fitToSize } from '../core/sprite';
+import type { BuffInfo } from '../core/events';
+
+const DEG = Math.PI / 180;
+
+interface Badge {
+  info: BuffInfo;
+  gfx: Phaser.GameObjects.Graphics;
+  icon: Phaser.GameObjects.Sprite;
+  iconScale: number;
+  seconds: Phaser.GameObjects.Text;
+  /** Counts down while the badge pops in / bumps (0 = idle). */
+  popInMs: number;
+  bumpMs: number;
+}
+
+/**
+ * Round timer badges for the active power-ups (HUD, top left under the cat meter).
+ * Each looks like its pickup in the arena: a glow disc and a ring in its color (draining clockwise) around its picture,
+ * with the seconds left under it. In the last stretch the ring blinks red and the badge shakes a little.
+ */
+export class BuffBadges {
+  private badges: Badge[] = [];
+  private clockMs = 0;
+
+  constructor(private readonly scene: Phaser.Scene) {}
+
+  /** The list of buffs changed (a new one, a refreshed one, or one ended). */
+  setBuffs(buffs: readonly BuffInfo[]): void {
+    const old = new Map(this.badges.map((b) => [b.info.kind, b]));
+    const next = buffs.map((info): Badge => {
+      const prev = old.get(info.kind);
+      if (!prev) return this.create({ ...info });
+      old.delete(info.kind);
+      if (info.remainingMs > prev.info.remainingMs + 50) prev.bumpMs = B.bump.ms; // picked up again: more time
+      prev.info = { ...info };
+      return prev;
+    });
+    old.forEach((b) => {
+      b.gfx.destroy();
+      b.icon.destroy();
+      b.seconds.destroy();
+    });
+    this.badges = next;
+    this.draw();
+  }
+
+  update(delta: number): void {
+    if (this.badges.length === 0) return;
+    this.clockMs += delta;
+    for (const b of this.badges) {
+      b.info.remainingMs = Math.max(0, b.info.remainingMs - delta);
+      b.popInMs = Math.max(0, b.popInMs - delta);
+      b.bumpMs = Math.max(0, b.bumpMs - delta);
+    }
+    this.draw();
+  }
+
+  private create(info: BuffInfo): Badge {
+    const visual = PICKUP_VISUALS[info.kind];
+    const gfx = this.scene.add.graphics();
+    const icon = this.scene.add.sprite(0, 0, visual.tex);
+    fitToSize(icon, B.iconSize);
+    const seconds = this.scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: `${B.seconds.size}px`, color: B.colors.seconds, stroke: B.colors.secondsStroke, strokeThickness: B.seconds.strokeThickness }).setOrigin(0.5);
+    return { info, gfx, icon, iconScale: icon.scale, seconds, popInMs: B.popIn.ms, bumpMs: 0 };
+  }
+
+  private center(i: number): { cx: number; cy: number } {
+    return { cx: B.x + B.r + i * (B.r * 2 + B.gap), cy: B.y + B.r };
+  }
+
+  private draw(): void {
+    this.badges.forEach((b, i) => this.drawBadge(b, i));
+  }
+
+  private drawBadge(b: Badge, index: number): void {
+    const g = b.gfx;
+    const { cx, cy } = this.center(index);
+    const color = PICKUP_VISUALS[b.info.kind].color;
+    const ratio = Phaser.Math.Clamp(b.info.remainingMs / b.info.durationMs, 0, 1);
+    const warning = b.info.remainingMs <= B.warn.ms;
+    const blinkOn = warning && Math.floor(this.clockMs / B.warn.blinkMs) % 2 === 0;
+    const shake = warning ? Math.sin(this.clockMs / 28) * B.warn.shakePx : 0;
+
+    const popIn = b.popInMs > 0 ? Phaser.Math.Easing.Back.Out(1 - b.popInMs / B.popIn.ms) : 1;
+    const bump = 1 + B.bump.grow * Math.sin((b.bumpMs / B.bump.ms) * Math.PI);
+    const scale = Math.max(0.01, popIn * bump);
+    const r = B.r;
+    const rr = r - B.ringW / 2;
+
+    g.clear();
+    g.setPosition(cx + shake, cy).setScale(scale);
+
+    // Glow disc, then the ring: a faint track with the part still left drawn over it, draining clockwise from the top.
+    const ringColor = blinkOn ? B.colors.warn : color;
+    g.fillStyle(color, B.glowAlpha).fillCircle(0, 0, r);
+    g.lineStyle(B.ringW, color, B.trackAlpha).strokeCircle(0, 0, rr);
+    if (ratio > 0) {
+      g.lineStyle(B.ringW, ringColor, B.ringAlpha);
+      if (ratio >= 0.999) g.strokeCircle(0, 0, rr);
+      else g.strokePoints(poly(this.arc(rr, -90 * DEG, (-90 + 360 * ratio) * DEG, Math.max(3, Math.ceil(B.arcSegments * ratio)))), false);
+    }
+
+    // The pickup's picture.
+    b.icon.setPosition(cx + shake, cy).setScale(b.iconScale * scale).setAlpha(blinkOn ? B.warn.iconAlpha : 1);
+
+    // Seconds left, under the badge.
+    const textY = cy + (r + B.seconds.gap) * scale;
+    b.seconds
+      .setText((Math.ceil(b.info.remainingMs / 100) / 10).toFixed(1))
+      .setColor(blinkOn ? B.colors.warnText : B.colors.seconds)
+      .setScale(scale)
+      .setPosition(cx + shake, textY);
+  }
+
+  private arc(r: number, from: number, to: number, steps: number): Pt[] {
+    const pts: Pt[] = [];
+    for (let i = 0; i <= steps; i++) {
+      const a = from + ((to - from) * i) / steps;
+      pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
+    return pts;
+  }
+}

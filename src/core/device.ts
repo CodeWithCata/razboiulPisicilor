@@ -1,0 +1,12 @@
+/**
+ * Phone or tablet? The main pointer is a finger there, while a touchscreen laptop still has a mouse.
+ * Adding ?touch=1 to the address forces the touch controls (handy for testing on a computer).
+ */
+export function usesTouchControls(): boolean {
+  try {
+    if (new URLSearchParams(window.location.search).get('touch') === '1') return true;
+    return window.matchMedia('(pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+}

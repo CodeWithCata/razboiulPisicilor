@@ -1,0 +1,530 @@
+import Phaser from 'phaser';
+import { Tex, type TexKey } from '../assets/keys';
+import { PLAYER } from '../config/balance';
+import { bus, Events, type PlayerHealthPayload } from '../core/events';
+import type { InputSource } from '../input/InputSource';
+import { Actor } from './Actor';
+import { gameClock } from '../core/clock';
+import { CIG_SMOKE, ENERGY_TRAIL, GOLD_BELT, MILK_FX, MILK_TRAIL, SMOKE_BREAK, VARU_ANIM } from '../config/animation';
+import { BELT_FX, css, FONT } from '../config/style';
+
+/** Body frames of the cigarette drag: arm down, half way, cigarette at his mouth. */
+const BODY_FRAMES: readonly TexKey[] = [Tex.Varu, Tex.VaruDrag1, Tex.VaruDrag2];
+
+const smoothstep = (u: number): number => u * u * (3 - 2 * u);
+
+/** Varu. Sprite must face UP; we rotate it toward the aim direction. */
+export class Player extends Actor {
+  /** Power-ups will change these later (milk, energy drink, golden belt). */
+  speedMultiplier = 1;
+  damageMultiplier = 1;
+  rangeMultiplier = 1;
+  /** True while the golden belt is active (PowerUpSystem sets it): gold strap, sticky white goo. */
+  goldenBelt = false;
+  /** True while the milk buff is active (PowerUpSystem sets it): drippy white trail. */
+  milkTrail = false;
+  /** True while the energy drink buff is active (PowerUpSystem sets it): small green Z z z letters behind him. */
+  energyTrail = false;
+
+  /** Current aim direction (normalized). Ninja cats use it to appear behind Varu. */
+  readonly facing = new Phaser.Math.Vector2(0, -1);
+
+  private invincibleUntil = 0;
+  /** Dev only (debug key G): nothing hurts Varu. */
+  godMode = false;
+  private phase = 0;
+  private rockAmount = 0;
+  private legSwing = 0;
+  private readonly legL: Phaser.GameObjects.Image;
+  private readonly legR: Phaser.GameObjects.Image;
+  private readonly heldBelt: Phaser.GameObjects.Image;
+  private readonly smoke: Phaser.GameObjects.Particles.ParticleEmitter;
+  private smokeTimer = 0;
+  /** Cigarette drag: ms since it started (-1 = not smoking), how far the arm is up (0..1), which body frame shows. */
+  private breakMs = -1;
+  private breakPose = 0;
+  private bodyFrame = 0;
+  private exhaled = false;
+  private readonly ember: Phaser.GameObjects.Image;
+  /** Goo dripping off the golden belt in his fist, and the splat when he grabs it. */
+  private readonly goo: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly gooBurst: Phaser.GameObjects.Particles.ParticleEmitter;
+  private gooTimer = 0;
+  /** The milk trail: a smeared white ribbon on the ground (drawn from his recent path) plus splotches beside it. */
+  private readonly milkGfx: Phaser.GameObjects.Graphics;
+  private readonly milkPath: Array<{ x: number; y: number; t: number }> = [];
+  private readonly milkBlobs: Array<{ x: number; y: number; r: number; t: number; life: number }> = [];
+  private milkTimer = 0;
+  /** The Z z z trail: where the last letter dropped, how many have dropped (picks the size), idle timer. */
+  private zLast: { x: number; y: number } | null = null;
+  private zCount = 0;
+  private zTimer = 0;
+  private beltIsGold = false;
+  private readonly tipPoint = new Phaser.Math.Vector2();
+  /** False while the belt swings or flies: the belt in his fist is hidden then (BeltSystem sets it). */
+  beltInHand = true;
+  /** Extra turn (radians) while the belt spins him around (BeltSystem sets it). */
+  spinTurn = 0;
+
+  constructor(scene: Phaser.Scene, x: number, y: number) {
+    super(scene, x, y, Tex.Varu, { maxHp: PLAYER.maxHp, size: PLAYER.size, hitRadius: PLAYER.hitRadius });
+    this.legL = scene.add.image(x, y, Tex.VaruLegL).setDepth(19);
+    this.legR = scene.add.image(x, y, Tex.VaruLegR).setDepth(19);
+    this.heldBelt = scene.add.image(x, y, Tex.VaruBelt).setDepth(21);
+    this.smoke = scene.add.particles(0, 0, Tex.Particle, {
+      emitting: false,
+      lifespan: CIG_SMOKE.lifespanMs,
+      speed: CIG_SMOKE.speed,
+      angle: CIG_SMOKE.angleDeg,
+      scale: CIG_SMOKE.scale,
+      alpha: CIG_SMOKE.alpha,
+      tint: [...CIG_SMOKE.tint],
+    }).setDepth(22);
+    this.ember = scene.add.image(x, y, Tex.Particle).setTint(SMOKE_BREAK.ember.tint).setDepth(23).setVisible(false);
+    this.goo = scene.add.particles(0, 0, Tex.MilkDrop, {
+      emitting: false,
+      gravityY: MILK_FX.gravity * GOLD_BELT.drops.gravityMult,
+      lifespan: GOLD_BELT.held.lifespanMs,
+      speed: GOLD_BELT.held.speed,
+      scale: GOLD_BELT.held.scale,
+      alpha: GOLD_BELT.held.alpha,
+      tint: [...GOLD_BELT.goo],
+    }).setDepth(22);
+    this.gooBurst = scene.add.particles(0, 0, Tex.MilkDrop, {
+      emitting: false,
+      gravityY: MILK_FX.gravity * GOLD_BELT.drops.gravityMult,
+      lifespan: GOLD_BELT.flourish.lifespanMs,
+      speed: GOLD_BELT.flourish.speed,
+      scale: GOLD_BELT.flourish.scale,
+      alpha: GOLD_BELT.flourish.alpha,
+      tint: [...GOLD_BELT.goo],
+    }).setDepth(22);
+    this.milkGfx = scene.add.graphics().setDepth(3);
+    this.setCollideWorldBounds(true);
+    this.setDepth(20);
+    this.emitHealth();
+  }
+
+  tick(input: InputSource): void {
+    if (!this.alive) return;
+
+    if (!this.isKnockedBack) {
+      const speed = PLAYER.speed * this.speedMultiplier;
+      this.setVelocity(input.move.x * speed, input.move.y * speed);
+    }
+    this.facing.copy(input.aim);
+    this.setRotation(input.aim.angle() + Math.PI / 2 + this.spinTurn);
+    this.waddle();
+    this.syncShadow();
+  }
+
+  /** Smooth waddle: rock left and right while walking, eased in and out. */
+  private waddle(): void {
+    if (!VARU_ANIM.enabled) return;
+    const dt = Math.min(this.scene.game.loop.delta, 50) / 1000;
+    const speed = (this.body as Phaser.Physics.Arcade.Body).speed;
+    const moving = speed >= VARU_ANIM.idleSpeed;
+    if (moving) this.phase += speed * dt * VARU_ANIM.radPerPx;
+    const target = moving ? 1 : 0;
+    this.rockAmount += (target - this.rockAmount) * Math.min(1, VARU_ANIM.blendPerSec * dt);
+    this.legSwing = Math.sin(this.phase) * this.rockAmount * VARU_ANIM.legSwing;
+    if (this.rockAmount < 0.01) return;
+    this.rotation += Math.sin(this.phase) * this.rockAmount * Phaser.Math.DegToRad(VARU_ANIM.tiltDeg);
+  }
+
+  /** A point on the body texture (relative to its center) in world space: follows his turn and size. */
+  private bodyPoint(local: { readonly x: number; readonly y: number }, out: Phaser.Math.Vector2): Phaser.Math.Vector2 {
+    const k = this.scaleX;
+    const lx = local.x * k;
+    const ly = local.y * k;
+    const c = Math.cos(this.rotation);
+    const s = Math.sin(this.rotation);
+    return out.set(this.x + lx * c - ly * s, this.y + lx * s + ly * c);
+  }
+
+  /** Where his right fist is in the world. The belt swings from here. */
+  handPosition(out = new Phaser.Math.Vector2()): Phaser.Math.Vector2 {
+    return this.bodyPoint(BELT_FX.handOffset, out);
+  }
+
+  /** Where the cigarette tip is now: at his side, or at his mouth while the arm is up. */
+  private tipLocal(): { x: number; y: number } {
+    const a = CIG_SMOKE.tipOffset;
+    const b = SMOKE_BREAK.tipOffset;
+    return { x: a.x + (b.x - a.x) * this.breakPose, y: a.y + (b.y - a.y) * this.breakPose };
+  }
+
+  /** A little smoke puff from the cigarette now and then (time from the frame delta, so it waits during pause). */
+  private puffSmoke(delta: number): void {
+    if (!CIG_SMOKE.enabled || !this.alive) return;
+    this.smokeTimer += delta;
+    if (this.smokeTimer < CIG_SMOKE.everyMs) return;
+    this.smokeTimer -= CIG_SMOKE.everyMs;
+    const tip = this.bodyPoint(this.tipLocal(), this.tipPoint);
+    this.smoke.emitParticleAt(tip.x, tip.y, 1);
+  }
+
+  /** Food or energy drink: he takes a drag. The arm swings up, the tip glows, then a cloud of smoke goes out in front of him. Visual only. */
+  smokeBreak(): void {
+    if (!SMOKE_BREAK.enabled || !this.alive) return;
+    this.breakMs = 0;
+    this.exhaled = false;
+    bus.emit(Events.SmokeBreak, { x: this.x, y: this.y });
+  }
+
+  /** The golden belt just landed in his fist: it flashes gold and splats goo. */
+  goldenBeltFlourish(): void {
+    if (!GOLD_BELT.enabled || !this.alive) return;
+    const f = GOLD_BELT.flourish;
+    const at = this.bodyPoint(f.burstOffset, new Phaser.Math.Vector2());
+    this.gooBurst.explode(f.drops, at.x, at.y);
+    this.heldBelt.setTint(f.flashTint).setTintMode(Phaser.TintModes.FILL);
+    this.scene.time.delayedCall(f.flashMs, () => {
+      if (!this.heldBelt.active) return;
+      this.heldBelt.clearTint();
+      this.heldBelt.setTintMode(Phaser.TintModes.MULTIPLY);
+    });
+  }
+
+  /** Runs the cigarette drag: arm up (smooth), hold with a glowing tip, blow the smoke out, arm down. */
+  private updateSmokeBreak(delta: number): void {
+    const s = SMOKE_BREAK;
+    if (this.breakMs >= 0 && !this.alive) {
+      this.breakMs = -1;
+      this.breakPose = 0;
+    }
+    if (this.breakMs >= 0) {
+      this.breakMs += delta;
+      const t = this.breakMs;
+      const holdEnd = s.raiseMs + s.holdMs;
+      if (t < s.raiseMs) this.breakPose = smoothstep(t / s.raiseMs);
+      else if (t < holdEnd) this.breakPose = 1;
+      else if (t < holdEnd + s.lowerMs) {
+        if (!this.exhaled) {
+          this.exhaled = true;
+          this.exhale();
+        }
+        this.breakPose = 1 - smoothstep((t - holdEnd) / s.lowerMs);
+      } else {
+        this.breakMs = -1;
+        this.breakPose = 0;
+      }
+    }
+
+    const frame = this.breakPose < 0.25 ? 0 : this.breakPose < 0.75 ? 1 : 2;
+    if (frame !== this.bodyFrame) {
+      this.bodyFrame = frame;
+      this.setTexture(BODY_FRAMES[frame]);
+    }
+
+    // The tip glows brighter and pulses while the cigarette is at his mouth.
+    const glowing = this.breakMs >= 0 && frame === 2;
+    this.ember.setVisible(glowing && this.visible);
+    if (glowing) {
+      const tip = this.bodyPoint(this.tipLocal(), this.tipPoint);
+      const pulse = 0.5 + 0.5 * Math.sin(this.breakMs / s.ember.pulseMs);
+      this.ember.setPosition(tip.x, tip.y).setScale(this.scaleX * (s.ember.scale.min + (s.ember.scale.max - s.ember.scale.min) * pulse) * 2);
+    }
+  }
+
+  /** A stream of smoke puffs out of his mouth, in the direction he faces. Tweened images, no emitter, so they can be aimed. */
+  private exhale(): void {
+    const e = SMOKE_BREAK.exhale;
+    const mouth = new Phaser.Math.Vector2();
+    for (let i = 0; i < e.puffs; i++) {
+      this.scene.time.delayedCall(i * e.staggerMs, () => {
+        if (!this.active) return;
+        this.bodyPoint(SMOKE_BREAK.mouthOffset, mouth);
+        const angle = this.facing.angle() + Phaser.Math.FloatBetween(-e.spreadRad, e.spreadRad);
+        const dist = Phaser.Math.FloatBetween(e.distance.min, e.distance.max);
+        const puff = this.scene.add
+          .image(mouth.x, mouth.y, Tex.Particle)
+          .setDepth(22)
+          .setTint(e.tint[Phaser.Math.Between(0, e.tint.length - 1)])
+          .setAlpha(e.alpha.start)
+          .setScale(e.scale.start);
+        this.scene.tweens.add({
+          targets: puff,
+          x: mouth.x + Math.cos(angle) * dist,
+          y: mouth.y + Math.sin(angle) * dist,
+          scale: e.scale.end,
+          alpha: e.alpha.end,
+          duration: Phaser.Math.Between(e.durationMs.min, e.durationMs.max),
+          ease: 'Cubic.easeOut',
+          onComplete: () => puff.destroy(),
+        });
+      });
+    }
+  }
+
+  /** He just drank the milk: a big white splat of splotches around him. */
+  milkSplash(): void {
+    if (!MILK_TRAIL.enabled || !this.alive) return;
+    const sp = MILK_TRAIL.splash;
+    const now = gameClock.now;
+    for (let i = 0; i < sp.blobs; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.sqrt(Math.random()) * sp.spread;
+      this.milkBlobs.push({
+        x: this.x + Math.cos(a) * d,
+        y: this.y + Math.sin(a) * d,
+        r: Phaser.Math.FloatBetween(sp.radius.min, sp.radius.max),
+        t: now,
+        life: Phaser.Math.Between(sp.lifeMs.min, sp.lifeMs.max),
+      });
+    }
+  }
+
+  /**
+   * While the milk buff lasts he smears a white ribbon behind him: a line of overlapping circles along his path
+   * (thick, with a soft outline), with splotches beside it. It thins out and disappears with age. Not drops.
+   */
+  private updateMilkTrail(delta: number): void {
+    const cfg = MILK_TRAIL;
+    const g = this.milkGfx;
+    if (!cfg.enabled) return;
+    const now = gameClock.now;
+    const active = this.milkTrail && this.alive;
+
+    if (active) {
+      const last = this.milkPath[this.milkPath.length - 1];
+      const moved = !last || Math.hypot(this.x - last.x, this.y - last.y) >= cfg.sampleDist;
+      if (moved) {
+        this.milkPath.push({ x: this.x, y: this.y, t: now });
+        // Splotches along the edges of the ribbon.
+        if (Math.random() < cfg.blobChance) {
+          const side = Math.random() < 0.5 ? -1 : 1;
+          const off = side * Phaser.Math.FloatBetween(cfg.width * 0.35, cfg.blobSpread);
+          const dir = this.rotation - Math.PI / 2; // facing; sideways is good enough for a smear
+          this.milkBlobs.push({
+            x: this.x + Math.cos(dir + Math.PI / 2) * off,
+            y: this.y + Math.sin(dir + Math.PI / 2) * off,
+            r: Phaser.Math.FloatBetween(cfg.blobRadius.min, cfg.blobRadius.max),
+            t: now,
+            life: cfg.lifeMs * Phaser.Math.FloatBetween(0.7, 1.1),
+          });
+        }
+      } else {
+        // Standing still: a puddle slowly spreads under him.
+        this.milkTimer += delta;
+        if (this.milkTimer >= cfg.idleEveryMs) {
+          this.milkTimer = 0;
+          this.milkBlobs.push({
+            x: this.x + Phaser.Math.Between(-8, 8),
+            y: this.y + Phaser.Math.Between(-8, 8),
+            r: Phaser.Math.FloatBetween(cfg.blobRadius.min, cfg.blobRadius.max),
+            t: now,
+            life: cfg.lifeMs,
+          });
+        }
+      }
+    }
+
+    // Forget what has faded.
+    while (this.milkPath.length > 0 && now - this.milkPath[0]!.t > cfg.lifeMs) this.milkPath.shift();
+    for (let i = this.milkBlobs.length - 1; i >= 0; i--) {
+      if (now - this.milkBlobs[i]!.t > this.milkBlobs[i]!.life) this.milkBlobs.splice(i, 1);
+    }
+
+    g.clear();
+    if (this.milkPath.length === 0 && this.milkBlobs.length === 0) return;
+
+    // Half-width of the ribbon at its age: it thins out to nothing.
+    const halfW = (t: number): number => (cfg.width / 2) * Math.pow(Math.max(0, 1 - (now - t) / cfg.lifeMs), 0.6);
+
+    // The ribbon is ONE strip of quads (no overlapping circles), so the see-through look stays even.
+    const pts = this.milkPath;
+    const n = pts.length;
+    if (n >= 2) {
+      const left: Array<[number, number, number, number]> = []; // inner edge x, y and outer edge x, y
+      const right: Array<[number, number, number, number]> = [];
+      for (let i = 0; i < n; i++) {
+        const prev = pts[Math.max(0, i - 1)]!;
+        const next = pts[Math.min(n - 1, i + 1)]!;
+        const len = Math.hypot(next.x - prev.x, next.y - prev.y) || 1;
+        const nx = -(next.y - prev.y) / len;
+        const ny = (next.x - prev.x) / len;
+        const hw = halfW(pts[i]!.t);
+        const o = cfg.outline * Math.min(1, hw / 3); // the outline thins out with the ribbon
+        const p = pts[i]!;
+        left.push([p.x + nx * hw, p.y + ny * hw, p.x + nx * (hw + o), p.y + ny * (hw + o)]);
+        right.push([p.x - nx * hw, p.y - ny * hw, p.x - nx * (hw + o), p.y - ny * (hw + o)]);
+      }
+      const quad = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number, dx: number, dy: number): void => {
+        g.fillTriangle(ax, ay, bx, by, cx, cy);
+        g.fillTriangle(ax, ay, cx, cy, dx, dy);
+      };
+      for (let i = 0; i < n - 1; i++) {
+        const l0 = left[i]!, l1 = left[i + 1]!, r0 = right[i]!, r1 = right[i + 1]!;
+        g.fillStyle(cfg.color, cfg.alpha);
+        quad(l0[0], l0[1], l1[0], l1[1], r1[0], r1[1], r0[0], r0[1]);
+        g.fillStyle(cfg.edgeColor, cfg.alpha);
+        quad(l0[0], l0[1], l1[0], l1[1], l1[2], l1[3], l0[2], l0[3]); // left outline
+        quad(r0[0], r0[1], r1[0], r1[1], r1[2], r1[3], r0[2], r0[3]); // right outline
+      }
+    }
+
+    // Splotches: the body, with the outline as a ring around it (so the two never overlap).
+    for (const b of this.milkBlobs) {
+      const r = b.r * Math.pow(Math.max(0, 1 - (now - b.t) / b.life), 0.5);
+      if (r < 0.3) continue;
+      g.fillStyle(cfg.color, cfg.alpha).fillCircle(b.x, b.y, r);
+      g.lineStyle(cfg.outline, cfg.edgeColor, cfg.alpha).strokeCircle(b.x, b.y, r + cfg.outline / 2);
+    }
+  }
+
+  /** While the energy drink lasts he leaves little green "Z z z" letters behind him. They float up, sway and fade. */
+  private updateEnergyTrail(delta: number): void {
+    const cfg = ENERGY_TRAIL;
+    if (!cfg.enabled) return;
+    if (!this.energyTrail || !this.alive) {
+      this.zLast = null;
+      return;
+    }
+    const last = this.zLast;
+    if (!last) {
+      this.zLast = { x: this.x, y: this.y };
+      return;
+    }
+    if (Math.hypot(this.x - last.x, this.y - last.y) >= cfg.everyPx) {
+      last.x = this.x;
+      last.y = this.y;
+      this.zTimer = 0;
+      this.dropZ();
+      return;
+    }
+    // Standing still: he keeps snoring.
+    this.zTimer += delta;
+    if (this.zTimer >= cfg.idleEveryMs) {
+      this.zTimer = 0;
+      this.dropZ();
+    }
+  }
+
+  /** One letter of the trail: appears at his feet, floats up, sways and fades. Tweens are scene-owned, so a restart cleans them up. */
+  private dropZ(): void {
+    const cfg = ENERGY_TRAIL;
+    const step = cfg.cycle[this.zCount % cfg.cycle.length]!;
+    this.zCount++;
+    const x = this.x + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
+    const y = this.y + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
+    const letter = this.scene.add
+      .text(x, y, step.letter, {
+        fontFamily: FONT,
+        fontSize: `${step.sizePx}px`,
+        color: css(cfg.color),
+        stroke: css(cfg.outline),
+        strokeThickness: step.strokePx,
+      })
+      .setOrigin(0.5)
+      .setDepth(cfg.depth)
+      .setAlpha(cfg.alpha)
+      .setAngle(Phaser.Math.FloatBetween(cfg.tiltDeg.min, cfg.tiltDeg.max))
+      .setScale(0.4);
+    const life = Phaser.Math.Between(cfg.lifeMs.min, cfg.lifeMs.max);
+    const sway = (Math.random() < 0.5 ? -1 : 1) * cfg.swayPx;
+    this.scene.tweens.add({ targets: letter, scale: 1, duration: life * 0.2, ease: 'Back.easeOut' });
+    this.scene.tweens.add({ targets: letter, x: x + sway, duration: life, ease: 'Sine.easeInOut' });
+    this.scene.tweens.add({
+      targets: letter,
+      y: y - Phaser.Math.Between(cfg.riseY.min, cfg.riseY.max),
+      alpha: 0,
+      duration: life,
+      ease: 'Sine.easeIn',
+      onComplete: () => letter.destroy(),
+    });
+  }
+
+  /** The belt in his fist: gold and dripping goo while the golden belt is active. */
+  private updateHeldBelt(delta: number): void {
+    const gold = GOLD_BELT.enabled && this.goldenBelt;
+    if (gold !== this.beltIsGold) {
+      this.beltIsGold = gold;
+      this.heldBelt.setTexture(gold ? Tex.VaruBeltGold : Tex.VaruBelt);
+    }
+    if (!gold || !this.beltInHand || !this.alive) return;
+    this.gooTimer += delta;
+    if (this.gooTimer < GOLD_BELT.held.everyMs) return;
+    this.gooTimer -= GOLD_BELT.held.everyMs;
+    const drip = this.bodyPoint(GOLD_BELT.held.dripOffset, this.tipPoint);
+    this.goo.emitParticleAt(drip.x, drip.y, 1);
+  }
+
+  /** Legs follow the body every frame (also during the death spin), swinging forward/back in turn. */
+  override preUpdate(time: number, delta: number): void {
+    super.preUpdate(time, delta);
+    this.updateSmokeBreak(delta);
+    this.updateHeldBelt(delta);
+    this.updateMilkTrail(delta);
+    this.updateEnergyTrail(delta);
+    this.puffSmoke(delta);
+    const r = this.rotation;
+    const k = this.scaleX;
+    const fx = Math.sin(r);
+    const fy = -Math.cos(r); // local "up" in world space
+    const swing = this.legSwing * k;
+    const place = (leg: Phaser.GameObjects.Image, off: number): void => {
+      leg.setPosition(this.x + fx * off, this.y + fy * off).setRotation(r).setScale(k).setAlpha(this.alpha).setVisible(this.visible);
+    };
+    place(this.legL, swing);
+    place(this.legR, -swing);
+    this.heldBelt
+      .setPosition(this.x, this.y).setRotation(r).setScale(k).setAlpha(this.alpha)
+      .setVisible(this.visible && this.beltInHand);
+  }
+
+  override flash(color = 0xffffff, ms = 80): void {
+    super.flash(color, ms);
+    for (const leg of [this.legL, this.legR, this.heldBelt]) leg.setTint(color).setTintMode(Phaser.TintModes.FILL);
+    this.scene.time.delayedCall(ms, () => {
+      for (const leg of [this.legL, this.legR, this.heldBelt]) {
+        if (!leg.active) continue;
+        leg.clearTint();
+        leg.setTintMode(Phaser.TintModes.MULTIPLY);
+      }
+    });
+  }
+
+  override destroy(fromScene?: boolean): void {
+    this.legL.destroy();
+    this.legR.destroy();
+    this.heldBelt.destroy();
+    this.smoke.destroy();
+    this.ember.destroy();
+    this.goo.destroy();
+    this.gooBurst.destroy();
+    this.milkGfx.destroy();
+    super.destroy(fromScene);
+  }
+
+  /** Returns true if the hit landed (false during i-frames). */
+  takeDamage(amount: number, fromX: number, fromY: number): boolean {
+    const now = gameClock.now;
+    if (!this.alive || this.godMode || now < this.invincibleUntil) return false;
+
+    this.hp = Math.max(0, this.hp - amount);
+    this.invincibleUntil = now + PLAYER.invincibleMs;
+    this.applyKnockback(fromX, fromY, PLAYER.hurtKnockback);
+    this.flash(0xff4444, 100);
+    this.scene.tweens.add({ targets: this, alpha: 0.35, duration: 70, yoyo: true, repeat: 4, onComplete: () => this.setAlpha(1) });
+
+    bus.emit(Events.PlayerHurt, { x: this.x, y: this.y });
+    this.emitHealth();
+    if (!this.alive) {
+      this.setVelocity(0, 0);
+      bus.emit(Events.PlayerDied);
+    }
+    return true;
+  }
+
+  heal(amount: number): void {
+    if (!this.alive) return;
+    this.hp = Math.min(this.maxHp, this.hp + amount);
+    this.emitHealth();
+  }
+
+  private emitHealth(): void {
+    const payload: PlayerHealthPayload = { hp: this.hp, maxHp: this.maxHp };
+    bus.emit(Events.PlayerHealth, payload);
+  }
+}
