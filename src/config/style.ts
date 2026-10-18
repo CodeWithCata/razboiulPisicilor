@@ -1,17 +1,27 @@
 // One place for the look of all text.
-/** The game font: chunky and friendly, and it has the Romanian letters (ă â î ș ț). Loaded from Google Fonts at start (core/fonts.ts). */
+/** The game font: chunky and friendly, and it has the Romanian letters (ă â î ș ț). Self-hosted in public/fonts/ (core/fonts.ts), so it also works offline and never waits for another website. */
 export const FONT_FAMILY = 'Lilita One';
-/** Shown instead if the font can't load (offline, blocked): the old Impact look. */
+/** Shown instead if the font can't load: the old Impact look. */
 const FONT_FALLBACK = 'Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif';
 export const FONT = `"${FONT_FAMILY}", ${FONT_FALLBACK}`;
 
 export const FONT_LOADING = {
-  /** Where the font comes from. To self-host instead: put a .woff2 in public/fonts/ and use @font-face in index.html. */
-  stylesheetUrl: 'https://fonts.googleapis.com/css2?family=Lilita+One&display=swap',
-  /** The game never waits longer than this for the font, so a slow or offline connection can't block the menu. */
+  /**
+   * Lilita One (SIL Open Font License, see public/fonts/OFL.txt), split by alphabet like Google does: "latin" has the plain letters and
+   * â î, "latin-ext" has ă ș ț. Files and ranges are from the @fontsource/lilita-one package (v5.3.0). Paths are relative to the page.
+   */
+  files: [
+    {
+      path: 'fonts/lilita-one-latin-400-normal.woff2',
+      unicodeRange: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD',
+    },
+    {
+      path: 'fonts/lilita-one-latin-ext-400-normal.woff2',
+      unicodeRange: 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF',
+    },
+  ],
+  /** The game never waits longer than this for the font (it is a local file, so this is only a safety net). */
   timeoutMs: 2500,
-  /** Google splits fonts by alphabet and loads a piece only when its letters are used: this forces the one with Romanian letters. */
-  sampleText: 'ĂăÂâÎîȘșȚț0123456789 AaBbZz',
 } as const;
 
 export const COLORS = {

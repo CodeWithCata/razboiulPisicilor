@@ -37,8 +37,8 @@ Format: `file (lines): exports`. Paths are relative to `src/`.
 - pause.ts (104): PAUSE_KEYS, PAUSE, pauseRowH, pauseGaps, pausePip
 - perf.ts (17): PERF
 - pickups.ts (14): PICKUP_VISUALS, PICKUP_KINDS
-- pwa.ts (30): PWA
-- style.ts (65): FONT_FAMILY, FONT, FONT_LOADING, COLORS, css, BELT_FX
+- pwa.ts (37): PWA
+- style.ts (75): FONT_FAMILY, FONT, FONT_LOADING, COLORS, css, BELT_FX
 - touch.ts (119): TOUCH, TouchButtonId, TOUCH_BUTTON_IDS
 - viewport.ts (11): RELAYOUT
 - waves.ts (66): WaveDef, WAVES, FINAL_WAVE, ENDLESS, getWave
@@ -58,14 +58,15 @@ Format: `file (lines): exports`. Paths are relative to `src/`.
 - ease.ts (16): easeInOutBack
 - events.ts (213): bus, Events, JokePayload, PerfStatsPayload, DebugActionPayload, DebugStatsPayload, TouchPressPayload, MutePayload, VolumePayload, MusicPayload, PointPayload, BeltAttackPayload, BeltCooldownPayload, PlayerHealthPayload, EnemyKilledPayload, ExplosionPayload, SpawnProjectilePayload, WavePayload, ScorePayload, PickupPayload, BuffInfo, BuffsPayload, CrowImpactPayload, SpawnEnemyPayload, BossSpawnedPayload, BossHealthPayload, BossPhasePayload, ShoutPayload, BossDefeatedPayload, listen
 - flowField.ts (100): FlowGrid, FlowField
-- fonts.ts (26): -
+- fonts.ts (30): loadGameFont
 - fullscreen.ts (103): keepScreenOn, enterFullscreenLandscape, retryFullscreenOnTap, whenScaleSettled
 - haptics.ts (10): buzz
 - mute.ts (17): isMuted, setMuted, toggleMuted
 - polyClip.ts (37): Pt, clipBelow, superEllipse
-- pwa.ts (128): InstallMode, isInstalledApp, installMode, onInstallModeChange, onOfflineReady, updateReady, onUpdateReady, applyUpdate, initPwa
+- pwa.ts (153): InstallMode, isInstalledApp, installMode, onInstallModeChange, onOfflineReady, updateReady, onUpdateReady, applyUpdate, markBootSuccess, initPwa
 - random.ts (17): weightedPick, pickNoRepeat
 - relayout.ts (31): watchRelayout
+- rotateHint.ts (23): watchRotateHint
 - run.ts (11): RunMode, RunOptions, DEFAULT_RUN, readRun
 - settings.ts (57): VolumeKind, getVolume, setVolume, nudgeVolume, getAutoAttack, setAutoAttack, toggleAutoAttack, getDebugInfo, toggleDebugInfo
 - sprite.ts (14): fitToSize, setCircleHitbox
@@ -73,7 +74,7 @@ Format: `file (lines): exports`. Paths are relative to `src/`.
 - storage.ts (93): loadBest, saveBest, loadMuted, saveMuted, loadVolume, saveVolume, loadEndlessUnlocked, saveEndlessUnlocked, loadHelpHidden, saveHelpHidden, loadAutoAttack, saveAutoAttack, loadDebugInfo, saveDebugInfo
 - streak.ts (19): KillStreak
 - sweep.ts (25): normalizeAngle, isSwept, distToSegment
-- viewport.ts (33): watchViewport
+- viewport.ts (47): watchViewport
 
 ## entities/
 - Actor.ts (72): ActorOptions, Actor
@@ -105,7 +106,7 @@ Format: `file (lines): exports`. Paths are relative to `src/`.
 - TouchOverlay.ts (209): TouchOverlay
 
 ## ./
-- main.ts (46): -
+- main.ts (58): -
 
 ## scenes/
 - BootScene.ts (44): BootScene

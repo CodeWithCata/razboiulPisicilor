@@ -21,12 +21,11 @@ function walk(dir, root) {
 
 /**
  * Builds dist/sw.js after `vite build`: the service worker template with the list of every built file and a version
- * that changes whenever any of them changes. No dependencies, so nothing extra to install.
+ * that changes whenever any of them (or the worker's own code) changes. No dependencies, so nothing extra to install.
  *
- * @param {{ fontStylesheets?: string[] }} [options] Google Fonts stylesheet URLs to keep for offline use.
  * @returns {import('vite').Plugin}
  */
-export function offlinePlugin(options = {}) {
+export function offlinePlugin() {
   let outDir = 'dist';
   return {
     name: 'varu-offline',
@@ -37,13 +36,13 @@ export function offlinePlugin(options = {}) {
     closeBundle() {
       // Runs after the bundle AND the public/ folder are in dist/.
       const files = walk(outDir, outDir).filter((file) => file !== SW_FILE && !SKIP.test(file)).sort();
-      const hash = createHash('sha256');
+      // A worker without the page it serves would cache nothing useful (and then "work offline" with a blank page): stop the build instead.
+      if (!files.includes('index.html')) throw new Error('[offline] dist/index.html is missing: cannot write the service worker');
+      const template = readFileSync(TEMPLATE, 'utf8');
+      const hash = createHash('sha256').update(template);
       for (const file of files) hash.update(file).update(readFileSync(join(outDir, file)));
       const version = hash.digest('hex').slice(0, 12);
-      const worker = readFileSync(TEMPLATE, 'utf8')
-        .replace('__VERSION__', () => version)
-        .replace('__PRECACHE__', () => JSON.stringify(files, null, 2))
-        .replace('__FONT_STYLESHEETS__', () => JSON.stringify(options.fontStylesheets ?? []));
+      const worker = template.replace('__VERSION__', () => version).replace('__PRECACHE__', () => JSON.stringify(files, null, 2));
       writeFileSync(join(outDir, SW_FILE), worker);
       console.log(`\n[offline] ${SW_FILE} written: ${files.length} files saved for offline play, version ${version}`);
     },

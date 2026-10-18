@@ -13,8 +13,9 @@ let installPrompt: InstallPromptEvent | null = null;
 const installListeners = new Set<() => void>();
 const offlineListeners = new Set<() => void>();
 const updateListeners = new Set<() => void>();
-/** A new version of the game that is downloaded and waiting. It starts when the player accepts, or the next time the app is opened. */
-let waitingWorker: ServiceWorker | null = null;
+/** True once a NEW version of the game has taken over in the background (see registerServiceWorker). The page itself still runs the old one. */
+let newVersionActive = false;
+let lastUpdateCheck = 0;
 
 const tell = (listeners: Set<() => void>): void => listeners.forEach((listener) => listener());
 
@@ -61,56 +62,80 @@ export async function promptInstall(): Promise<void> {
 }
 
 export function updateReady(): boolean {
-  return waitingWorker !== null;
+  return newVersionActive;
 }
 
-/** Calls `listener` when a new version has been downloaded and waits for the player. */
+/** Calls `listener` when a new version has been downloaded and is active (the player decides when to reload into it). */
 export function onUpdateReady(listener: () => void): () => void {
   updateListeners.add(listener);
   return () => updateListeners.delete(listener);
 }
 
-/** Starts the waiting version and reloads the page once it has taken over. Only call it from the menu (a run in progress would be lost). */
+/** Loads the new version. Only call it from the menu (a run in progress would be lost). */
 export function applyUpdate(): void {
-  if (!waitingWorker) return;
-  navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true });
-  waitingWorker.postMessage('SKIP_WAITING');
+  window.location.reload();
 }
 
-function watchForUpdates(registration: ServiceWorkerRegistration): void {
-  const waitFor = (worker: ServiceWorker | null): void => {
-    worker?.addEventListener('statechange', () => {
-      // "installed" while another version already runs = an update is waiting (the very first install has no controller).
-      if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-        waitingWorker = worker;
-        tell(updateListeners);
-      }
-    });
-  };
-  if (registration.waiting && navigator.serviceWorker.controller) {
-    waitingWorker = registration.waiting;
-    tell(updateListeners);
+/** Tells index.html's boot self-repair that the game started fine, so a later problem may be repaired again. */
+export function markBootSuccess(): void {
+  try {
+    window.sessionStorage.removeItem(PWA.healFlagKey);
+  } catch {
+    // Storage blocked: nothing to clear.
   }
-  waitFor(registration.installing);
-  registration.addEventListener('updatefound', () => waitFor(registration.installing));
+}
+
+/**
+ * The service worker (scripts/sw-template.js) takes over by itself as soon as it is installed, so there is no "waiting" version to manage.
+ * The only signal the page needs is the controller changing: the very first time = the whole game is now saved for offline play,
+ * any later time = a new version replaced the old one (the page keeps running the old code until it is reloaded).
+ */
+function watchController(container: ServiceWorkerContainer): void {
+  let controlled = container.controller !== null;
+  container.addEventListener('controllerchange', () => {
+    if (!controlled) {
+      controlled = true;
+      tell(offlineListeners);
+    } else if (!newVersionActive) {
+      newVersionActive = true;
+      tell(updateListeners);
+    }
+  });
+}
+
+/** An installed app stays alive in the background for days: look for a new version whenever it comes back to the front or gets internet. */
+function keepFresh(registration: ServiceWorkerRegistration): void {
+  const check = (): void => {
+    const now = Date.now();
+    if (now - lastUpdateCheck < PWA.updateCheckMinMs) return;
+    lastUpdateCheck = now;
+    registration.update().catch(() => undefined); // offline or the server is busy: try again next time
+  };
+  lastUpdateCheck = Date.now(); // the browser checks by itself at every launch
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') check();
+  });
+  window.addEventListener('online', check);
 }
 
 function registerServiceWorker(): void {
   // Only in the built game: during `pnpm dev` a service worker would keep serving old files.
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
-  const firstVisit = navigator.serviceWorker.controller === null;
-  // The worker takes over right after its first install (it claims the page), which means every file is saved by then.
-  if (firstVisit) navigator.serviceWorker.addEventListener('controllerchange', () => tell(offlineListeners), { once: true });
-  window.addEventListener('load', () => {
+  watchController(navigator.serviceWorker);
+  const register = (): void => {
     navigator.serviceWorker
+      // updateViaCache 'none': never take sw.js from the browser's own cache, so a fixed worker is found at once.
       .register(`${import.meta.env.BASE_URL}${PWA.serviceWorkerPath}`, { updateViaCache: 'none' })
-      .then(watchForUpdates)
+      .then(keepFresh)
       .catch(() => {
         // Blocked (private mode, http instead of https): the game works online, just not offline.
       });
     // Ask the browser not to wipe the saved game files and records when the phone runs low on space (it may say no; that is fine).
     void Promise.resolve(navigator.storage?.persist?.()).catch(() => undefined);
-  });
+  };
+  // After the page is loaded, so the worker's downloads never compete with starting the game.
+  if (document.readyState === 'complete') register();
+  else window.addEventListener('load', register, { once: true });
 }
 
 /** Call once at start, before the game is created: offline mode, and listening for the install question. */

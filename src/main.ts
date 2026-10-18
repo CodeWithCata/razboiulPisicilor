@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { bindGameSize, GAME_BASE_HEIGHT, GAME_BASE_WIDTH } from './config/balance';
 import { usesTouchControls } from './core/device';
-import { initPwa } from './core/pwa';
+import { loadGameFont } from './core/fonts';
+import { initPwa, markBootSuccess } from './core/pwa';
 import { watchRelayout } from './core/relayout';
 import { watchRotateHint } from './core/rotateHint';
 import { watchViewport } from './core/viewport';
@@ -17,6 +18,8 @@ import { mountOfflineToast } from './ui/PwaUi';
 // Offline mode (service worker, built game only) and the install question. Must run before the game starts.
 initPwa();
 mountOfflineToast();
+// The font is a small local file: start loading it right now, so it is ready long before BootScene needs it.
+void loadGameFont();
 
 // Phones: a long press must not open the browser's context menu (the game uses long presses all the time).
 if (usesTouchControls()) window.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -51,4 +54,5 @@ watchRotateHint(); // tap on the "turn your phone" page = try fullscreen + lands
 // Tells the boot error reporter in index.html that the game started (it only reports errors before this).
 game.events.once(Phaser.Core.Events.READY, () => {
   (window as unknown as { __varuReady?: boolean }).__varuReady = true;
+  markBootSuccess(); // the boot self-repair (index.html) may try again next time something goes wrong
 });

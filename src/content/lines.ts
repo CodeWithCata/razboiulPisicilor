@@ -80,7 +80,7 @@ export const PWA_TEXT = {
   /** iPhone / iPad have no install button: the player has to use the Share menu of Safari. */
   iosHint: 'Apasă Partajează (pătrățelul cu săgeată), apoi „Adaugă pe ecranul principal”.',
   offlineReady: 'Gata! Acum merge și fără internet 🐱',
-  /** A new version is downloaded and waiting. */
+  /** A new version is downloaded and already active; the page reloads to show it. */
   update: 'Versiune nouă: apasă ca să actualizezi',
 } as const;
 

@@ -11,8 +11,8 @@
     <!-- The orange-cat logo (art-source/logo.png -> scripts/make-icons.py -> public/icons/). -->
     <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
-    <!-- Installable app + offline play: manifest here, service worker is registered by src/core/pwa.ts (built game only). -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
+    <!-- Installable app + offline play: manifest here, service worker (scripts/sw-template.js) is registered by src/core/pwa.ts (built game only). -->
     <link rel="manifest" href="./manifest.webmanifest" />
     <title>Varu vs. Pisicile 🐱🧷</title>
     <style>
@@ -44,10 +44,30 @@
       #boot-error pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; color: #f5c518; }
     </style>
     <script>
-      /* If the game cannot start (old browser, blocked file, no WebGL) show WHY instead of a blank page. Only before the game is ready. */
+      /* If the game cannot start (old browser, blocked file, no WebGL, broken saved files) it must not stay a blank page.
+         1. Once per session: remove the offline copy (service worker + saved files) and reload, so a damaged copy repairs itself.
+            (Only when online, and never twice: the flag is cleared by src/core/pwa.ts markBootSuccess when the game starts fine.)
+         2. Otherwise show WHY instead of a blank page. Only before the game is ready. */
       (function () {
+        var HEAL_FLAG = 'varu-healed'; /* same string as PWA.healFlagKey in src/config/pwa.ts */
+        function selfHeal() {
+          try {
+            if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return false;
+            if (navigator.onLine === false || window.sessionStorage.getItem(HEAL_FLAG)) return false;
+            window.sessionStorage.setItem(HEAL_FLAG, '1');
+          } catch (e) { return false; }
+          var unregister = navigator.serviceWorker.getRegistrations().then(function (list) {
+            return Promise.all(list.map(function (item) { return item.unregister(); }));
+          });
+          var wipe = window.caches ? window.caches.keys().then(function (names) {
+            return Promise.all(names.filter(function (name) { return name.indexOf('varu-') === 0; }).map(function (name) { return window.caches.delete(name); }));
+          }) : Promise.resolve();
+          Promise.all([unregister, wipe]).catch(function () {}).then(function () { window.location.reload(); });
+          return true;
+        }
         function show(msg) {
           if (window.__varuReady) return;
+          if (selfHeal()) return;
           var box = document.getElementById('boot-error');
           if (!box) return;
           box.style.display = 'block';
