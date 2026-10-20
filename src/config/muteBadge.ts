@@ -1,3 +1,4 @@
+/** @file Look of the speaker / mute badge (ui/MuteBadge.ts). */
 import { COLORS } from './style';
 
 /**

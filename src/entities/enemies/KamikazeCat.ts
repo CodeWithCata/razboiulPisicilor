@@ -1,3 +1,4 @@
+/** @file Kamikaze cat: sprints, lights a fuse, explodes unless killed first. */
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { KAMIKAZE } from '../../config/balance';
@@ -38,7 +39,7 @@ export class KamikazeCat extends Enemy {
   }
 
   private explode(): void {
-    const payload: ExplosionPayload = { x: this.x, y: this.y, radius: KAMIKAZE.blastRadius, damage: KAMIKAZE.blastDamage };
+    const payload: ExplosionPayload = { x: this.x, y: this.y, radius: KAMIKAZE.blastRadius, damage: KAMIKAZE.blastDamage, shockwave: true };
     bus.emit(Events.Explosion, payload);
     this.destroy(); // self-destruct: no score for Varu
   }

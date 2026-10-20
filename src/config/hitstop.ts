@@ -1,3 +1,4 @@
+/** @file Hit-stop (tiny freeze on strong hits) timings per enemy type. */
 import type { EnemyType } from './balance';
 
 /**

@@ -1,10 +1,12 @@
+/** @file The HUD, running in parallel on top of GameScene; it only listens to events. */
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
 import { HUD } from '../config/hud';
 import { TOUCH } from '../config/touch';
 import { ENDLESS } from '../config/waves';
+import { showWaveFanfare } from '../ui/WaveFanfare';
 import { FONT } from '../config/style';
-import { ENDLESS_TEXT, PICKUP_LABELS, TOUCH_TEXT } from '../content/lines';
+import { ENDLESS_TEXT, LUCKY_TEXT, PICKUP_LABELS, TOUCH_TEXT } from '../content/lines';
 import { usesTouchControls } from '../core/device';
 import { buzz } from '../core/haptics';
 import { getAutoAttack } from '../core/settings';
@@ -19,6 +21,7 @@ import { DebugPanel } from '../ui/DebugPanel';
 import { PerfPanel } from '../ui/PerfPanel';
 import { BossBar } from '../ui/BossBar';
 import { ControlsHint } from '../ui/ControlsHint';
+import { LowHpVignette } from '../ui/LowHpVignette';
 import { Toast } from '../ui/Toast';
 import {
   Events,
@@ -28,6 +31,8 @@ import {
   type BossPhasePayload,
   type BossSpawnedPayload,
   type BuffsPayload,
+  type CatSurrenderPayload,
+  type HeartbeatPayload,
   type JokePayload,
   type PickupPayload,
   type PlayerHealthPayload,
@@ -46,6 +51,8 @@ export class UIScene extends Phaser.Scene {
   private bossBar!: BossBar;
   private buffBadges!: BuffBadges;
   private beltBadges!: BeltBadges;
+  /** The cats gave up in this wave (Events.CatSurrender): the fanfare then says so instead of "CURĂȚAT!". */
+  private surrenderedWave = false;
 
   constructor() {
     super('UIScene');
@@ -56,9 +63,11 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.surrenderedWave = false; // scenes restart with their old fields
     const style = { fontFamily: FONT, color: '#ffffff', stroke: '#1b2340', strokeThickness: HUD.strokeThickness };
 
     const touch = usesTouchControls();
+    const lowHp = new LowHpVignette(this); // first, so it sits behind every other HUD piece
     this.catMeter = new CatMeter(this);
     const toast = new Toast(this);
     // On a phone the speaker sits next to the pause button (top right) instead of under the score.
@@ -93,7 +102,9 @@ export class UIScene extends Phaser.Scene {
     const off = [
       listen<PlayerHealthPayload>(Events.PlayerHealth, ({ hp, maxHp }) => {
         this.catMeter.setHealth(hp, maxHp);
+        lowHp.setHealth(hp, maxHp);
       }),
+      listen<HeartbeatPayload>(Events.Heartbeat, ({ intensity }) => lowHp.beat(intensity)),
       listen(Events.PlayerHurt, () => {
         this.catMeter.hurt();
         buzz(TOUCH.haptics.hurtMs);
@@ -132,7 +143,16 @@ export class UIScene extends Phaser.Scene {
       listen(Events.BossDefeated, () => {
         this.bossBar.defeat();
       }),
+      listen(Events.LuckySpawn, () => this.banner(LUCKY_TEXT.banner, HUD.banner.luckyColor, GAME.height / 2 + HUD.banner.luckyYOffset, HUD.banner.luckySize)),
+      listen<CatSurrenderPayload>(Events.CatSurrender, () => {
+        this.surrenderedWave = true;
+      }),
+      listen<WavePayload>(Events.WaveCleared, ({ wave }) => {
+        const surrendered = this.surrenderedWave; // read now: the next wave resets it before the fanfare starts
+        this.time.delayedCall(HUD.fanfare.delayMs, () => showWaveFanfare(this, wave, surrendered));
+      }),
       listen<WavePayload>(Events.WaveStarted, ({ wave }) => {
+        this.surrenderedWave = false;
         const endless = this.run.mode === 'endless';
         this.waveText.setText(endless ? `Valul ${wave} · ${ENDLESS_TEXT.hud}` : `Valul ${wave}`);
         this.banner(`VALUL ${wave}`, HUD.banner.color);

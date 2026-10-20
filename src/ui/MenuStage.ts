@@ -1,3 +1,4 @@
+/** @file Varu wobbling in the middle of the main menu. */
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { GAME } from '../config/balance';

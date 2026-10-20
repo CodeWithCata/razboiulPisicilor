@@ -1,3 +1,4 @@
+/** @file Service worker registration, update detection and the install prompt (built game only). */
 import { PWA } from '../config/pwa';
 
 /** Chrome / Edge / Android hand over this event when the game can be installed. It is not in TypeScript's DOM types. */

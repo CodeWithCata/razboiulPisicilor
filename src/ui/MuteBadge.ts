@@ -1,3 +1,4 @@
+/** @file Speaker badge showing sound on / off; click or tap to toggle. */
 import Phaser from 'phaser';
 import { poly } from '../assets/paint';
 import { AUDIO } from '../config/audio';

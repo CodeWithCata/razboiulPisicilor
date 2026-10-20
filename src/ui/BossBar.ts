@@ -1,3 +1,4 @@
+/** @file Boss health bar at the top: slides in, drains smoothly, phase-2 notch. */
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
 import { HUD } from '../config/hud';

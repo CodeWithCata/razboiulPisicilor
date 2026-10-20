@@ -1,6 +1,7 @@
+/** @file Code-drawn projectiles (yarn, tennis ball, broken heart, thrown belt) and pickup icons (crochete, lapte, monster, golden belt, laser, mystery question mark). */
 import { GOLD_BELT } from '../../config/animation';
 import { COLORS } from '../../config/style';
-import { C, E, P, R, S, T, flat, heart, ink, layer, sparkle, type G, type Pt, type Shape } from './shapes';
+import { C, E, P, R, S, T, ellipsePts, flat, heart, ink, layer, sparkle, type G, type Pt, type Shape } from './shapes';
 
 /** Ball of yarn with a loose thread (32x32). */
 export function drawYarn(g: G): void {
@@ -17,6 +18,14 @@ export function drawTennis(g: G): void {
   g.beginPath().arc(2, 16, 12, -0.9, 0.9).strokePath();
   g.beginPath().arc(30, 16, 12, Math.PI - 0.9, Math.PI + 0.9).strokePath();
   flat(g, [E(10, 9, 6, 4)], 0xf1fba0);
+}
+
+/** Broken heart (the emo cat's shot, 32x32): hot-pink heart with a black crack down the middle. */
+export function drawBrokenHeart(g: G): void {
+  const outline: Pt[] = [[16, 29], [5, 18], [3, 10], [7, 5], [12, 5], [16, 9], [20, 5], [25, 5], [29, 10], [27, 18]];
+  layer(g, [S(outline)], 0xe0409a, 2.5);
+  flat(g, [E(10, 10, 6, 4)], 0xf9b4d6);
+  ink(g, [[16, 8], [13.5, 13], [18, 16.5], [14, 21], [16.5, 26]], 1.8, 0x15151c);
 }
 
 /** Thrown belt, buckle at the top (32x96). `gold`: the golden belt, gold strap coated in sticky white goo. */
@@ -176,19 +185,65 @@ export function drawPickupMonster(g: G): void {
   sparkle(g, 9, 43, 3.5);
 }
 
-/** Coiled golden belt: gold outline, brown coil, buckle at the bottom right (64x64). */
+/**
+ * The golden belt buckled into a loop and standing on its edge, seen a little from above (64x64): a wide low band, so it is clearly a belt
+ * and not a ring or a wheel. You see the dark inside of the loop, the front wall of the strap with its holes and stitching, the gold
+ * rectangular buckle, the loose tail laid over the strap, and white goo dripping off the bottom edge.
+ */
 export function drawPickupGoldenBelt(g: G): void {
-  layer(g, [E(32, 32, 58, 54)], COLORS.gold);
-  layer(g, [E(32, 32, 49, 45)], COLORS.belt, 2);
-  flat(g, [E(32, 32, 43, 39)], 0xa06a35, 0.45);
-  g.lineStyle(2, COLORS.navy, 1).strokeEllipse(32, 32, 37, 33).strokeEllipse(32, 32, 26, 22);
-  layer(g, [E(32, 33, 15, 11)], 0xf1e7c8, 2);
-  for (const [x, y] of [[13, 31], [17, 43], [49, 20], [41, 13]] as const) flat(g, [C(x, y, 1.2)], 0x4a2f14);
-  layer(g, [R(39, 44, 17, 13, 3)], COLORS.gold, 2.5);
-  flat(g, [R(43, 47, 9, 7, 1)], 0x6b4423);
-  sparkle(g, 8, 9, 5);
-  sparkle(g, 57, 8, 4);
-  sparkle(g, 7, 55, 3.5);
+  const cx = 32;
+  const topY = 24; // center of the top opening
+  const wall = 14; // how tall the belt is (its width)
+  const rx = 25;
+  const ry = 12;
+  /** A point on the front wall: angle `a` (0..PI is the front half), `h` how far down the wall (0 = top rim, 1 = bottom edge), `grow` pushes outward. */
+  const wallAt = (a: number, h: number, grow = 0): Pt => [cx + (rx + grow) * Math.cos(a), topY + (ry + grow * 0.5) * Math.sin(a) + wall * h];
+
+  // the band: discs stacked from the top down make its wall, outlined as one silhouette
+  const discs: Shape[] = [];
+  for (let i = 0; i <= 7; i++) discs.push(P(ellipsePts(cx, topY + (wall * i) / 7, rx, ry, 0, 36)));
+  layer(g, discs, COLORS.belt, 2.6);
+  // the dark inside of the loop, with the thickness of the leather showing as a rim
+  flat(g, [P(ellipsePts(cx, topY, rx - 3.4, ry - 2.3, 0, 36))], 0x3a2410);
+  flat(g, [P(ellipsePts(cx, topY - 0.6, rx - 5.6, ry - 3.6, 0, 36))], 0x4a2f14);
+  // gold shine along the top of the front wall, and a darker shade along its bottom
+  flat(g, [T([wallAt(2.95, 0.22), wallAt(2.4, 0.22), wallAt(1.9, 0.22), wallAt(1.5, 0.22)], 1.4)], GOLD_BELT.goldShine, 0.9);
+  flat(g, [T([wallAt(2.95, 0.93), wallAt(2.3, 0.93), wallAt(1.6, 0.93)], 2.2)], 0x6f4520, 0.8);
+  // stitching along the top rim and holes along the middle of the wall
+  for (let a = 1.75; a <= 3.0; a += 0.25) flat(g, [C(...wallAt(a, 0.36), 0.7)], 0xf1e7c8);
+  for (const a of [1.75, 2.05, 2.35, 2.65]) flat(g, [C(...wallAt(a, 0.62), 1.6)], COLORS.gold);
+
+  // sticky white goo hanging off the bottom edge
+  const [d1x, d1y] = wallAt(2.2, 1);
+  const [d2x, d2y] = wallAt(1.5, 1);
+  const goo: Shape[] = [C(d1x, d1y, 3), T([[d1x, d1y + 1], [d1x + 0.4, d1y + 6]], 3.4, 2.4), C(d1x + 0.4, d1y + 7, 2.6), C(d2x, d2y, 2.4), T([[d2x, d2y + 1], [d2x, d2y + 3.5]], 3, 2.2), C(d2x, d2y + 4.4, 2.1)];
+  layer(g, goo, GOLD_BELT.gooBody, 1.8);
+  flat(g, [C(d1x - 1, d1y - 0.8, 0.9)], COLORS.white);
+
+  // the loose tail: the strap end comes out of the buckle and lies over the band, narrowing to a point
+  const tail = [wallAt(1.0, 0.5, 1.5), wallAt(0.7, 0.5, 1.5), wallAt(0.4, 0.5, 1.5), wallAt(0.1, 0.5, 1.5)];
+  layer(g, [T(tail, 12, 7)], COLORS.belt, 2.5);
+  flat(g, [T([wallAt(0.95, 0.2, 1.5), wallAt(0.6, 0.2, 1.5), wallAt(0.3, 0.2, 1.5)], 1.2)], GOLD_BELT.goldShine, 0.9);
+  for (const a of [0.55, 0.3]) flat(g, [C(...wallAt(a, 0.5, 1.5), 1.4)], COLORS.gold);
+
+  // the gold rectangular buckle on the front, across the strap, with its dark inside and the prong
+  const [bx, by] = wallAt(1.12, 0.5, 1.5);
+  const dir = -0.3;
+  const box = (len: number, wid: number): Pt[] => {
+    const tx = (Math.cos(dir) * len) / 2;
+    const ty = (Math.sin(dir) * len) / 2;
+    const qx = (-Math.sin(dir) * wid) / 2;
+    const qy = (Math.cos(dir) * wid) / 2;
+    return [[bx + tx + qx, by + ty + qy], [bx + tx - qx, by + ty - qy], [bx - tx - qx, by - ty - qy], [bx - tx + qx, by - ty + qy]];
+  };
+  layer(g, [P(box(12, 18))], COLORS.gold, 2.6);
+  flat(g, [P(box(6, 12))], GOLD_BELT.goldShade);
+  flat(g, [T([[bx - Math.cos(dir) * 5.5, by - Math.sin(dir) * 5.5], [bx + Math.cos(dir) * 5.5, by + Math.sin(dir) * 5.5]], 2.2)], COLORS.gold);
+  flat(g, [T([[bx - 2, by - 8], [bx + 2.4, by - 8.6]], 1.2)], GOLD_BELT.goldShine, 0.9);
+
+  sparkle(g, 7, 8, 5);
+  sparkle(g, 57, 9, 4);
+  sparkle(g, 57, 57, 3.2);
 }
 
 /** Red laser pen with the red dot (64x64). */
@@ -206,4 +261,33 @@ export function drawPickupLaser(g: G): void {
   g.fillStyle(0xff2222, 0.35).fillCircle(55, 12, 6.5);
   g.fillStyle(0xff3b3b, 1).fillCircle(55, 12, 3.6);
   g.fillStyle(0xffffff, 1).fillCircle(55, 12, 1.5);
+}
+
+/** The mystery question mark (64x64): a violet block with gold studs, a big gold "?" on it, and a few sparkles. It turns into a random pickup. */
+export function drawPickupMystery(g: G): void {
+  const violet = 0x8e44ec;
+  const violetDark = 0x6a2fc0;
+  const violetLight = 0xb985ff;
+  const gold = COLORS.gold;
+
+  // the block: outlined silhouette, a darker lower edge for depth and a light strip on the top-left edge
+  layer(g, [R(7, 7, 50, 50, 9)], violet, 3);
+  flat(g, [R(9, 44, 46, 11, 7)], violetDark);
+  flat(g, [T([[14, 12], [48, 12]], 2.6)], violetLight, 0.9);
+  flat(g, [R(11, 16, 3, 22, 1.4)], violetLight, 0.55);
+
+  // four gold studs in the corners
+  for (const [x, y] of [[14, 14], [50, 14], [14, 50], [50, 50]] as const) {
+    layer(g, [C(x, y, 3)], gold, 1.5);
+    flat(g, [C(x - 0.8, y - 0.8, 1)], COLORS.white, 0.85);
+  }
+
+  // the "?": a gold curve with a navy outline, and the dot
+  const hook: Pt[] = [[23.5, 25], [23, 19], [28, 14.5], [34, 14.5], [40, 19], [39.5, 26], [32.5, 32], [32, 38.5]];
+  layer(g, [T(hook, 7.4), C(32, 47.2, 4.1)], gold, 2.4);
+  flat(g, [T([[26, 20], [29.5, 17.4], [34, 17.4]], 1.7)], 0xfff0a8, 0.95); // shine along the curve
+  flat(g, [C(30.8, 46, 1.2)], 0xfff0a8, 0.95);
+
+  sparkle(g, 56, 8, 5);
+  sparkle(g, 7, 56, 3.6);
 }

@@ -1,3 +1,4 @@
+/** @file Two cats peeking over the pause panel. */
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { PAUSE } from '../../config/pause';

@@ -1,17 +1,21 @@
+/** @file Flying cat: circles Varu at a distance and throws yarn; its wings flap (FlyingCatRig). */
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { FLYER } from '../../config/balance';
 import { bus, Events, type SpawnProjectilePayload } from '../../core/events';
 import { Enemy, type EnemyContext } from '../Enemy';
+import { FlyingCatRig } from './FlyingCatRig';
 import { gameClock } from '../../core/clock';
 
 /** Keeps its distance, circles around Varu and throws yarn balls. Flies over other cats. */
 export class FlyingCat extends Enemy {
   private readonly strafeDir = Math.random() < 0.5 ? 1 : -1;
   private nextShotAt: number;
+  private readonly wings: FlyingCatRig;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, 'flying', Tex.CatFlying);
+    super(scene, x, y, 'flying', Tex.CatFlyingBody);
+    this.wings = new FlyingCatRig(scene, this);
     this.nextShotAt = gameClock.now + Phaser.Math.Between(900, 1800);
   }
 
@@ -50,5 +54,21 @@ export class FlyingCat extends Enemy {
       const payload: SpawnProjectilePayload = { kind: 'yarn', x: this.x, y: this.y, angle: toPlayer, speed: FLYER.projectileSpeed };
       bus.emit(Events.SpawnProjectile, payload);
     }
+  }
+
+  /** The wings follow the body after it has moved this frame. */
+  override preUpdate(time: number, delta: number): void {
+    super.preUpdate(time, delta);
+    this.wings.sync(gameClock.scaled(delta));
+  }
+
+  override flash(color = 0xffffff, ms = 80): void {
+    super.flash(color, ms);
+    this.wings.flash(color, ms);
+  }
+
+  override destroy(fromScene?: boolean): void {
+    this.wings.destroy();
+    super.destroy(fromScene);
   }
 }

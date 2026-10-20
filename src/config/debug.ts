@@ -3,6 +3,7 @@ export type DebugId =
   | 'spawnCat'
   | 'horde'
   | 'killAll'
+  | 'surrender'
   | 'boss'
   | 'nextWave'
   | 'victory'
@@ -12,6 +13,7 @@ export type DebugId =
   | 'allBuffs'
   | 'pickup'
   | 'score'
+  | 'crowd'
   | 'hitboxes'
   | 'tileset';
 

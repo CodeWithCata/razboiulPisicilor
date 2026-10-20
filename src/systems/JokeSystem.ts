@@ -1,3 +1,4 @@
+/** @file Decides WHEN a joke is said (cooldowns, chances, streaks) and emits Events.Joke. */
 import Phaser from 'phaser';
 import { JOKE_RULES, JOKE_TUNING, type JokeCategory } from '../config/jokes';
 import { isBossType, type EnemyType } from '../config/balance';

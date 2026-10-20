@@ -1,3 +1,4 @@
+/** @file Varu's health meter: cat face (mood) + heart + health bar. */
 import Phaser from 'phaser';
 import { poly } from '../assets/paint';
 import { CAT_METER as C } from '../config/catMeter';

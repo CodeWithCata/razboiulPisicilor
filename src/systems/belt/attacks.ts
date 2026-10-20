@@ -1,3 +1,4 @@
+/** @file Sweep attacks as data (swing, spin): add an attack by adding an object here. */
 import { BELT, BELT_SPIN, type BeltAttackId } from '../../config/balance';
 import { BELT_FX } from '../../config/style';
 import { Events } from '../../core/events';

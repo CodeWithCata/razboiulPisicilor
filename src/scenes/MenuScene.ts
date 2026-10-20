@@ -1,3 +1,4 @@
+/** @file Main menu: logo, Varu, tap to start (endless button once unlocked), mute badge, install button. */
 import Phaser from 'phaser';
 import { AUDIO } from '../config/audio';
 import { GAME } from '../config/balance';

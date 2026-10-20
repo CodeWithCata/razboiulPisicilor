@@ -1,3 +1,4 @@
+/** @file Draws the leather strap with its buckle for the swing / spin. */
 import Phaser from 'phaser';
 import { poly } from '../../assets/paint';
 import { GOLD_BELT } from '../../config/animation';

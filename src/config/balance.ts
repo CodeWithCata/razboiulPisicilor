@@ -1,3 +1,4 @@
+/** @file ALL gameplay numbers (player, belt, enemies, bosses, waves timing, pickups, buffs, laser, crow rain) and the live GAME size getters. */
 import type Phaser from 'phaser';
 /**
  * ALL gameplay numbers live here. Tweak, save, the browser reloads.
@@ -105,6 +106,10 @@ export const ENEMIES = {
   ninja: { hp: 2, speed: 200, size: 54, hitRadius: 15, contactDamage: 10, score: 25, knockbackResist: 0 },
   kamikaze: { hp: 1, speed: 265, size: 52, hitRadius: 15, contactDamage: 0, score: 20, knockbackResist: 0 },
   flying: { hp: 2, speed: 140, size: 60, hitRadius: 17, contactDamage: 6, score: 25, knockbackResist: 0 },
+  /** Pisica Norocoasă (see LUCKY): never hurts, only runs. Two swings, a spin or a throw catch her. Not in any wave table: systems/LuckyCatSystem.ts sends her. */
+  lucky: { hp: 1, speed: 215, size: 56, hitRadius: 16, contactDamage: 0, score: 150, knockbackResist: 0 },
+  /** Pisica de Tenis (see TENNIS): a walking ranged cat. Keeps her distance and serves tennis balls the belt can swat back. */
+  tennis: { hp: 2, speed: 150, size: 64, hitRadius: 16, contactDamage: 6, score: 30, knockbackResist: 0 },
   // Bosses (their attack numbers are in config/bosses.ts). Armor makes belt hits weaker, see BOSS.armor.
   queen: { hp: 30, speed: 70, size: 150, hitRadius: 52, contactDamage: 14, score: 300, knockbackResist: 0.9 },
   mafia: { hp: 36, speed: 80, size: 140, hitRadius: 48, contactDamage: 14, score: 400, knockbackResist: 0.9 },
@@ -142,6 +147,148 @@ export const FLYER = {
   projectileSpeed: 270,
 } as const;
 
+/**
+ * Pisica de Tenis (`entities/enemies/TennisCat.ts`): walks (no flying), keeps `preferredDistance` from Varu and serves a tennis ball
+ * (the same deflectable `tennis` projectile Federer uses). Before each serve she stops and winds up (a yellow-green flash) so Varu can
+ * react. She only serves with a clear line to Varu (walls stop balls), and follows the laser dot like the ground cats (no serving then).
+ * All times are game ms.
+ */
+export const TENNIS = {
+  /** She walks closer when farther than preferredDistance + band, backs off when closer than preferredDistance - band, else holds and faces Varu. */
+  preferredDistance: 340,
+  band: 60,
+  /** Backing off is a bit slower than walking, and aims this far (px) behind her. */
+  retreatSpeedFactor: 0.8,
+  retreatStep: 220,
+  /** Time between serves (random in the range), the first one is a bit later so a fresh cat does not fire at once. */
+  shotMinMs: 2200,
+  shotMaxMs: 3400,
+  firstShotMs: { min: 1200, max: 2400 },
+  /** She stops and winds up this long before the ball leaves (flash color = the ball's). */
+  windUpMs: 450,
+  windUpColor: 0xc9e33a,
+  /** Serves only from this far (px) out to this far; the ball leaves her racket, `muzzle` px in front of her. */
+  minShotRange: 160,
+  maxShotRange: 620,
+  muzzle: 28,
+  projectileSpeed: 340,
+  /** Aim error (degrees, +/-), so she is not a perfect shot. */
+  spreadDeg: 4,
+  /** The corners of the world stay this far away from her backing-off target (px). */
+  wallMargin: 80,
+  /** How often she re-checks that nothing blocks the line to Varu (ms), and how fast she turns to face him (radians per frame). */
+  sightMs: 150,
+  turnRate: 0.15,
+} as const;
+
+/**
+ * Cat pinball: a cat flung by the belt that slams into another cat hurts it (systems/PinballSystem.ts).
+ * Each bump passes on only `transfer` of the speed, so a swing bumps once and a spin can chain two or three.
+ */
+export const PINBALL = {
+  enabled: true,
+  /** The flung cat must be at least this fast (px/s) to count. A plain swing flings at BELT.knockback (280). */
+  minSpeed: 200,
+  /** Damage to the cat that gets hit. */
+  damage: 1,
+  /** The cat that gets hit is shoved at this share of the flung cat's speed (below 1, so chains die out). */
+  transfer: 0.6,
+  /** One cat can be bumped again only after this long, so a pile-up isn't damage every frame. */
+  victimGapMs: 350,
+} as const;
+
+/**
+ * "Predarea pisicilor": when only a few cats are left, there is a SMALL chance they give up, wave a white flag, walk off and the wave
+ * counts as cleared (systems/SurrenderSystem.ts decides WHEN, `Enemy.surrender()` is the cat itself). A rare, funny reward, not a way to win.
+ * All times are game ms (the game clock, so the pause menu stops them).
+ */
+export const SURRENDER = {
+  enabled: true,
+  // --- WHEN (checked every frame; one roll per wave, the first moment all of these are true) ---
+  /** Chance of the one roll. */
+  chance: 0.15,
+  /** At most this many cats alive, AND Varu killed at least `minKills` of this wave's cats. */
+  maxAlive: 2,
+  minKills: 5,
+  /** The wave must have run this long, with every cat already spawned (queue empty, none still hiding in a bush). */
+  minWaveMs: 15000,
+  /** Waves started in this run before the first one that may roll (2 = never in the first wave; an endless run counts from its own first wave). Bosses and the final wave never roll. */
+  minRunWave: 2,
+  /** Never in the wave right after a surrender, and at most this many per run. */
+  maxPerRun: 3,
+  /** Not while Varu is below this share of his health (a surrender while he is dying would feel like a cheat). */
+  minVaruHpFraction: 0.3,
+  /** Points for the wave's surrender (once, not per cat). */
+  score: 50,
+  // --- HOW the cat leaves ---
+  /** Stands still waving the flag (and says its line) before it walks. flagMs + fadeMs must stay above SLOW_MO.windowMs (config/slowMo.ts): that is why the last-cat slow-mo never fires after a surrender. */
+  flagMs: 1500,
+  /** Walking speed: this share of the cat's own speed, but never slower than `minWalkSpeed` (px/s, so a fat cat still gets somewhere). */
+  walkSpeedFactor: 0.7,
+  minWalkSpeed: 120,
+  /** It counts as gone once it is this close to its exit (px). */
+  exitRadius: 28,
+  /** Safety: after this long walking, it fades where it stands, so a stuck cat can never hold the wave. */
+  walkTimeoutMs: 4000,
+  /** Fade-out before the cat is removed. */
+  fadeMs: 600,
+  /** Without enemy spawn points in the map the exit is the nearest world edge, this far inside it (px). */
+  edgeInset: 40,
+  /** The line above the cat (Effects): how long it stays put before it floats up and fades, its size and colour, and its height above the cat (px). */
+  line: { holdMs: 1200, size: 26, color: '#ffffff', offsetY: -64 },
+  /** The little white flag, drawn in code: the anchor is a share of the cat's size from its centre, then a pole and a cloth that ripples. */
+  flag: {
+    depth: 12,
+    anchorX: 0.3,
+    anchorY: -0.15,
+    poleLen: 34,
+    poleWidth: 3,
+    poleColor: 0xb98a4f,
+    clothW: 24,
+    clothH: 15,
+    clothColor: 0xffffff,
+    outlineColor: 0x1b2340,
+    outlineWidth: 2,
+    /** The wave: how fast it flutters (Hz), how far the pole top sways sideways and how far the cloth's free edge ripples up and down (px). */
+    waveHz: 2.2,
+    swayPx: 4,
+    ripplePx: 3,
+  },
+} as const;
+
+/**
+ * Pisica Norocoasă (the lucky cat): now and then a golden cat shows up in a normal wave and RUNS from Varu. Catch her before she
+ * gets away and she drops a pile of pickups. She never hurts and the wave never waits for her (`Enemy.isBonus`).
+ * systems/LuckyCatSystem.ts decides WHEN (game clock), `entities/enemies/LuckyCat.ts` is the cat. All times are game ms.
+ */
+export const LUCKY = {
+  enabled: true,
+  /** One roll per wave, at the start of the wave. Never in boss waves, the final wave or the first wave of the run. */
+  chance: 0.12,
+  minRunWave: 2,
+  /** At least this many waves without her between two visits, and at most this many visits per run. */
+  minWavesBetween: 2,
+  maxPerRun: 4,
+  /** She shows up this long after the wave starts (random in the range), and only if that wave is still going. */
+  delayMs: { min: 4000, max: 10000 },
+  /** She runs for this long, then vanishes in a puff. */
+  lifeMs: 10000,
+  /** Running away: every `retargetMs` she looks at the directions below (degrees off straight-away-from-Varu), keeps the ones with a clear line
+   *  of `fleeStep` px (at least `minStep` of real travel) and takes the one that ends up farthest from Varu, minus `turnPenalty` px per 45 degrees of turning. */
+  retargetMs: 200,
+  fleeStep: 280,
+  minStep: 80,
+  turnPenalty: 45,
+  turnStepsDeg: [0, 45, -45, 90, -90, 135, -135],
+  /** Her targets stay this far inside the world edge (px). */
+  wallMargin: 70,
+  /** Catching her: this many pickups (the usual random ones) land in a ring of this radius around the spot. */
+  dropCount: 3,
+  dropRadius: 46,
+  /** The show: gold sparks when she appears and when she is caught, and the camera shake of a catch. */
+  fx: { appearSparks: 18, catchSparks: 34, catchShakeMs: 160, catchShake: 0.007 },
+} as const;
+
 export interface ProjectileStats {
   size: number;
   hitRadius: number;
@@ -155,7 +302,7 @@ export interface ProjectileStats {
 export const PROJECTILES = {
   yarn: { size: 30, hitRadius: 11, damage: 7, spinPerSec: 540, lifetimeMs: 4000, deflectable: false },
   tennis: { size: 36, hitRadius: 13, damage: 10, spinPerSec: 720, lifetimeMs: 5000, deflectable: true },
-  smoke: { size: 44, hitRadius: 16, damage: 9, spinPerSec: 120, lifetimeMs: 3500, deflectable: false },
+  heart: { size: 42, hitRadius: 15, damage: 9, spinPerSec: 100, lifetimeMs: 3500, deflectable: false }, // the emo cat's broken heart
 } as const satisfies Record<string, ProjectileStats>;
 
 export type ProjectileKind = keyof typeof PROJECTILES;
@@ -173,9 +320,12 @@ export const WAVE_TIMING = {
 // Pickups, buffs, laser pointer, Crow Rain
 // ---------------------------------------------------------------------------
 
-export type PickupKind = 'crochete' | 'lapte' | 'monster' | 'goldenBelt' | 'laser' | 'crow';
+export type PickupKind = 'crochete' | 'lapte' | 'monster' | 'goldenBelt' | 'laser' | 'crow' | 'mystery';
 
-/** Timed effects. Crochete (instant heal) and the crow (one-off event) are not buffs. */
+/** What the question mark can turn into: every pickup except itself. */
+export type MysteryPrize = Exclude<PickupKind, 'mystery'>;
+
+/** Timed effects. Crochete (instant heal), the crow (one-off event) and the question mark (turns into one of the others) are not buffs. */
 export type BuffKind = 'lapte' | 'monster' | 'goldenBelt' | 'laser';
 
 export interface BuffStats {
@@ -210,9 +360,17 @@ export const PICKUP_SPAWN = {
   goldenBeltFirstMs: 12000,
   goldenBeltEveryMs: 25000,
   /** Higher = more common. */
-  weights: { crochete: 3, lapte: 2, monster: 2, goldenBelt: 5, laser: 1.5, crow: 1.5 } satisfies Record<PickupKind, number>,
+  weights: { crochete: 3, lapte: 2, monster: 4, goldenBelt: 5, laser: 1.5, crow: 1.5, mystery: 2 } satisfies Record<PickupKind, number>,
   lowHpThreshold: 0.4, // below this HP fraction...
   lowHpHealBoost: 3, // ...crochete is this many times more likely
+} as const;
+
+/** The question mark: Varu grabs it, a beat later it turns into a random OTHER pickup and that one takes effect. */
+export const MYSTERY = {
+  /** The pause (game ms) between grabbing the "?" and the reveal. */
+  revealMs: 450,
+  /** Higher = more likely. Equal = every prize is as likely as the others. */
+  prizeWeights: { crochete: 1, lapte: 1, monster: 1, goldenBelt: 1, laser: 1, crow: 1 } satisfies Record<MysteryPrize, number>,
 } as const;
 
 export const LASER = {

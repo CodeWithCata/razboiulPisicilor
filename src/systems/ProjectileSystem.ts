@@ -1,3 +1,4 @@
+/** @file Projectile sprite (yarn, tennis, broken heart) and the group that updates and expires them. */
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { WORLD } from '../config/arena';
@@ -10,7 +11,7 @@ import type { Player } from '../entities/Player';
 import { gameClock } from '../core/clock';
 
 /** Placeholder texture per kind. */
-const TEXTURES: Record<ProjectileKind, TexKey> = { yarn: Tex.Yarn, tennis: Tex.Tennis, smoke: Tex.Smoke };
+const TEXTURES: Record<ProjectileKind, TexKey> = { yarn: Tex.Yarn, tennis: Tex.Tennis, heart: Tex.Heart };
 
 export class Projectile extends Phaser.Physics.Arcade.Sprite {
   readonly kind: ProjectileKind;
@@ -35,6 +36,14 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(25);
     fitToSize(this, stats.size);
     setCircleHitbox(this, stats.hitRadius);
+    this.launch(angle, speed);
+  }
+
+  /**
+   * Set its flight. Must also run AFTER the sprite joins the physics group: adding a body to a group resets its velocity to 0
+   * (the group's defaults), which made the balls hang in place and just spin.
+   */
+  launch(angle: number, speed: number): void {
     this.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
   }
 
@@ -93,7 +102,10 @@ export class ProjectileSystem {
 
     this.off.push(
       listen<SpawnProjectilePayload>(Events.SpawnProjectile, ({ kind, x, y, angle, speed }) => {
-        this.group.add(new Projectile(this.scene, kind, x, y, angle, speed));
+        const proj = new Projectile(this.scene, kind, x, y, angle, speed);
+        this.group.add(proj);
+        proj.launch(angle, speed); // the group's add reset the velocity to 0: set it again now
+
       }),
     );
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off.forEach((f) => f()));

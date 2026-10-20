@@ -1,3 +1,4 @@
+/** @file On-phone card with fps and screen numbers (pause-menu switch "Date debug"). */
 import Phaser from 'phaser';
 import { PERF } from '../config/perf';
 import { PERF_TEXT } from '../content/lines';

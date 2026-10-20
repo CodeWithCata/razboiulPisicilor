@@ -1,3 +1,4 @@
+/** @file Nearest-cat aim + auto-swing helper for touch (only used when the pause-menu switch is on). */
 import type Phaser from 'phaser';
 import { PROJECTILES } from '../../config/balance';
 import { TOUCH } from '../../config/touch';

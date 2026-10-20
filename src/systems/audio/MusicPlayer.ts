@@ -1,3 +1,4 @@
+/** @file Tiny step sequencer for the generated music loops. */
 import type { MusicId } from '../../assets/audioKeys';
 import { AUDIO, TRACKS, type TrackDef } from '../../config/audio';
 import { midiToHz, tone } from './synth';

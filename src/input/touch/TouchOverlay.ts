@@ -1,5 +1,7 @@
-import Phaser from 'phaser';
+/** @file Draws the touch stick, attack button and pause button. Visuals only; logic is in TouchInput. */
+import type Phaser from 'phaser';
 import { GAME } from '../../config/balance';
+import { drawBeltArm } from '../../assets/art/beltArm';
 import { TOUCH } from '../../config/touch';
 import { COLORS, FONT } from '../../config/style';
 import { TOUCH_TEXT } from '../../content/lines';
@@ -8,10 +10,12 @@ import type { StickView, TouchInput } from './TouchInput';
 /**
  * Draws the touch move stick, the attack button and the pause button on top of the game (the spin and throw buttons are the
  * cooldown badges of ui/BeltBadges.ts). Same look as the badges: a soft disc, a cream ring, a navy outline, gold.
+ * The attack button's picture (Varu's arm holding the belt) is drawn once on its own Graphics, which is then moved and scaled each frame.
  * Pure visuals: all the logic is in TouchInput.
  */
 export class TouchOverlay {
   private readonly gfx: Phaser.GameObjects.Graphics;
+  private readonly attackIcon: Phaser.GameObjects.Graphics;
   private readonly caption: Phaser.GameObjects.Text;
   private readonly attackTag: Phaser.GameObjects.Text;
   private readonly laserHint: Phaser.GameObjects.Text;
@@ -21,6 +25,11 @@ export class TouchOverlay {
     private readonly input: TouchInput,
   ) {
     this.gfx = scene.add.graphics().setScrollFactor(0).setDepth(TOUCH.depth);
+
+    // The attack button's picture: drawn once around (0, 0), then placed and scaled in drawAttack. Created after `gfx` at the same depth, so it sits on top of the disc.
+    const c = TOUCH.attackIcon.center;
+    this.attackIcon = scene.add.graphics().setScrollFactor(0).setDepth(TOUCH.depth);
+    drawBeltArm(this.attackIcon, c.x, c.y);
 
     // A caption under the idle stick says where the thumb goes. It fades after a few seconds and never comes back once the stick was used.
     const spot = TOUCH.idleStickSpot;
@@ -122,7 +131,7 @@ export class TouchOverlay {
   }
 
   /**
-   * The attack button: a soft disc, a ring and a fist holding a belt, all with a navy outline like the other buttons.
+   * The attack button: a soft disc and a ring with Varu's arm holding the belt in it, all with a navy outline like the other buttons.
    * It squashes and glows while a thumb holds it.
    */
   private drawAttack(): void {
@@ -135,57 +144,7 @@ export class TouchOverlay {
     g.lineStyle(TOUCH.ringWidth + 4, TOUCH.outlineColor, held ? 0.9 : 0.55).strokeCircle(b.x, b.y, r - 2);
     g.lineStyle(TOUCH.ringWidth, tone, held ? 1 : 0.8).strokeCircle(b.x, b.y, r - 2);
 
-    this.drawFistWithBelt(b.x, b.y, r);
-  }
-
-  /** A fist holding a belt: the strap goes through the fist and ends in a gold buckle. Every shape is drawn navy first (a bit bigger), then in color. */
-  private drawFistWithBelt(cx: number, cy: number, r: number): void {
-    const g = this.gfx;
-    const I = TOUCH.attackIcon;
-    const o = I.outline;
-    const at = ([u, v]: readonly [number, number]): [number, number] => [cx + u * r, cy + v * r];
-
-    // The strap, with holes near the buckle end, and the buckle on its tip.
-    const [x0, y0] = at(I.strap.from);
-    const [x1, y1] = at(I.strap.to);
-    const sw = I.strap.width * r;
-    g.lineStyle(sw + o * 2, TOUCH.outlineColor, 1).lineBetween(x0, y0, x1, y1);
-    g.lineStyle(sw, I.strapColor, 1).lineBetween(x0, y0, x1, y1);
-    g.fillStyle(TOUCH.outlineColor, 1);
-    for (const k of I.strap.holes) g.fillCircle(x0 + (x1 - x0) * k, y0 + (y1 - y0) * k, I.strap.holeR * r);
-    const half = I.buckle.half * r;
-    g.fillStyle(TOUCH.outlineColor, 1).fillRect(x1 - half - o, y1 - half - o, (half + o) * 2, (half + o) * 2);
-    g.fillStyle(TOUCH.knobColor, 1).fillRect(x1 - half, y1 - half, half * 2, half * 2);
-    g.fillStyle(I.strapColor, 1).fillRect(x1 - half * 0.45, y1 - half * 0.45, half * 0.9, half * 0.9);
-
-    // The fist over the strap: palm, four knuckles, thumb (outline pass, then skin).
-    const P = I.palm;
-    const K = I.knuckles;
-    const T = I.thumb;
-    const px = cx + P.x * r;
-    const py = cy + P.y * r;
-    const thumb = (grow: number, color: number): void => {
-      const tx = cx + T.x * r;
-      const ty = cy + T.y * r;
-      const w = T.w * r + grow * 2;
-      const h = T.h * r + grow * 2;
-      const tilt = Phaser.Math.DegToRad(T.tiltDeg);
-      const c = Math.cos(tilt);
-      const s2 = Math.sin(tilt);
-      const pts = [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]].map(([u, v]) => new Phaser.Math.Vector2(tx + u! * c - v! * s2, ty + u! * s2 + v! * c));
-      g.fillStyle(color, 1).fillPoints(pts, true);
-    };
-    for (const pass of [o, 0]) {
-      const color = pass > 0 ? TOUCH.outlineColor : I.skin;
-      g.fillStyle(color, 1).fillRoundedRect(px - (P.w * r) / 2 - pass, py - (P.h * r) / 2 - pass, P.w * r + pass * 2, P.h * r + pass * 2, P.radius * r + pass);
-      for (const kx of K.xs) g.fillCircle(cx + kx * r, cy + K.y * r, K.r * r + pass);
-      thumb(pass, color);
-    }
-    // A shaded line under the knuckles and under the thumb, so the fingers read as a fist.
-    g.lineStyle(Math.max(2, r * 0.03), I.skinShade, 1);
-    const ly = cy + (K.y + K.r * 0.9) * r;
-    g.lineBetween(cx + (K.xs[0]! - 0.02) * r, ly, cx + (K.xs[3]! + 0.02) * r, ly);
-    g.lineBetween(cx + (T.x - T.w / 2 + 0.03) * r, cy + (T.y + T.h / 2) * r, cx + (T.x + T.w / 2 - 0.03) * r, cy + (T.y + T.h / 2) * r);
+    this.attackIcon.setPosition(b.x, b.y).setScale(TOUCH.attackIcon.size * r);
   }
 
   /** The pause button: a soft disc, a thin ring and two bars with a navy outline (like the speaker badge). */

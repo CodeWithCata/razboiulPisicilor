@@ -5,21 +5,27 @@
 import { writeFileSync } from 'node:fs';
 import { ARENA, OBJECTS, SOLID_TILES, SPAWN_KINDS, TILES, objectTiles } from '../src/config/arena.ts';
 
-const { cols, rows, tile } = ARENA;
-const idx = (c, r) => r * cols + c;
+const { tile, play, standTiles } = ARENA;
+// The map is the fenced PLAY AREA (play.cols x play.rows tiles: the arena Varu fights in) with a ring of STANDS around it.
+// Everything below is written in PLAY coordinates (0..PC-1, 0..PR-1). `idx` adds the stand margin, so the fence runs along
+// the edge of the play area and the stands lie outside it. The stands themselves are drawn in code (world/Stands.ts).
+const PC = play.cols, PR = play.rows;
+const cols = ARENA.cols, rows = ARENA.rows; // the whole map
+const MX = standTiles.left, MY = standTiles.top; // where the play area starts inside the map
+const idx = (c, r) => (r + MY) * cols + (c + MX); // play coordinates -> layer index
+const rawIdx = (c, r) => r * cols + c; // whole-map coordinates -> layer index
 const gid = (tileId) => tileId + 1; // firstgid = 1; 0 = empty
 
 const ground = new Array(cols * rows).fill(0);
 const walls = new Array(cols * rows).fill(0);
 const decor = new Array(cols * rows).fill(0);
 
-// The world is 48x28 tiles; the screen shows about 32x18 of it, following Varu. The middle of the world is the
-// "courtyard" (the layout Varu starts in: plaza, crossing paths, beds, "Campus!" lettering). The rest is built
-// around it. Everything is turned 180 degrees around the world's center (a thing at the top left has a partner at
-// the bottom right), so neither side of the world is easier.
-const OX = 8, OY = 5; // where the courtyard's old top-left corner sits in the world
-const rotC = (c, size = 2) => cols - size - c; // partner column of a thing that is `size` tiles wide
-const rotR = (r, size = 2) => rows - size - r;
+// The courtyard (the layout Varu starts in: plaza, crossing paths, beds, \"Campus!\" lettering) is in the middle of the play area.
+// The rest is built around it. Everything is turned 180 degrees around the play area's center (a thing at the top left has a
+// partner at the bottom right), so neither side of the arena is easier.
+const OX = 8, OY = 5; // where the courtyard's old top-left corner sits in the play area
+const rotC = (c, size = 2) => PC - size - c; // partner column of a thing that is `size` tiles wide
+const rotR = (r, size = 2) => PR - size - r;
 
 // Floor: the grass is the repeating backdrop (Tex.Grass), so the ground layer only holds plank floors.
 // The weave repeats every 2x2 tiles.
@@ -32,25 +38,25 @@ for (let r = PLAZA.fromRow; r <= PLAZA.toRow; r++) {
   for (let c = PLAZA.fromCol; c <= PLAZA.toCol; c++) if (!CHOPPED.has(`${c},${r}`)) putPlank(c, r);
 }
 for (let c = 5 + OX; c <= 26 + OX; c++) for (const r of [8 + OY, 9 + OY]) putPlank(c, r); // long path, bed to bed
-// Short stubs up and down (the strip above stays grass for the "Campus!" lettering).
+// Short stubs up and down (the strip above stays grass for the \"Campus!\" lettering).
 for (const r of [4, 5, 12, 13]) for (const c of [15, 16]) putPlank(c + OX, r + OY);
 
-// Decks: a small plank mat (4x4) under the four outer objects at the sides of the world.
+// Decks: a small plank mat (4x4) under the four outer objects at the sides of the arena.
 const DECKS = [[4, 9], [42, 9]].flatMap(([c, r]) => [[c, r], [rotC(c), rotR(r)]]);
 for (const [c, r] of DECKS) for (let dr = -1; dr <= 2; dr++) for (let dc = -1; dc <= 2; dc++) putPlank(c + dc, r + dr);
 
-// Border: a picket fence. Posts at the corners and every few tiles; the side edges use the turned pieces.
+// Border: a picket fence around the play area. Posts at the corners and every few tiles; the side edges use the turned pieces.
 const POST_COLS = [4, 12, 20, 28, 36, 44];
 const POST_ROWS = [4, 13, 22];
-for (let c = 0; c < cols; c++) {
+for (let c = 0; c < PC; c++) {
   const piece = POST_COLS.includes(c) ? TILES.fencePost : TILES.fence;
-  walls[idx(c, 0)] = walls[idx(c, rows - 1)] = gid(piece);
+  walls[idx(c, 0)] = walls[idx(c, PR - 1)] = gid(piece);
 }
-for (let r = 1; r < rows - 1; r++) {
+for (let r = 1; r < PR - 1; r++) {
   const piece = POST_ROWS.includes(r) ? TILES.fencePostSide : TILES.fenceSide;
-  walls[idx(0, r)] = walls[idx(cols - 1, r)] = gid(piece);
+  walls[idx(0, r)] = walls[idx(PC - 1, r)] = gid(piece);
 }
-for (const [c, r] of [[0, 0], [cols - 1, 0], [0, rows - 1], [cols - 1, rows - 1]]) walls[idx(c, r)] = gid(TILES.fencePost);
+for (const [c, r] of [[0, 0], [PC - 1, 0], [0, PR - 1], [PC - 1, PR - 1]]) walls[idx(c, r)] = gid(TILES.fencePost);
 
 // Obstacles: 2x2 objects ([column, row] of the top-left tile), listed for the top half only; each one is turned
 // around the center to make its partner in the bottom half (the cat bed gets the cushion bed as partner).
@@ -60,7 +66,7 @@ for (const [c, r] of [[0, 0], [cols - 1, 0], [0, rows - 1], [cols - 1, rows - 1]
 // Nothing is L-shaped, and every gap stays at least 2 tiles (80px) wide for the fat cat (checked below).
 const PARTNER = { [OBJECTS.bed]: OBJECTS.bedCushion };
 const HALF = [
-  // courtyard (the old 32x18 layout, moved to the middle of the world)
+  // courtyard (the old 32x18 layout, moved to the middle of the play area)
   [3 + OX, 3 + OY, OBJECTS.bush], [27 + OX, 3 + OY, OBJECTS.bush],
   [3 + OX, 8 + OY, OBJECTS.bed],
   [8 + OX, 4 + OY, OBJECTS.scratcher], [22 + OX, 4 + OY, OBJECTS.box],
@@ -78,7 +84,7 @@ for (const [c, r, id] of OBSTACLES) {
 // Gap check: two 2x2 objects need at least 4 tiles between their top-left corners on one axis (= 2 free tiles),
 // and each needs 2 free tiles to the fence.
 for (const [c, r, id] of OBSTACLES) {
-  if (c < 3 || r < 3 || c > cols - 5 || r > rows - 5) throw new Error(`object ${id} at ${c},${r} is too close to the fence`);
+  if (c < 3 || r < 3 || c > PC - 5 || r > PR - 5) throw new Error(`object ${id} at ${c},${r} is too close to the fence`);
 }
 for (let i = 0; i < OBSTACLES.length; i++) {
   for (let j = i + 1; j < OBSTACLES.length; j++) {
@@ -108,9 +114,11 @@ for (const [c, r, t] of DECOR) {
   if (decor[idx(c, r)] === 0) decor[idx(c, r)] = gid(t);
 }
 
-// Spawn points (pixels). Cats appear at these (never right next to Varu, and not absurdly far either), the boss
-// above the start so it walks into view, Varu in the middle of the world.
-const W = cols * tile, H = rows * tile;
+// Spawn points. Written in PLAY pixels (inside the fence), then moved into map pixels: the stands are outside the fence,
+// so a spawn at the edge of the play area must not land out there. Cats appear at these (never right next to Varu, and not
+// absurdly far either), the boss above the start so it walks into view, Varu in the middle of the play area.
+const W = PC * tile, H = PR * tile;
+const toMap = (x, y) => [x + MX * tile, y + MY * tile];
 const EDGE_XS = [160, 480, 800, 1120, 1440, 1760];
 const EDGE_YS = [200, 420, 700, 920];
 const ENEMY_SPAWNS = [
@@ -120,29 +128,30 @@ const ENEMY_SPAWNS = [
 let nextId = 1;
 const point = (name, type, x, y) => ({ id: nextId++, name, type, point: true, rotation: 0, visible: true, width: 0, height: 0, x, y });
 const objects = [
-  point('player', SPAWN_KINDS.player, W / 2, H / 2),
-  point('boss', SPAWN_KINDS.boss, W / 2, H / 2 - 260),
-  ...ENEMY_SPAWNS.map(([x, y], i) => point(`enemy ${i + 1}`, SPAWN_KINDS.enemy, x, y)),
+  point('player', SPAWN_KINDS.player, ...toMap(W / 2, H / 2)),
+  point('boss', SPAWN_KINDS.boss, ...toMap(W / 2, H / 2 - 260)),
+  ...ENEMY_SPAWNS.map(([x, y], i) => point(`enemy ${i + 1}`, SPAWN_KINDS.enemy, ...toMap(x, y))),
 ];
 
 // ---- sanity checks, so a bad edit to this script fails loudly ----
 const solidGids = new Set(SOLID_TILES.map(gid));
-const isSolid = (x, y) => solidGids.has(walls[idx(Math.floor(x / tile), Math.floor(y / tile))]);
-for (const o of objects) if (isSolid(o.x, o.y)) throw new Error(`spawn "${o.name}" is inside a wall`);
+const isSolid = (x, y) => solidGids.has(walls[rawIdx(Math.floor(x / tile), Math.floor(y / tile))]);
+for (const o of objects) if (isSolid(o.x, o.y)) throw new Error(`spawn \"${o.name}\" is inside a wall`);
 
-const startC = Math.floor(W / 2 / tile), startR = Math.floor(H / 2 / tile);
+const startC = Math.floor(PC / 2), startR = Math.floor(PR / 2);
 const seen = new Set([idx(startC, startR)]);
 const queue = [[startC, startR]];
 while (queue.length) {
   const [c, r] = queue.pop();
   for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     const nc = c + dc, nr = r + dr;
-    if (nc < 0 || nr < 0 || nc >= cols || nr >= rows || seen.has(idx(nc, nr)) || solidGids.has(walls[idx(nc, nr)])) continue;
+    if (nc < 0 || nr < 0 || nc >= PC || nr >= PR || seen.has(idx(nc, nr)) || solidGids.has(walls[idx(nc, nr)])) continue;
     seen.add(idx(nc, nr));
     queue.push([nc, nr]);
   }
 }
-const open = walls.filter((g) => !solidGids.has(g)).length;
+let open = 0;
+for (let r = 0; r < PR; r++) for (let c = 0; c < PC; c++) if (!solidGids.has(walls[idx(c, r)])) open++;
 if (seen.size !== open) throw new Error(`arena has unreachable pockets: ${seen.size} reachable of ${open} open tiles`);
 
 // ---- write Tiled JSON ----
@@ -186,4 +195,4 @@ const map = {
 };
 
 writeFileSync(new URL('../public/assets/maps/arena.json', import.meta.url), JSON.stringify(map));
-console.log(`arena.json written: ${cols}x${rows} tiles, ${open} open, ${objects.length} spawn points.`);
+console.log(`arena.json written: ${cols}x${rows} tiles (play area ${PC}x${PR} inside a stand ring), ${open} open play tiles, ${objects.length} spawn points.`);

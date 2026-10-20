@@ -1,3 +1,4 @@
+/** @file The jokes (Romanian), grouped by trigger, plus boss intro lines and photo captions. */
 import type { BossType } from '../config/balance';
 import type { JokeCategory } from '../config/jokes';
 import type { PhotoId } from '../assets/keys';
@@ -51,7 +52,7 @@ export const JOKE_LINES: Record<JokeCategory, readonly string[]> = {
 /** PLACEHOLDER: boss intro lines, one list per boss. Put the real nicknames here. */
 export const BOSS_INTRO_LINES: Record<BossType, readonly string[]> = {
   queen: ['PLACEHOLDER: ea își cere tronul înapoi.', 'Regina vrea o plecăciune. Sau o centură.'],
-  mafia: ['PLACEHOLDER: șeful vine după taxe.', 'Pisica Mafiotă: "Ai o ofertă pe care nu o poți refuza."'],
+  mafia: ['PLACEHOLDER: cine i-a frânt inima?', 'Pisica Emo: \"Sunt bine. (Nu sunt.)\"'],
   federer: ['PLACEHOLDER: serviciu, retur, apoi smash.', 'Pisica Federer: 20 de turnee, 0 mile de milă.'],
 };
 
@@ -61,7 +62,7 @@ export const BOSS_INTRO_LINES: Record<BossType, readonly string[]> = {
  */
 export const PHOTO_CAPTIONS: Record<PhotoId, string> = {
   queen: 'PLACEHOLDER: numele prietenei (Regina)',
-  mafia: 'PLACEHOLDER: numele prietenului (Mafiotul)',
+  mafia: 'PLACEHOLDER: numele prietenului (Emo-ul)',
   federer: 'PLACEHOLDER: numele prietenului (Federer)',
   gameOver: 'PLACEHOLDER: cine râde de Varu',
   ending: 'PLACEHOLDER: toată gașca',

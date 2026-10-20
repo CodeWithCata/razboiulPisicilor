@@ -1,3 +1,4 @@
+/** @file Helpers for placeholder textures: `make` (draw once, only if no real image loaded) and `poly` (Phaser 4 needs Vector2 lists). */
 import Phaser from 'phaser';
 import type { TexKey } from './keys';
 

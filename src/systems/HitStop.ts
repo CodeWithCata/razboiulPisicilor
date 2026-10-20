@@ -1,3 +1,4 @@
+/** @file Tiny physics freeze on strong hits (config/hitstop.ts). */
 import Phaser from 'phaser';
 import { HIT_STOP } from '../config/hitstop';
 import { Events, listen, type EnemyKilledPayload } from '../core/events';

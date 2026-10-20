@@ -1,14 +1,17 @@
+/** @file Runs one swing or spin: the tip arcs around Varu, each cat is hit once, projectiles are swatted. */
 import Phaser from 'phaser';
 import { BELT_FX } from '../../config/style';
-import { GOLD_BELT, MILK_FX } from '../../config/animation';
+import { FLINCH, GOLD_BELT, MILK_FX } from '../../config/animation';
 import { easeInOutBack } from '../../core/ease';
-import { bus } from '../../core/events';
-import { isSwept } from '../../core/sweep';
+import { gameClock } from '../../core/clock';
+import { bus, Events, type BeltSweepPayload } from '../../core/events';
+import { isSwept, normalizeAngle } from '../../core/sweep';
 import type { Enemy } from '../../entities/Enemy';
 import type { Player } from '../../entities/Player';
 import type { Projectile } from '../ProjectileSystem';
 import type { SweepDef } from './attacks';
 import { drawStrap, drawTrail } from './beltVisual';
+import { drawGoldenTornado } from './goldenTornado';
 import { createDrops, createPuddles } from './gooEmitters';
 import { swatProjectile } from './swat';
 
@@ -42,6 +45,8 @@ export class SweepAttack {
   private bursts = 0;
   private lap = 0;
   private readonly alreadyHit = new Set<Enemy>();
+  /** Cats that already flinched in this lap (they flinch once per pass). */
+  private readonly warned = new Set<Enemy>();
 
   constructor(
     private readonly player: Player,
@@ -65,6 +70,11 @@ export class SweepAttack {
     return this.def?.spinsBody ? this.lastTurn : 0;
   }
 
+  /** True while the golden tornado is spinning: Varu is hidden inside it (the belt is still drawn). */
+  get hidesBody(): boolean {
+    return this.def !== null && this.def.ring && GOLD_BELT.enabled && GOLD_BELT.tornado.enabled && GOLD_BELT.tornado.hideVaru && this.player.goldenBelt;
+  }
+
   /** Reach, including power-ups (golden belt). */
   private get range(): number {
     return (this.def?.range ?? 0) * this.player.rangeMultiplier;
@@ -77,6 +87,7 @@ export class SweepAttack {
     // The aim is locked for the whole attack: only the start angle is kept.
     this.startAngle = def.centered ? aimAngle - this.arcRad / 2 : aimAngle;
     this.alreadyHit.clear();
+    this.warned.clear();
     this.lap = 0;
     this.lastTurn = 0;
     this.lastTime = time;
@@ -106,10 +117,14 @@ export class SweepAttack {
     if (lap > this.lap) {
       this.lap = lap;
       this.alreadyHit.clear();
+      this.warned.clear();
     }
     const swept = total - lap * TAU;
     this.hitEnemies(def, swept);
     this.swatProjectiles(swept);
+    // Same numbers the cats are hit with: the arena (bushes, fences, cans...) reacts to them (systems/props/PropSystem.ts).
+    const sweep: BeltSweepPayload = { x: this.player.x, y: this.player.y, startAngle: this.startAngle, swept, lap, range: this.range, spin: def.ring };
+    bus.emit(Events.BeltSweep, sweep);
     this.track(turn, time);
     this.draw(def, turn, t);
     if (def.milk) this.flingMilk(time);
@@ -133,12 +148,25 @@ export class SweepAttack {
 
       const dist = Phaser.Math.Distance.Between(px, py, enemy.x, enemy.y) - enemy.hitRadius;
       if (dist > this.range) continue;
-      if (!isSwept(Phaser.Math.Angle.Between(px, py, enemy.x, enemy.y), this.startAngle, swept)) continue;
+      const angle = Phaser.Math.Angle.Between(px, py, enemy.x, enemy.y);
+      if (!isSwept(angle, this.startAngle, swept)) {
+        this.warn(def, enemy, angle, swept); // not yet: but if the belt is close, the cat flinches
+        continue;
+      }
 
       this.alreadyHit.add(enemy);
       enemy.takeDamage(damage, px, py, def.knockback); // armor is applied inside takeDamage
     }
     // EnemyHit / EnemyKilled events fire from the enemy, so effects and score react on their own.
+  }
+
+  /** The belt tip is close behind this cat (inside the reach): it squashes and flashes once per pass, so the hit is readable. Nothing else changes. */
+  private warn(def: SweepDef, enemy: Enemy, angle: number, swept: number): void {
+    if (!FLINCH.enabled || enemy.isBoss || this.warned.has(enemy) || !(def.ring ? FLINCH.spin : FLINCH.swing)) return;
+    const ahead = normalizeAngle(angle - this.startAngle) - swept; // how far the tip still has to turn to reach the cat
+    if (ahead <= 0 || ahead > Phaser.Math.DegToRad(FLINCH.leadDeg)) return;
+    this.warned.add(enemy);
+    enemy.flinch();
   }
 
   private swatProjectiles(swept: number): void {
@@ -206,6 +234,8 @@ export class SweepAttack {
       this.gfx.lineStyle(BELT_FX.innerWidth, buffed ? BELT_FX.buffedInner : BELT_FX.normalInner, BELT_FX.spinRingAlpha * alpha);
       this.gfx.strokeCircle(x, y, ringRadius);
     }
+    // Golden belt + spin: the gold tornado around Varu (under the strap, so the belt whips through it).
+    if (def.ring && golden) drawGoldenTornado(this.gfx, x, y, this.range, t, gameClock.now);
     // The streak is as long as the belt is fast: nothing at the wind-up, full at the whip, short again at the end.
     const speed = Phaser.Math.Clamp(Math.abs(this.turnSpeed) / BELT_FX.fullTrailSpeed, 0, 1);
     const trail = Phaser.Math.DegToRad(def.trailDeg) * speed;

@@ -1,3 +1,4 @@
+/** @file Measures fps and slow frames for the on-phone debug panel. */
 import { PERF } from '../config/perf';
 
 /** What the monitor measured since the last `take()`. */

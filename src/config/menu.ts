@@ -1,3 +1,4 @@
+/** @file Look of the main menu (logo, sunburst, stage, buttons). */
 import { Tex } from '../assets/keys';
 import { GAME } from './balance';
 import { COLORS } from './style';

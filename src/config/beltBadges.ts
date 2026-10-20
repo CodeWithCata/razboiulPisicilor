@@ -1,3 +1,4 @@
+/** @file Look and position of the spin / throw cooldown badges (ui/BeltBadges.ts). */
 import { COLORS } from './style';
 
 /**

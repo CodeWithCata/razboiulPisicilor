@@ -1,3 +1,4 @@
+/** @file Where real sound / music files are listed to replace the synthesized placeholders (empty = all placeholders). */
 import type { MusicId, SoundId } from './audioKeys';
 
 /**

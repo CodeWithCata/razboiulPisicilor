@@ -1,12 +1,16 @@
+/** @file Generates every placeholder texture at boot (calls the art/ drawers + small shapes), skipping keys that loaded a real image. */
 import Phaser from 'phaser';
 import { COLORS } from '../config/style';
 import { Tex } from './keys';
-import { drawBossFederer, drawBossMafia, drawBossQueen } from './art/bosses';
+import { drawBossMafia } from './art/bosses';
+import { drawBossFederer, drawFedererArm, drawFedererFootL, drawFedererFootR, drawFedererRacket, drawFedererTail } from './art/federer';
+import { drawBarrel, drawBarrelBroken, drawBarrelPuddle } from './art/barrel';
 import { CROW_GOLD, CROW_KAMIKAZE, CROW_NORMAL, POSE_FLAP, POSE_FOLD, POSE_OPEN, drawCrow, drawFeather } from './art/crows';
-import { drawCatFat, drawCatFlying, drawCatKamikaze, drawCatNinja, drawCatNormal } from './art/cats';
+import { drawBossQueen, drawQueenCape, drawQueenCrown, drawQueenFootL, drawQueenFootR, drawQueenScepter } from './art/queen';
+import { drawCatFat, drawCatFlying, drawCatFlyingBody, drawWingLeft, drawWingRight, drawCatKamikaze, drawCatLucky, drawCatNinja, drawCatNormal, drawCatTennis, drawTennisArm, drawTennisRacket } from './art/cats';
 import {
-  drawBeltThrown, drawPickupCrochete, drawPickupGoldenBelt, drawPickupLapte, drawPickupLaser, drawPickupMonster,
-  drawTennis, drawYarn,
+  drawBeltThrown, drawPickupCrochete, drawPickupGoldenBelt, drawPickupLapte, drawPickupLaser, drawPickupMonster, drawPickupMystery,
+  drawBrokenHeart, drawTennis, drawYarn,
 } from './art/items';
 import { drawVaru, drawVaruBelt, drawVaruLegL, drawVaruLegR } from './art/varu';
 import { make, poly } from './paint';
@@ -34,8 +38,16 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.CatNinja, 96, 96, drawCatNinja);
   make(scene, Tex.CatKamikaze, 96, 96, drawCatKamikaze);
   make(scene, Tex.CatFlying, 96, 96, drawCatFlying);
+  make(scene, Tex.CatFlyingBody, 96, 96, drawCatFlyingBody);
+  make(scene, Tex.CatWingL, 96, 96, drawWingLeft);
+  make(scene, Tex.CatWingR, 96, 96, drawWingRight);
+  make(scene, Tex.CatLucky, 96, 96, drawCatLucky);
+  make(scene, Tex.CatTennis, 96, 96, drawCatTennis);
+  make(scene, Tex.CatTennisArm, 96, 96, drawTennisArm);
+  make(scene, Tex.CatTennisRacket, 96, 96, drawTennisRacket);
   make(scene, Tex.Yarn, 32, 32, drawYarn);
   make(scene, Tex.Tennis, 32, 32, drawTennis);
+  make(scene, Tex.Heart, 32, 32, drawBrokenHeart);
   make(scene, Tex.BeltThrown, 32, 96, (g) => drawBeltThrown(g));
   make(scene, Tex.BeltThrownGold, 32, 96, (g) => drawBeltThrown(g, true));
 
@@ -71,6 +83,7 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.PickupMonster, 64, 64, drawPickupMonster);
   make(scene, Tex.PickupGoldenBelt, 64, 64, drawPickupGoldenBelt);
   make(scene, Tex.PickupLaser, 64, 64, drawPickupLaser);
+  make(scene, Tex.PickupMystery, 64, 64, drawPickupMystery);
 
   // ---- Crows ----
   // Dazed crow lying on the ground (the Crow Rain pickup). Stars are added in code.
@@ -100,10 +113,36 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
 
   make(scene, Tex.Star, 20, 20, star);
 
+  // Mustard barrel decoration: whole (with a cat face), broken, and the puddle that stays. See systems/props/BarrelDecor.ts.
+  make(scene, Tex.BarrelWhole, 96, 96, drawBarrel);
+  make(scene, Tex.BarrelBroken, 96, 96, drawBarrelBroken);
+  make(scene, Tex.BarrelPuddle, 96, 96, drawBarrelPuddle);
+
+  // Bits that fly off the arena props when they are hit (systems/props/PropFx.ts tints them per prop).
+  make(scene, Tex.Leaf, 24, 24, (g) => {
+    const blade = poly([[12, 1], [20, 7], [21, 15], [12, 23], [3, 15], [4, 7]]);
+    g.fillStyle(0x58a84c, 1).fillPoints(blade, true);
+    g.lineStyle(2, NAVY, 1).strokePoints(blade, true);
+    g.lineStyle(2, 0x2f7035, 1).lineBetween(12, 5, 12, 19);
+  });
+  make(scene, Tex.Chip, 12, 10, (g) => {
+    g.fillStyle(0xffffff, 1).fillPoints(poly([[1, 3], [9, 0], [12, 6], [5, 10]]), true);
+  });
+
 
   make(scene, Tex.BossQueen, 128, 128, drawBossQueen);
+  make(scene, Tex.BossQueenCape, 128, 128, drawQueenCape);
+  make(scene, Tex.BossQueenCrown, 128, 128, drawQueenCrown);
+  make(scene, Tex.BossQueenScepter, 128, 128, drawQueenScepter);
+  make(scene, Tex.BossQueenFootL, 128, 128, drawQueenFootL);
+  make(scene, Tex.BossQueenFootR, 128, 128, drawQueenFootR);
   make(scene, Tex.BossMafia, 128, 128, drawBossMafia);
   make(scene, Tex.BossFederer, 128, 128, drawBossFederer);
+  make(scene, Tex.BossFedererArm, 128, 128, drawFedererArm);
+  make(scene, Tex.BossFedererRacket, 128, 128, drawFedererRacket);
+  make(scene, Tex.BossFedererTail, 128, 128, drawFedererTail);
+  make(scene, Tex.BossFedererFootL, 128, 128, drawFedererFootL);
+  make(scene, Tex.BossFedererFootR, 128, 128, drawFedererFootR);
 
   // Milk: a teardrop (the particles fall, so the tip points up) and a gooey puddle made of merged blobs.
   make(scene, Tex.MilkDrop, 24, 28, (g) => {
@@ -121,7 +160,7 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
     g.fillStyle(0xf1effb, 1).fillEllipse(32, 31, 22, 7);
   });
 
-  // Cigar smoke ring projectile.
+  // Smoke ring (used by the pause menu scene).
   make(scene, Tex.Smoke, 40, 40, (g) => {
     g.lineStyle(13, NAVY, 1).strokeCircle(20, 20, 12);
     g.lineStyle(7, 0xe6e6ee, 1).strokeCircle(20, 20, 12);

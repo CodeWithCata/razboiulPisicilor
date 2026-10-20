@@ -1,3 +1,4 @@
+/** @file Procedural animation numbers (cat sway / squash / flap, Varu walk, smoke break, milk and crow FX, golden belt, blasts). */
 import type { PickupKind } from './balance';
 
 /**
@@ -10,10 +11,15 @@ export const ANIM = {
   enabled: true,
   /** Walk cycle phase advances by this many radians per pixel walked. Bigger = quicker legs. */
   stridePerPx: 0.07,
-  walk: { swayDeg: 11, squash: 0.07 },
+  /** `stride` scales how fast the legs go for that look (1 = normal, smaller = slow and heavy). */
+  walk: { swayDeg: 11, squash: 0.07, stride: 1 },
+  /** Fat cats waddle: slow, heavy steps with a big rock side to side and a deep belly squash. */
+  fat: { swayDeg: 19, squash: 0.1, stride: 0.7 },
   /** Wings: a fast pulse that does not depend on speed. `rate` is radians per ms. */
   flyer: { rate: 0.022, squash: 0.1, swayDeg: 4 },
-  boss: { swayDeg: 3, squash: 0.03 },
+  /** Wing flap (FlyingCatRig): `rate` = radians per ms, `foldX` = how narrow a wing gets at the top of the beat (1 = no change), `swingDeg` = how far it lifts, `lag` = the far wing is this many radians behind (0 = both together). */
+  wing: { rate: 0.03, foldX: 0.45, swingDeg: 14, lag: 0.25, depth: 9 },
+  boss: { swayDeg: 3, squash: 0.03, stride: 0.6 },
   /** Standing still. `rate` is radians per ms. */
   idle: { rate: 0.004, squash: 0.03 },
   /** Below this speed (px/s) a cat counts as standing still. */
@@ -169,6 +175,51 @@ export const ENERGY_TRAIL = {
 } as const;
 
 /**
+ * The energy drink back flip: the moment Varu grabs the can he plants his feet, crouches, springs UP the screen and does one full
+ * somersault, then lands with a squash, a green shockwave ring, a puff of dust and a small shake. He keeps full control the whole time
+ * (walk, aim, swing): the flip rides along with him, only the jump lifts it up the screen. `rooted: true` plants him instead.
+ * The view is top-down, so the somersault is drawn the way the game draws everything: the body squashes and stretches along the way
+ * he faces (a head-over-heels turn seen from above gets short, flat, flips over, and comes back), it grows a little at the top
+ * (it comes closer to the camera) while its shadow stays on the ground, small and faint, and green ghosts trail behind.
+ * His hitbox, speed and the buff are untouched. The Z z z trail (ENERGY_TRAIL) is separate and stays.
+ */
+export const ENERGY_FLIP = {
+  enabled: true,
+  /** The whole thing: crouch, jump and spin, landing. */
+  ms: 720,
+  /** False (default) = he keeps full control while he flips: walking, aiming and swinging, the flip follows him. True = he is planted and cannot walk while it runs. */
+  rooted: false,
+  /** How high the body rises on the screen at the top of the jump (px), and how much bigger it is there (0.25 = 25 percent). */
+  jumpPx: 54,
+  hop: 0.22,
+  /** Share of the time (0 to 1) when the crouch ends and the jump starts, and when he touches down again. The jump is a parabola between them. */
+  takeoff: 0.2,
+  touchdown: 0.8,
+  /** How long (share of the time) the push-off stretch lasts, right after takeoff. */
+  launch: 0.07,
+  /** Extra squash as a share of the size, `x` across his body and `y` along it (negative = smaller). Crouch before the jump, stretch as he leaves the floor, squash on landing. */
+  crouch: { x: 0.14, y: -0.18 },
+  stretch: { x: -0.07, y: 0.12 },
+  landing: { x: 0.2, y: -0.22 },
+  /** Full turns in the air (head over the back). */
+  turns: 1,
+  /** The somersault never gets thinner than this share of his length (so he does not vanish edge on). */
+  minLength: 0.1,
+  /** The shadow at the top of the jump: this share of its size, and how see-through. */
+  shadowSize: 0.55,
+  shadowAlpha: 0.45,
+  /** Green ghosts left behind in the air: one every `everyMs`, fading out over `lifeMs`. */
+  ghost: { everyMs: 50, lifeMs: 280, alpha: 0.42, tint: 0xb4ff1a, depth: 19 },
+  /** The landing (systems/Effects.ts): a green ring that spreads on the floor, dust, a small shake, a word. */
+  land: {
+    ring: { color: 0xb4ff1a, startPx: 18, endPx: 92, width: 5, ms: 340, alpha: 0.85 },
+    dust: { count: 10 },
+    shake: { ms: 120, intensity: 0.004 },
+    word: { color: '#b4ff1a', size: 30, offsetY: -52 },
+  },
+} as const;
+
+/**
  * How the Crow Rain crows fall (visuals only; damage and timing are CROW_RAIN in balance.ts).
  * A crow swoops in from above and to one side, flapping, grows from big (close to the camera) to its landing size,
  * tucks its wings for the last stretch of the dive, sheds feathers on the way and lands with a squash and a dust puff.
@@ -192,8 +243,8 @@ export const CROW_FALL = {
   dust: { count: 12, tint: [0xe6d9b3, 0xc2b48c, 0xf5ecd0] },
 } as const;
 
-/** Pickups that make Varu take a drag of his cigarette (visual only). Add 'lapte' here to make milk do it too. */
-export const SMOKE_BREAK_ON: readonly PickupKind[] = ['crochete', 'monster'];
+/** Pickups that make Varu take a drag of his cigarette (visual only). Add 'lapte' here to make milk do it too, or 'monster' to put the drag back next to the back flip. */
+export const SMOKE_BREAK_ON: readonly PickupKind[] = ['crochete']; // the energy drink does a back flip now (ENERGY_FLIP), not a drag
 
 /**
  * The cigarette drag: his left arm swings up (3 body frames: Tex.Varu, Tex.VaruDrag1, Tex.VaruDrag2),
@@ -271,4 +322,305 @@ export const GOLD_BELT = {
     alpha: { start: 1, end: 0 },
     burstOffset: { x: 40, y: -16 },
   },
+  /** The golden spin: a swirling gold tornado around Varu (Ninjago "Spinjitzu" style). Looks only; the hit area is the spin's own reach. */
+  tornado: {
+    enabled: true,
+    /** Varu hides inside the tornado while it spins (the belt stays visible). */
+    hideVaru: true,
+    /** Rings stacked from the narrow bottom (at his feet) to the wide top, and loose strands per ring. */
+    rings: 38,
+    strandsPerRing: 2,
+    /** Funnel height and widest width as a share of the spin's reach (it hugs Varu, not the whole arena). */
+    heightFactor: 0.72,
+    widthFactor: 0.46,
+    /** How far below his center the point of the funnel sits (px). */
+    baseDrop: 24,
+    /** Narrowest ring (at the bottom) as a share of the widest. */
+    baseWidth: 0.07,
+    /** Squash of each ring (1 = round, small = seen from the side). */
+    squash: 0.3,
+    /** Turn speed of the rings (rad/s), faster near the bottom. */
+    spinSpeed: 7,
+    /** Long tapered ribbons twisting up the funnel. */
+    ribbons: 6,
+    /** Big loose rings that swing out past the rim at the top (the flare in the photos). */
+    flareRings: 5,
+    /** Colors from the dark orange edge to the white-hot core. */
+    colors: { glow: 0xff8a00, edge: 0xffa51a, deep: 0xffc21a, body: 0xffd83a, light: 0xffec7a, core: 0xfffbe0 },
+    /** The funnel grows in over this share of the spin, and fades out over the last share. */
+    growShare: 0.16,
+    fadeShare: 0.2,
+    sparkles: 64,
+  },
+} as const;
+
+/** The extra shockwave on a kamikaze cat's blast (systems/Effects.ts, `ExplosionPayload.shockwave`): two thin rings that race outward, a scorch mark and a big word. */
+export const KAMIKAZE_BLAST = {
+  word: { text: 'BOOM!', color: '#ffd166', size: 56, offsetY: -36 },
+  ringMs: 440,
+  /** Outer ring reaches this share of the blast radius (it flies a bit past the real edge, so it feels big). */
+  outerReach: 1.2,
+  innerReach: 0.8,
+  outerWidth: 14,
+  innerWidth: 6,
+  outerColor: 0xffffff,
+  innerColor: 0xffd166,
+  /** A dark scorch mark that fades on the floor. */
+  scorch: { radiusFactor: 0.5, alpha: 0.28, color: 0x1b2340, fadeMs: 3500 },
+  shake: { ms: 260, intensity: 0.016 },
+} as const;
+
+/** A ninja cat's teleport: a bigger smoke puff at both ends, and a small word where it lands. */
+export const NINJA_POOF = {
+  smokeCount: 18,
+  /** A soft grey puff that swells and fades. */
+  puff: { radius: 14, grow: 3.2, alpha: 0.4, color: 0xcfd0e0, ms: 380 },
+  word: { color: '#e6e6ee', size: 22, offsetY: -26 },
+  /** At most one word this often (game ms), so a pack of ninjas does not spam the screen. */
+  wordGapMs: 260,
+} as const;
+
+/**
+ * Regina Pisicilor's moving parts (`entities/bosses/QueenRig.ts`): the cape lags behind her, the feet step, the crown bobs and
+ * tilts, the scepter arm sways and swings, sparkles twinkle on the jewels. Visual only. Distances in texture px (the sprite is 128 wide).
+ */
+export const QUEEN_RIG = {
+  depth: { aura: 6, cape: 13, foot: 14, crown: 16, scepter: 17, glow: 18 },
+  feet: { swing: 9, radPerPx: 0.07 },
+  scepter: { idleDeg: 3, idleRate: 0.0028, walkDeg: 2.5 },
+  crown: { bobPx: 1.8, tiltDeg: 5, idleTiltDeg: 1.2, idleRate: 0.0017 },
+  cape: { lagPerSpeed: 0.05, maxLagPx: 13, swayDeg: 7, flareX: 0.12, flareY: 0.16 },
+  glow: { sizePx: 64, maxAlpha: 0.55, gold: 0xffd84a, red: 0xff6b6b, pulseRate: 0.018, furyMin: 0.35 },
+  aura: { sizePx: 300, alpha: 0.16, pulseAlpha: 0.07, color: 0xff3d5a, pulseRate: 0.006 },
+  sparkle: { everyMs: { min: 700, max: 1500 }, sizePx: 16, lifeMs: 480 },
+  burst: { count: 9, reachPx: 90, lifeMs: 520 },
+  dust: { everyMs: 45, behindPx: 38, startScale: 1.1, endScale: 3.4, lifeMs: 380, alpha: 0.55, color: 0xefe3cf },
+  ring: { color: 0xffd166, alpha: 0.12, strokeAlpha: 0.8 },
+  dizzy: { stars: 3, headPx: 62, orbitPx: 48, rate: 0.0038, crownTiltDeg: 16, crownRate: 0.011, scepterDroopDeg: 38 },
+  death: { crownRisePx: 90, crownSpinDeg: 420, lifeMs: 1000 },
+} as const;
+
+/** Poses of Regina's loose parts per attack moment (see `QueenPose` in `entities/bosses/QueenRig.ts`), and how long each change takes (ms). */
+export const QUEEN_POSES = {
+  relaxed: { scepterDeg: 0, scepterScale: 1, crownLift: 0, crownTiltDeg: 0, glow: 0, capeFlare: 0, squash: 0 },
+  decreeRaise: { scepterDeg: -22, scepterScale: 1.25, crownLift: 8, glow: 1, squash: -0.06 },
+  decreeSlam: { scepterDeg: 40, squash: 0.1, crownLift: -3 },
+  chargeWindup: { scepterDeg: 55, scepterScale: 1.1, crownLift: -4, glow: 1, squash: 0.12 },
+  chargeRush: { scepterDeg: 0, scepterScale: 1.35, crownLift: 3, capeFlare: 1, squash: -0.14 },
+  spinWindup: { scepterDeg: 100, scepterScale: 1.4, crownLift: -3, glow: 1, capeFlare: 0.3, squash: 0.08 },
+  spinGo: { crownTiltDeg: -18, capeFlare: 1, squash: -0.05 },
+  furyPop: { crownLift: 10, scepterDeg: -20, glow: 1 },
+} as const;
+
+export const QUEEN_POSE_MS = {
+  decreeRaise: 600, decreeSlam: 110, decreeBackDelay: 130, decreeBack: 520,
+  chargeWindup: 650, chargeRush: 120, chargeEnd: 350,
+  spinWindup: 600, spinGo: 200, spinEnd: 400,
+  furyPop: 200, furyBack: 600, furyBackDelay: 700,
+} as const;
+
+/**
+ * The emo cat's sadness (`entities/bosses/EmoRig.ts`): he slumps, sighs, trudges, and cries all the time. A small rain cloud
+ * follows him and drizzles on his head. Tears come out of the visible eye (and from under the fringe). Visual only.
+ * Distances in texture px (the sprite is 128 wide) unless it says game px.
+ */
+export const EMO_RIG = {
+  /** Where the eyes are, relative to the texture center (the sprite faces UP). Left one is hidden under the fringe: tears just leak out from it. */
+  eye: { x: 14, y: -14 },
+  fringeEye: { x: -17, y: -10 },
+  /** Mouth, where sighs come out. */
+  mouth: { x: 0, y: 8 },
+  /** Always-on slump (squash) and the slow sway of his head, in degrees. */
+  slump: { squash: 0.045, swayDeg: 2.6, swayRate: 0.0013, bobSquash: 0.018, bobRate: 0.0021 },
+  /** Walking: slow, heavy, hunched shuffle. Used instead of the normal boss gait. */
+  gait: { swayDeg: 4.5, squash: 0.02, stride: 0.42 },
+  walkLeanDeg: 5,
+  /** Shaking while sobbing (pose `sob` 0 to 1): rate in radians per ms. */
+  sob: { rate: 0.052, tiltDeg: 3.2, squash: 0.03 },
+  /** Tears: game px for sizes and speeds. `everyMs` is the gap at cry level 1 (the level divides it). */
+  tear: {
+    everyMs: 230,
+    fringeEveryMs: 520,
+    w: 5, h: 8,
+    colors: [0x9fd8ff, 0xcdeeff, 0x9fd8ff, 0x15151c], // every 4th one is black mascara
+    outline: 0x1b2340,
+    gravity: 520,
+    spread: { vx: 34, vy: 22 },
+    lifeMs: { min: 520, max: 760 },
+    maxAlive: 34,
+    depth: 18,
+  },
+  /** A spurt of tears that fly out and fall (getting hit, scream, phase 2). Count is per burst. */
+  spray: { speed: { min: 90, max: 230 }, upBias: 0.45, lifeMs: { min: 600, max: 900 } },
+  /** A pale puff of breath and a tiny "..." now and then. */
+  sigh: { everyMs: { min: 3600, max: 6200 }, sinkSquash: 0.085, sinkTiltDeg: 6, sinkMs: 650, backMs: 900, puffMs: 1100, puffColor: 0xcfd3dc, puffAlpha: 0.55 },
+  /** The gloom cloud (game px). It hovers above his head and lags a little behind him. */
+  cloud: {
+    hoverPx: 98, lag: 6, bobPx: 3, bobRate: 0.0022,
+    puffs: [[-13, 3, 11], [0, -3, 15], [14, 2, 12], [3, 6, 11]] as const, // x, y, radius
+    color: 0x6a6f8a, darkColor: 0x40445c, flashColor: 0xf777b9, outline: 0x1b2340, outlineW: 2.2,
+    alpha: 0.95, depth: 19,
+    rain: { everyMs: 120, w: 2, h: 8, color: 0x9fd8ff, speed: 190, lifeMs: 460, jitter: 16 },
+    /** Phase 2: darker, rains harder, and flashes pink now and then. */
+    stormRainMult: 2.2,
+    flashEveryMs: { min: 1800, max: 3600 },
+    flashMs: 110,
+  },
+  death: { tears: 16, cloudSinkPx: 46, cloudMs: 900 },
+} as const;
+
+/** Poses of the emo cat per moment (see `EmoPose` in `entities/bosses/EmoRig.ts`). */
+export const EMO_POSES = {
+  slump: { squash: 0, tiltDeg: 0, sob: 0, cry: 1 },
+  heartsWind: { squash: 0.1, tiltDeg: -4, sob: 1, cry: 2.4 },
+  heartsFire: { squash: -0.1, tiltDeg: 0, sob: 0, cry: 3 },
+  screamWind: { squash: 0.14, tiltDeg: 0, sob: 0.7, cry: 3.2 },
+  screamFire: { squash: -0.17, tiltDeg: 0, sob: 0, cry: 5 },
+  crewWind: { squash: 0.06, tiltDeg: 9, sob: 0.3, cry: 1.8 },
+  crewFire: { squash: -0.05, tiltDeg: -9, sob: 0, cry: 2.4 },
+  stunned: { squash: 0.2, tiltDeg: 13, sob: 1, cry: 4.5 },
+  breakdown: { squash: 0.12, tiltDeg: 0, sob: 1, cry: 4 },
+} as const;
+
+export const EMO_POSE_MS = {
+  heartsWind: 520, heartsFire: 90, heartsBack: 500,
+  screamWind: 700, screamFire: 90, screamBack: 650,
+  crewWind: 560, crewFire: 110, crewBack: 520,
+  stunned: 220, stunBack: 500,
+  breakdown: 250, breakdownBack: 700, breakdownBackDelay: 800,
+  hurt: 70, hurtBack: 260,
+} as const;
+
+/**
+ * Pisica Federer's moving parts (`entities/bosses/FedererRig.ts`): the racket arm and the racket on its wrist, the tail,
+ * the feet (they hop on their toes while she waits), the tennis ball in her other paw (it is dribbled, tossed and hit),
+ * a racket swoosh and a lime aura in phase 2. Visual only. Distances in texture px (the sprite is 128 wide) unless it says game px.
+ */
+export const FEDERER_RIG = {
+  depth: { aura: 6, tail: 13, foot: 14, racket: 16, arm: 17, ball: 18, trail: 16 },
+  feet: { swing: 8, radPerPx: 0.07, hopPx: 2.6, hopRate: 0.0085, hopRatePhase2: 0.0125 },
+  /** The racket arm's idle sway and walking bob (degrees), and the wrist's own small sway. */
+  arm: { idleDeg: 3, idleRate: 0.0031, walkDeg: 3.5, wristIdleDeg: 5, wristIdleRate: 0.0047 },
+  /** Tail: slow wag (degrees), swing with her steps, and how far it stretches when she dashes (see `tailStretch` in the poses). */
+  tail: { idleDeg: 9, idleRate: 0.0021, walkDeg: 14, stretchY: 0.3 },
+  /** The ball in her left paw: a dribble (px) while she waits, size in game px, and how it grows while tossed (per px of lift). */
+  ball: { sizePx: 17, dribblePx: 5, dribbleRate: 0.0075, growPerPx: 0.011, spinPerMs: 0.35, popMs: 150 },
+  /** `flick` and `kick` jump by hand (every swat) and fade by themselves: `fadePerSec` is the share left after one second (smaller = fades faster). */
+  swat: { wristDeg: -62, armDeg: -14, squashKick: -0.07, fadePerSec: 0.0004 },
+  /** A swoosh behind the racket head when it moves faster than `minSpeed` px/s: a puff every `everyMs`. Game px. */
+  trail: { minSpeed: 520, everyMs: 28, sizePx: 20, color: 0xe9ff7a, alpha: 0.5, lifeMs: 230, maxAlive: 14 },
+  /** The little pop where the racket meets the ball. */
+  hit: { ringPx: 46, ringMs: 260, color: 0xf1fba0, stars: 5, starReachPx: 54, starMs: 380 },
+  /** Phase 2: a lime aura, and she bounces on her toes faster. */
+  aura: { sizePx: 280, color: 0xd7f03a, alpha: 0.13, pulseAlpha: 0.06, pulseRate: 0.0065 },
+  /** The racket twirl of the phase 2 roar. */
+  twirl: { ms: 620 },
+  /** She is beaten: the racket flies off spinning, the ball bounces away. */
+  death: { racketRisePx: 110, racketSpinDeg: 540, ballHopPx: 70, lifeMs: 1000 },
+  /** Dropped ball when she is stunned (a few bounces on the spot). */
+  drop: { hopPx: 34, ms: 300, lifeMs: 900 },
+} as const;
+
+/** Poses of the tennis cat's loose parts per attack moment (see `FedererPose` in `entities/bosses/FedererRig.ts`). Degrees: positive arm / wrist = turned clockwise (racket swung out to her right and back), negative = swung across the front. */
+export const FEDERER_POSES = {
+  ready: { armDeg: 0, wristDeg: 0, squash: 0, tiltDeg: 0, ballLift: 0, ballShow: 1, tailStretch: 0, tailDeg: 0 },
+  volleyWind: { armDeg: 40, wristDeg: 26, squash: 0.05, tiltDeg: -3 },
+  volleyHold: { armDeg: 10, wristDeg: 0, squash: 0, tiltDeg: 2 },
+  serveToss: { armDeg: 72, wristDeg: 52, squash: 0.1, tiltDeg: -6, ballLift: 64 },
+  serveSmash: { armDeg: -52, wristDeg: -72, squash: -0.14, tiltDeg: 6 },
+  lobToss: { armDeg: 66, wristDeg: 58, squash: 0.12, tiltDeg: -5, ballLift: 96 },
+  lobSmash: { armDeg: -46, wristDeg: -78, squash: -0.16, tiltDeg: 4 },
+  lobHold: { armDeg: -20, wristDeg: -30, squash: -0.04, tiltDeg: 0 },
+  dashWind: { armDeg: 82, wristDeg: 40, squash: 0.14, tiltDeg: 0, tailStretch: 0.1 },
+  dashGo: { armDeg: 34, wristDeg: 8, squash: -0.14, tiltDeg: 0, tailStretch: 0.8 },
+  dashSwing: { armDeg: -78, wristDeg: -84, squash: -0.06, tiltDeg: 8 },
+  callUp: { armDeg: 18, wristDeg: -14, squash: -0.05, tiltDeg: 0 },
+  stunned: { armDeg: 58, wristDeg: 64, squash: 0.2, tiltDeg: 13, tailStretch: -0.25, ballShow: 0 },
+  roar: { armDeg: -10, wristDeg: -20, squash: -0.1, tiltDeg: 0, tailStretch: 0.5 },
+} as const;
+
+export const FEDERER_POSE_MS = {
+  volleyWind: 380, volleyHold: 220, volleyBack: 380,
+  serveToss: 760, serveSmash: 80, serveBackDelay: 170, serveBack: 520,
+  lobToss: 720, lobSmash: 85, lobHold: 260, lobBackDelay: 160, lobBack: 560,
+  dashWind: 480, dashGo: 110, dashSwing: 100, dashBackDelay: 120, dashBack: 520,
+  callUp: 380, callBack: 460, callBackDelay: 160,
+  stunned: 200, stunBack: 520,
+  roar: 220, roarBack: 600, roarBackDelay: 700,
+} as const;
+
+/**
+ * The tennis cat's sky lobs (`systems/BallLobSystem.ts`): the ball leaves the racket and soars up out of sight, hangs in the
+ * sky, then comes down on a spot that is marked by a growing shadow and a ring (like the crows of the Crow Rain, but they
+ * hurt Varu and stay a lot longer in the air). The damage numbers and the how-many are `FEDERER.lob` in `config/bosses.ts`.
+ */
+export const BALL_LOB = {
+  sizePx: 40,
+  /** Up: how high it climbs (px), the scale at the top (closer to the camera), and how long it takes. */
+  riseMs: 380,
+  riseHeightPx: 640,
+  apexScale: 2.3,
+  /** Hang: out of sight. The marker on the floor is faint and small. */
+  hangMs: 300,
+  /** Down: it starts this far above and to a random side of the spot, and shrinks to normal size while the marker grows. */
+  fallMs: 820,
+  fromAbove: 560,
+  fromSide: 110,
+  startScale: 2.5,
+  spinPerMs: 0.9,
+  /** The marker: a shadow that grows with the fall and a ring that shows how far the blow reaches. */
+  marker: { shadowW: 1.15, shadowH: 0.58, startShare: 0.25, startAlpha: 0.2, endAlpha: 0.85 },
+  ring: { color: 0xd7f03a, fill: 0.07, stroke: 0.65, soonColor: 0xff4d4d, soonAt: 0.7 },
+  /** After the landing: two hops with a squash, then it fades. */
+  squash: { x: 1.35, y: 0.66, ms: 70 },
+  hops: [{ heightPx: 54, ms: 230, driftPx: 26 }, { heightPx: 22, ms: 150, driftPx: 14 }] as const,
+  fade: { delayMs: 220, ms: 260 },
+  fuzz: { count: 10, tint: [0xd7f03a, 0xf1fba0, 0xffffff] },
+  dust: { count: 8, tint: [0xe6d9b3, 0xc2b48c, 0xf5ecd0] },
+  /** The pop on the ground: a ring (game px) that spreads. */
+  pop: { ringMs: 300, color: 0xf1fba0 },
+  depth: { marker: 6, ball: 50, fuzz: 49, dust: 11 },
+} as const;
+
+/** The juice of a landing ball of the tennis cat's rain (`systems/Effects.ts`): a small shake, and a word every `gapMs` at most. */
+export const BALL_FX = {
+  shake: { ms: 70, intensity: 0.003 },
+  word: { gapMs: 140, offsetY: 30, size: 24, color: '#d7f03a' },
+} as const;
+
+/**
+ * Flinch: a cat the belt is about to hit squashes and flashes for a moment, so you can SEE the hit coming.
+ * Visual only: the cat does not move, so it stays inside the reach and no damage is lost (hop-back dodging could come later).
+ */
+export const FLINCH = {
+  enabled: true,
+  /** Which attacks warn the cats: the spin yes, the quick swing no. */
+  spin: true,
+  swing: false,
+  /** The cat flinches when the belt tip is this many degrees away from it (the spin whips fast, so this is a wide angle). */
+  leadDeg: 100,
+  /** Extra squash (wider and shorter) that fades out over `ms`. Keep it small: the hitbox follows the scale a little. */
+  squash: 0.14,
+  ms: 200,
+  flashColor: 0xfff3d6,
+  flashMs: 70,
+} as const;
+
+/**
+ * Idle habits: after a few seconds of standing still Varu does a small thing: takes a drag (the cigarette pose above),
+ * checks his belt, or cracks his neck. Visual only; any move, swing or hit ends it at once.
+ */
+export const IDLE_HABITS = {
+  enabled: true,
+  /** The first habit comes after this long standing still (ms), the next ones after a random gap. */
+  afterMs: 4000,
+  gapMs: { min: 5500, max: 9500 },
+  /** How often each habit is picked (bigger = more often). It never repeats the one before. */
+  weights: { drag: 1, belt: 1, neck: 1 },
+  /** He looks the belt over: it lifts and turns twice, with a little glint. `tiltDeg` follows `times` (0..1 of `ms`). */
+  belt: { ms: 1000, times: [0, 0.18, 0.4, 0.58, 0.8, 1], tiltDeg: [0, 18, 8, 20, 6, 0] },
+  /** He cracks his neck: the body leans left, then right, then settles. */
+  neck: { ms: 800, times: [0, 0.22, 0.4, 0.62, 0.78, 1], tiltDeg: [0, -9, -9, 7, 7, 0] },
+  /** Where the little glint of the belt shows, relative to the fist (px, before the body turn). */
+  glintCount: 4,
 } as const;

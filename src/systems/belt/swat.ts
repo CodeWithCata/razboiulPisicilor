@@ -1,3 +1,4 @@
+/** @file What the belt does to an enemy projectile it touches (deflect tennis balls, destroy the rest). */
 import type Phaser from 'phaser';
 import { bus, Events } from '../../core/events';
 import type { Enemy } from '../../entities/Enemy';

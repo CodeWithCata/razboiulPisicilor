@@ -1,3 +1,4 @@
+/** @file Graffiti-style joke message near the bottom of the HUD, one at a time with a short queue. */
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
 import { TOAST } from '../config/jokes';

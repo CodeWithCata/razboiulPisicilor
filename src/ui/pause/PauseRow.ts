@@ -1,3 +1,4 @@
+/** @file One pause-menu row (button, volume slider or toggle) with selection and confirm states. */
 import Phaser from 'phaser';
 import { AUDIO } from '../../config/audio';
 import { PAUSE, pausePip, pauseRowH } from '../../config/pause';

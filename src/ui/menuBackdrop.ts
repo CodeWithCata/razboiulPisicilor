@@ -1,3 +1,4 @@
+/** @file Static sunburst light rays behind the menu and pause menu. */
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { GAME } from '../config/balance';

@@ -1,3 +1,4 @@
+/** @file Round badges for active power-ups: a ring that drains clockwise, seconds left underneath. */
 import Phaser from 'phaser';
 import { poly } from '../assets/paint';
 import { BUFF_BADGES as B } from '../config/buffBadges';

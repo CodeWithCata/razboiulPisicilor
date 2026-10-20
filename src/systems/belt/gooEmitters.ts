@@ -1,3 +1,4 @@
+/** @file Milk / goo particle emitters for the belt trail, splash and spin. */
 import type Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { GOLD_BELT, MILK_FX } from '../../config/animation';

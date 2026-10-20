@@ -1,3 +1,4 @@
+/** @file Short phone vibration (`buzz`); no-op on computers. */
 import { usesTouchControls } from './device';
 
 /** A short buzz on phones that can do it (Android browsers; iPhones ignore it). Never throws, does nothing on computers. */

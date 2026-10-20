@@ -1,11 +1,12 @@
+/** @file ArenaQuery (what gameplay may ask the arena: is a point solid, is a circle free, nearest open spot) and `clampToArena`. */
 import Phaser from 'phaser';
-import { WORLD } from '../config/arena';
+import { PLAY_AREA } from '../config/arena';
 
-/** Keep a point inside the world, `margin` px away from the walls. */
+/** Keep a point inside the play area (inside the fence), `margin` px away from it. */
 export function clampToArena(x: number, y: number, margin = 0): Phaser.Math.Vector2 {
   return new Phaser.Math.Vector2(
-    Phaser.Math.Clamp(x, margin, WORLD.width - margin),
-    Phaser.Math.Clamp(y, margin, WORLD.height - margin),
+    Phaser.Math.Clamp(x, PLAY_AREA.left + margin, PLAY_AREA.right - margin),
+    Phaser.Math.Clamp(y, PLAY_AREA.top + margin, PLAY_AREA.bottom - margin),
   );
 }
 

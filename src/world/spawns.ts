@@ -1,3 +1,4 @@
+/** @file Reads player / enemy / boss spawn points from Tiled objects and picks safe enemy spots. Pure logic. */
 import { SPAWN_KINDS } from '../config/arena';
 import type { Point } from '../core/arena';
 

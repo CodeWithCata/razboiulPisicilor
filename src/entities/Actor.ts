@@ -1,3 +1,4 @@
+/** @file Shared base for Varu and every cat: hp, shadow, hit flash, knockback. */
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { fitToSize, setCircleHitbox } from '../core/sprite';
@@ -59,6 +60,16 @@ export abstract class Actor extends Phaser.Physics.Arcade.Sprite {
       this.clearTint();
       this.setTintMode(Phaser.TintModes.MULTIPLY);
     });
+  }
+
+  /** Fade the ground shadow along with the cat (a cat that fades out must not leave its shadow behind). */
+  protected setShadowAlpha(alpha: number): void {
+    this.shadow.setAlpha(alpha);
+  }
+
+  /** The shadow while an actor jumps: `size` and `alpha` are shares of the normal ones (1 and 1 = on the ground, call that to put it back). */
+  protected setShadowJump(size: number, alpha: number): void {
+    this.shadow.setDisplaySize(this.shadowSize * 0.9 * size, this.shadowSize * 0.45 * size).setAlpha(alpha);
   }
 
   protected syncShadow(): void {

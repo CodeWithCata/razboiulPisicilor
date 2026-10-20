@@ -1,3 +1,4 @@
+/** @file Ground warning visuals for boss attacks (`telegraphCircle`, `telegraphLine`) that can be cancelled early. */
 import type Phaser from 'phaser';
 
 /** Something that can be cancelled early (when a boss gets stunned, for example). */

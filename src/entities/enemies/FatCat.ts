@@ -1,3 +1,4 @@
+/** @file Slow, huge, high-hp cat. */
 import type Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { Enemy, type EnemyContext } from '../Enemy';

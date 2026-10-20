@@ -1,14 +1,20 @@
+/** @file ALL sound: listens to the bus, plays synthesized or real sounds and music, owns mute (N) and volumes. Game-lifetime. */
 import Phaser from 'phaser';
 import { musicKey, sfxKey, type MusicId, type SoundId } from '../assets/audioKeys';
 import { AUDIO_MANIFEST, MUSIC_MANIFEST } from '../assets/audioManifest';
 import { AUDIO } from '../config/audio';
+import { PROP_LOOK } from '../config/props';
 import { Cooldowns } from '../core/cooldown';
 import {
   Events,
   listen,
   type CrowImpactPayload,
+  type HeartbeatPayload,
+  type IdleHabitPayload,
   type MusicPayload,
   type MutePayload,
+  type PropDestroyedPayload,
+  type PropHitPayload,
   type VolumePayload,
 } from '../core/events';
 import { isMuted, toggleMuted } from '../core/mute';
@@ -19,6 +25,8 @@ import { SoundBank } from './audio/SoundBank';
 interface PlayOptions {
   /** Multiplies the pitch (1 = normal). */
   pitch?: number;
+  /** Multiplies the loudness (1 = normal). */
+  gain?: number;
 }
 
 /**
@@ -111,6 +119,7 @@ export class AudioSystem {
     sound(Events.Explosion, 'explosion');
     sound(Events.ProjectileDeflected, 'deflect');
     sound(Events.ProjectileBlocked, 'bonk');
+    sound(Events.BackflipLand, 'bonk', { pitch: 0.7 });
     sound(Events.BossStunned, 'stun');
     sound(Events.BossSpawned, 'bossIntro');
     sound(Events.BossPhase, 'bossIntro', { pitch: 1.25 });
@@ -131,10 +140,29 @@ export class AudioSystem {
         this.play('miau', { pitch: AUDIO.pitch.bossKillMiau });
         this.play('explosion');
       }),
+      listen(Events.BallLanded, () => this.play('bonk', { pitch: AUDIO.pitch.ballLanded })), // a tennis ball: a higher, lighter bonk
       listen<CrowImpactPayload>(Events.CrowImpact, ({ variant }) => {
         if (variant !== 'miss') this.play('bonk');
         if (variant !== 'golden') this.play('caw');
       }),
+      // Bushes, rocks, fences, cans... a little pitch variation so a row of fence pieces never sounds the same twice; harder hits are louder.
+      listen<PropHitPayload>(Events.PropHit, ({ kind, power }) => {
+        const look = PROP_LOOK[kind];
+        this.play(look.sound, { pitch: look.pitch * (0.92 + Math.random() * 0.16), gain: 0.4 + 0.6 * power });
+      }),
+      listen<PropDestroyedPayload>(Events.PropDestroyed, ({ kind }) => {
+        this.play('smash', { pitch: PROP_LOOK[kind].pitch });
+        if (kind === 'bush') this.play('rustle', { pitch: 0.8 });
+      }),
+      listen<IdleHabitPayload>(Events.IdleHabit, ({ habit }) =>
+        habit === 'neck' ? this.play('knock', { pitch: 1.7, gain: 0.5 }) : this.play('clank', { pitch: 1.8, gain: 0.35 }),
+      ),
+      listen(Events.CatBump, () => this.play('bonk', { pitch: AUDIO.pitch.bump })), // a flung cat hits another cat
+      listen(Events.LuckySpawn, () => this.play('pickup', { pitch: AUDIO.pitch.luckySpawn })), // a bright ding: the lucky cat is here
+      listen(Events.LuckyGone, () => this.play('boing', { pitch: AUDIO.pitch.luckyGone })), // and a boing when she gets away
+      listen(Events.CatSurrender, () => this.play('miau', { pitch: AUDIO.pitch.surrender })), // a small, high, sad "miau" as the white flag goes up
+      listen<HeartbeatPayload>(Events.Heartbeat, ({ intensity }) => this.play('heartbeat', { gain: 0.65 + 0.35 * intensity })),
+      listen(Events.PropCracked, () => this.play('thud', { pitch: 0.6 })),
       listen<MutePayload>(Events.MuteChanged, () => this.applyMute()),
       listen<VolumePayload>(Events.VolumeChanged, ({ kind }) => {
         this.applyVolumes();
@@ -145,7 +173,7 @@ export class AudioSystem {
   }
 
   /** Play one sound (a real file if there is one, the placeholder otherwise). Rate-limited per sound id. */
-  private play(id: SoundId, { pitch = 1 }: PlayOptions = {}): void {
+  private play(id: SoundId, { pitch = 1, gain = 1 }: PlayOptions = {}): void {
     if (isMuted()) return;
     const now = performance.now();
     if (!this.cooldowns.ready(id, now, AUDIO.minGapMs[id])) return;
@@ -153,7 +181,7 @@ export class AudioSystem {
 
     const spread = id === 'miau' ? 1 + (Math.random() * 2 - 1) * AUDIO.miauPitchVariance : 1;
     const rate = pitch * spread;
-    const volume = AUDIO.volumes[id];
+    const volume = AUDIO.volumes[id] * gain;
 
     const files = this.loadedFiles(id);
     if (files.length > 0) {

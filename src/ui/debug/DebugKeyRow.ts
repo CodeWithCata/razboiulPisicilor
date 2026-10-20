@@ -1,3 +1,4 @@
+/** @file One row of the debug card: keycap that presses, label, optional on / off pill. */
 import Phaser from 'phaser';
 import { HUD } from '../../config/hud';
 import { COLORS, FONT, css } from '../../config/style';

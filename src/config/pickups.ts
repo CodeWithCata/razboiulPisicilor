@@ -1,3 +1,4 @@
+/** @file How each pickup looks (texture, glow color, size) and the list of pickup kinds. */
 import { Tex, type TexKey } from '../assets/keys';
 import type { PickupKind } from './balance';
 
@@ -9,6 +10,7 @@ export const PICKUP_VISUALS: Record<PickupKind, { tex: TexKey; color: number; si
   goldenBelt: { tex: Tex.PickupGoldenBelt, color: 0xf5c518 },
   laser: { tex: Tex.PickupLaser, color: 0xff4d4d },
   crow: { tex: Tex.PickupCrow, color: 0xa88bff, size: 66 }, // the logo is detailed, so it is drawn a bit bigger
+  mystery: { tex: Tex.PickupMystery, color: 0xc77dff, size: 58 }, // the question mark: a random other pickup
 };
 
 export const PICKUP_KINDS = Object.keys(PICKUP_VISUALS) as PickupKind[];

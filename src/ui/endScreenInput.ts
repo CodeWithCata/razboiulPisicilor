@@ -1,3 +1,4 @@
+/** @file Shared tap / click / key input for the game over and victory screens, plus `padHitArea`. */
 import Phaser from 'phaser';
 
 export interface EndScreenButtons {

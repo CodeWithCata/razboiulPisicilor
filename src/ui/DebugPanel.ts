@@ -1,3 +1,4 @@
+/** @file Dev-only cheat sheet card (dev build): keys, toggles, live numbers. */
 import Phaser from 'phaser';
 import { HUD } from '../config/hud';
 import { COLORS, FONT, css } from '../config/style';

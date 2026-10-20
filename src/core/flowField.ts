@@ -1,3 +1,4 @@
+/** @file Breadth-first walking distances to a target, so cats path around walls (used by Enemy.steerTo). */
 import type { Point } from './arena';
 
 /** The few things the flow field needs to know about the map. SolidGrid provides them. */
@@ -40,6 +41,11 @@ export class FlowField {
   /** True if (x, y) is in the tile the field currently leads to. */
   isTarget(x: number, y: number): boolean {
     return this.targetIndex === this.row(y) * this.grid.cols + this.col(x);
+  }
+
+  /** The walls changed (a prop was destroyed): the next `setTarget` rebuilds the field even for the same tile. */
+  invalidate(): void {
+    this.targetIndex = -1;
   }
 
   /** Point the field at a new target. Does nothing if the target is still in the same tile. */

@@ -1,10 +1,22 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(npm run typecheck)",
+      "Bash(npm run check)",
+      "Bash(npm run build)",
+      "Bash(npm run codemap)",
+      "Bash(npm run codemap:check)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm check)",
+      "Bash(pnpm build)",
+      "Bash(pnpm codemap)"
+    ],
     "deny": [
       "Read(./node_modules/**)",
       "Read(./dist/**)",
       "Read(./.pnpm-store/**)",
       "Read(./pnpm-lock.yaml)",
+      "Read(./package-lock.json)",
       "Read(./public/assets/maps/arena.json)"
     ]
   }

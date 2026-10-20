@@ -1,3 +1,4 @@
+/** @file Polaroid-style card for a friend photo (or a "FOTO" silhouette) with a caption. */
 import Phaser from 'phaser';
 import { photoKey, Tex, type PhotoId } from '../assets/keys';
 import { PHOTO_FRAME } from '../config/jokes';

@@ -1,3 +1,4 @@
+/** @file Timed buffs (best value wins) and the laser pointer dot cats chase. */
 import Phaser from 'phaser';
 import { WORLD } from '../config/arena';
 import { BUFFS, LASER, type BuffKind } from '../config/balance';

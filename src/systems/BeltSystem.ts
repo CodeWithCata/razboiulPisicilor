@@ -1,3 +1,4 @@
+/** @file Varu's belt: swing, spin and throw state, cooldowns and which attack is active. */
 import type Phaser from 'phaser';
 import { BELT, BELT_THROW, type BeltAttackId } from '../config/balance';
 import type { ArenaQuery } from '../core/arena';
@@ -46,6 +47,7 @@ export class BeltSystem {
       this.cancelAll();
       this.player.beltInHand = true;
       this.player.spinTurn = 0;
+      this.player.hiddenInTornado = false;
       return;
     }
     if (input.spinPressed) this.queue('spin', time);
@@ -57,6 +59,7 @@ export class BeltSystem {
     if (this.thrown && this.thrown.update(delta)) this.onCaught(time);
     this.player.beltInHand = !this.sweep.running && !this.thrown;
     this.player.spinTurn = this.sweep.bodyTurn;
+    this.player.hiddenInTornado = this.sweep.hidesBody;
   }
 
   /** Dev helper: make every attack ready right now. */

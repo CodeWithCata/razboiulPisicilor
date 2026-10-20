@@ -1,3 +1,4 @@
+/** @file Look of Varu's cat-face health meter (ui/CatMeter.ts). */
 import { COLORS } from './style';
 
 /**

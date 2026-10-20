@@ -1,3 +1,4 @@
+/** @file Keeps the page and the Phaser canvas the right size when phone browser bars slide in and out. */
 import type Phaser from 'phaser';
 
 /**

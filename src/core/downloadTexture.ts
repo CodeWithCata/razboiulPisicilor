@@ -1,3 +1,4 @@
+/** @file Dev helper: saves a loaded texture as a PNG download (debug key T). */
 import type Phaser from 'phaser';
 
 /** Dev helper: saves a loaded texture as a PNG file through the browser (used by the debug key T for the tileset). */

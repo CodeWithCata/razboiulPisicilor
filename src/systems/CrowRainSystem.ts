@@ -1,3 +1,4 @@
+/** @file The Crow Rain power-up: crows drop with a growing shadow, land and bonk nearby cats. */
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { CROW_FALL } from '../config/animation';

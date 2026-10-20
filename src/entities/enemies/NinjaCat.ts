@@ -1,7 +1,8 @@
+/** @file Ninja cat: chases, vanishes, reappears behind Varu. */
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { NINJA } from '../../config/balance';
-import { bus, Events } from '../../core/events';
+import { bus, Events, type TeleportPayload } from '../../core/events';
 import type { Player } from '../Player';
 import { Enemy, type EnemyContext } from '../Enemy';
 import { gameClock } from '../../core/clock';
@@ -19,7 +20,7 @@ export class NinjaCat extends Enemy {
   }
 
   override get hittable(): boolean {
-    return this.phase === 'chase';
+    return this.phase === 'chase' && super.hittable; // a surrendering ninja is not hittable either
   }
 
   protected think(time: number, _delta: number, ctx: EnemyContext): void {
@@ -43,8 +44,9 @@ export class NinjaCat extends Enemy {
     this.phase = 'hidden';
     this.setVelocity(0, 0);
     (this.body as Phaser.Physics.Arcade.Body).enable = false;
-    bus.emit(Events.Teleport, { x: this.x, y: this.y });
-    this.scene.tweens.add({ targets: this, alpha: 0.15, duration: NINJA.vanishMs * 0.6 });
+    const out: TeleportPayload = { x: this.x, y: this.y, ninja: 'out' };
+    bus.emit(Events.Teleport, out);
+    this.scene.tweens.add({ targets: this, fadeAlpha: 0.15, duration: NINJA.vanishMs * 0.6 }); // fadeAlpha: the fog is multiplied in refreshAlpha
 
     this.scene.time.delayedCall(NINJA.vanishMs, () => {
       if (!this.active) return;
@@ -55,8 +57,9 @@ export class NinjaCat extends Enemy {
       const spot = this.obstacles.nearestOpen(nx, ny, this.hitRadius); // never lands inside a wall
       (this.body as Phaser.Physics.Arcade.Body).reset(spot.x, spot.y);
       (this.body as Phaser.Physics.Arcade.Body).enable = true;
-      this.setAlpha(1);
-      bus.emit(Events.Teleport, { x: spot.x, y: spot.y });
+      this.fadeAlpha = 1;
+      const land: TeleportPayload = { x: spot.x, y: spot.y, ninja: 'in' };
+      bus.emit(Events.Teleport, land);
       this.phase = 'chase';
       this.nextTeleportAt = gameClock.now + this.randomDelay();
     });

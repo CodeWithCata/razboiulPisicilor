@@ -1,3 +1,4 @@
+/** @file Code-drawn crow sprites (normal, gold, kamikaze looks; open / flap / fold wing poses) and the feather. */
 import { COLORS } from '../../config/style';
 import { C, E, P, R, S, T, flat, ink, layer, sparkle, type G, type Pt, type Shape } from './shapes';
 

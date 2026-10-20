@@ -1,3 +1,4 @@
+/** @file DOM overlay: install button, "new version" button, offline note (page elements above the canvas). */
 import { PWA } from '../config/pwa';
 import { FONT } from '../config/style';
 import { PWA_TEXT } from '../content/lines';

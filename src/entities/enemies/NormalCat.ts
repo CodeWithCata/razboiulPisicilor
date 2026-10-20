@@ -1,3 +1,4 @@
+/** @file The basic cat: runs straight at Varu with a slightly random speed. */
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { Enemy, type EnemyContext } from '../Enemy';

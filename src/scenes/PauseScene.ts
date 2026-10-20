@@ -1,3 +1,4 @@
+/** @file Pause menu on top of the run: resume, volumes, toggles, restart, menu. Esc opens and closes it. */
 import Phaser from 'phaser';
 import { PAUSE, PAUSE_KEYS, pauseGaps, pauseRowH } from '../config/pause';
 import { FONT } from '../config/style';

@@ -1,3 +1,4 @@
+/** @file Wave loop: countdown -> cats trickle in -> all dead -> next wave (campaign and endless). */
 import Phaser from 'phaser';
 import { isBossType, WAVE_TIMING, type EnemyType } from '../config/balance';
 import { ENDLESS, FINAL_WAVE, getWave } from '../config/waves';
@@ -16,6 +17,9 @@ export class WaveSystem {
   private nextWaveAt: number;
   private waitingForNextWave = true;
   private running = true;
+  /** Game time the current wave began (0 before the first wave). */
+  private startedAt = 0;
+  private bossWave = false;
 
   constructor(
     private readonly spawn: (type: EnemyType) => void,
@@ -28,6 +32,31 @@ export class WaveSystem {
 
   stop(): void {
     this.running = false;
+  }
+
+  /** Game time (game clock) the current wave began. Read it after `Events.WaveStarted`. */
+  get waveStartedAt(): number {
+    return this.startedAt;
+  }
+
+  /** A wave is going right now (false during the countdown to the next one). */
+  get inWave(): boolean {
+    return this.running && !this.waitingForNextWave;
+  }
+
+  /** True once the current wave has put EVERY cat into the arena (nothing left in the queue). False between waves. */
+  get allSpawned(): boolean {
+    return !this.waitingForNextWave && this.queue.length === 0;
+  }
+
+  /** The current wave has a boss in it. */
+  get isBossWave(): boolean {
+    return this.bossWave;
+  }
+
+  /** The last wave of the campaign (endless mode has none). */
+  get isFinalWave(): boolean {
+    return this.mode === 'campaign' && this.wave >= FINAL_WAVE;
   }
 
   /** Dev only (debug key L): drop what is left of this wave and start the next one on the next frame. The campaign stops at the last wave. */
@@ -61,6 +90,8 @@ export class WaveSystem {
     this.wave += 1;
     this.waitingForNextWave = false;
     this.queue = this.buildQueue(this.wave);
+    this.startedAt = time;
+    this.bossWave = this.queue.some(isBossType);
     this.nextSpawnAt = time + 700; // a short beat so the banner can show first
     const payload: WavePayload = { wave: this.wave };
     bus.emit(Events.WaveStarted, payload);

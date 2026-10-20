@@ -1,3 +1,4 @@
+/** @file Score, kills and the saved best (campaign and endless kept apart). */
 import Phaser from 'phaser';
 import { bus, Events, listen, type EnemyKilledPayload, type ScorePayload } from '../core/events';
 import type { RunMode } from '../core/run';
@@ -27,7 +28,7 @@ export class ScoreSystem {
     this.emit();
   }
 
-  /** Dev only (debug key J): add points without a kill. */
+  /** Add points without a kill: the debug key J, and the bonus when the last cats surrender (SURRENDER.score). */
   add(points: number): void {
     this.score += points;
     this.emit();

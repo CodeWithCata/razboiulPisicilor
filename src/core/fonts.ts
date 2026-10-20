@@ -1,4 +1,5 @@
-import { FONT_FAMILY, FONT_LOADING } from '../config/style';
+/** @file Loads the self-hosted game font once, before any text is drawn (never rejects). */
+import { FONT_LOADING } from '../config/style';
 
 let loading: Promise<void> | null = null;
 
@@ -17,7 +18,7 @@ async function load(): Promise<void> {
   try {
     const faces = FONT_LOADING.files.map((file) => {
       const source = `url("${import.meta.env.BASE_URL}${file.path}") format("woff2")`;
-      const face = new FontFace(FONT_FAMILY, source, { display: 'swap', unicodeRange: file.unicodeRange });
+      const face = new FontFace(file.family, source, { display: 'swap', unicodeRange: file.unicodeRange });
       document.fonts.add(face); // page text (install button, "turn your phone" page) can use it too
       return face.load();
     });

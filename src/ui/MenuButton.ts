@@ -1,3 +1,4 @@
+/** @file A menu button (`createMenuButton`) with a hover pop. */
 import Phaser from 'phaser';
 import { MENU } from '../config/menu';
 import { COLORS, FONT } from '../config/style';

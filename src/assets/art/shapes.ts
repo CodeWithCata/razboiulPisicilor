@@ -1,3 +1,4 @@
+/** @file Drawing toolkit for the code-drawn art: flat shapes with a thick navy outline (layer / flat / ink / T / P / C / E ...). */
 import type Phaser from 'phaser';
 import { COLORS } from '../../config/style';
 import { poly } from '../paint';

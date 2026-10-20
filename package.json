@@ -12,7 +12,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && node scripts/gen-codemap.mjs --check",
     "codemap": "node scripts/gen-codemap.mjs",
+    "codemap:check": "node scripts/gen-codemap.mjs --check",
     "gen:map": "node scripts/generate-arena-map.mjs"
   },
   "dependencies": {

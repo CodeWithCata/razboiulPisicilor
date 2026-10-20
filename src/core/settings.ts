@@ -1,3 +1,4 @@
+/** @file Player settings saved on the device: music / sfx volume, auto-attack, debug numbers. */
 import { AUDIO } from '../config/audio';
 import { bus, Events, type VolumePayload } from './events';
 import { loadAutoAttack, loadDebugInfo, loadVolume, saveAutoAttack, saveDebugInfo, saveVolume } from './storage';

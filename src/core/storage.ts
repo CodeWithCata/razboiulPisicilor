@@ -1,3 +1,4 @@
+/** @file Guarded localStorage: best scores, mute, volumes, hints, unlocks. */
 import type { RunMode } from './run';
 
 const KEY_PREFIX = 'varu-vs-pisicile:';

@@ -1,3 +1,4 @@
+/** @file A friend's photo card that slides in when a boss appears. */
 import type Phaser from 'phaser';
 import type { BossType } from '../config/balance';
 import { BOSS_CARD } from '../config/jokes';

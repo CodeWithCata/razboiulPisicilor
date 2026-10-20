@@ -1,3 +1,4 @@
+/** @file Keyboard controls reminder at the bottom, with a keycap button that hides it. */
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
 import { HUD } from '../config/hud';

@@ -1,3 +1,4 @@
+/** @file Plays the synthesized placeholder for a sound id. */
 import type { SoundId } from '../../assets/audioKeys';
 import { SYNTH } from './sounds';
 

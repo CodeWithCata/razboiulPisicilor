@@ -1,3 +1,4 @@
+/** @file `fitToSize` and `setCircleHitbox`: size and hitboxes in game pixels, independent of texture size. */
 import type Phaser from 'phaser';
 
 /** Scale a sprite so its biggest side is `size` game pixels (any texture size works). */

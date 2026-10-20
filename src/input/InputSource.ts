@@ -1,3 +1,4 @@
+/** @file The interface gameplay reads input from (move, aim, attack, spin, throw). Keyboard and touch implement it. */
 import type Phaser from 'phaser';
 
 /**

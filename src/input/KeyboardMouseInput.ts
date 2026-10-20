@@ -1,3 +1,4 @@
+/** @file Desktop controls: WASD / arrows, mouse aim, click / Space swing, Shift / right click spin, E throw. */
 import Phaser from 'phaser';
 import type { InputSource } from './InputSource';
 

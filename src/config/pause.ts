@@ -1,3 +1,4 @@
+/** @file Pause menu keys, layout, row sizes and decor (scenes/PauseScene.ts, ui/pause/). */
 import { Tex } from '../assets/keys';
 import { shiftRight } from './balance';
 import { COLORS } from './style';

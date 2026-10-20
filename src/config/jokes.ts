@@ -1,3 +1,4 @@
+/** @file Joke timing: categories, per-category chance and cooldown, toast and boss-card looks (no Phaser). */
 import { shiftRight } from './balance';
 /**
  * Joke numbers. WHEN a joke may appear lives here; WHAT it says lives in content/jokes.ts.

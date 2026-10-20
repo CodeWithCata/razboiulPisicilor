@@ -1,3 +1,4 @@
+/** @file A collectible on the floor: item sprite on a glowing ring, bobs, then expires. */
 import Phaser from 'phaser';
 import { PICKUPS, type PickupKind } from '../config/balance';
 import { PICKUP_VISUALS } from '../config/pickups';

@@ -1,3 +1,4 @@
+/** @file Fullscreen, landscape lock and keep-screen-on for phones; `whenScaleSettled` waits for the resize. */
 import type Phaser from 'phaser';
 import { RELAYOUT } from '../config/viewport';
 

@@ -1,11 +1,13 @@
+/** @file Varu: movement, aim, damage, belt visuals, walk / smoke-break / energy back flip animation, power-up multipliers. */
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { PLAYER } from '../config/balance';
-import { bus, Events, type PlayerHealthPayload } from '../core/events';
+import { sampleKeys } from '../core/ease';
+import { bus, Events, type IdleHabitPayload, type PlayerHealthPayload } from '../core/events';
 import type { InputSource } from '../input/InputSource';
 import { Actor } from './Actor';
 import { gameClock } from '../core/clock';
-import { CIG_SMOKE, ENERGY_TRAIL, GOLD_BELT, MILK_FX, MILK_TRAIL, SMOKE_BREAK, VARU_ANIM } from '../config/animation';
+import { CIG_SMOKE, ENERGY_FLIP, ENERGY_TRAIL, GOLD_BELT, IDLE_HABITS, MILK_FX, MILK_TRAIL, SMOKE_BREAK, VARU_ANIM } from '../config/animation';
 import { BELT_FX, css, FONT } from '../config/style';
 
 /** Body frames of the cigarette drag: arm down, half way, cigarette at his mouth. */
@@ -17,6 +19,8 @@ const smoothstep = (u: number): number => u * u * (3 - 2 * u);
 export class Player extends Actor {
   /** Power-ups will change these later (milk, energy drink, golden belt). */
   speedMultiplier = 1;
+  /** Slowed by the floor (a mustard puddle): 1 = normal. BarrelSystem sets it every frame before Varu moves; it never mixes with the power-up speed above. */
+  terrainSlow = 1;
   damageMultiplier = 1;
   rangeMultiplier = 1;
   /** True while the golden belt is active (PowerUpSystem sets it): gold strap, sticky white goo. */
@@ -45,6 +49,13 @@ export class Player extends Actor {
   private breakPose = 0;
   private bodyFrame = 0;
   private exhaled = false;
+  /** Idle habits (config IDLE_HABITS): how long he has stood still, when the next habit is due, the one running, the last one, and the lean they add. */
+  private idleMs = 0;
+  private nextHabitAt: number = IDLE_HABITS.afterMs;
+  private habit: { kind: 'belt' | 'neck'; ms: number } | null = null;
+  private lastHabit: 'drag' | 'belt' | 'neck' | null = null;
+  private habitTilt = 0;
+  private beltTilt = 0;
   private readonly ember: Phaser.GameObjects.Image;
   /** Goo dripping off the golden belt in his fist, and the splat when he grabs it. */
   private readonly goo: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -59,18 +70,32 @@ export class Player extends Actor {
   private zLast: { x: number; y: number } | null = null;
   private zCount = 0;
   private zTimer = 0;
+  /**
+   * The energy drink back flip (config ENERGY_FLIP): ms since it started (-1 = not flipping). While it runs the real body is hidden and
+   * `flipBody` plays the somersault in its place (with the legs and belt), so the body's scale and hitbox never change.
+   */
+  private flipMs = -1;
+  /** Where the stand-in parts are: position, turn, and the scale across (`sx`) and along (`sy`, negative = flipped over) his body. */
+  private readonly flipPose = { on: false, x: 0, y: 0, rot: 0, sx: 1, sy: 1 };
+  private flipGhostMs = 0;
+  /** The landing was already announced for this flip. */
+  private flipLanded = false;
+  private readonly flipBody: Phaser.GameObjects.Image;
   private beltIsGold = false;
   private readonly tipPoint = new Phaser.Math.Vector2();
   /** False while the belt swings or flies: the belt in his fist is hidden then (BeltSystem sets it). */
   beltInHand = true;
   /** Extra turn (radians) while the belt spins him around (BeltSystem sets it). */
   spinTurn = 0;
+  /** True during the golden tornado spin: the body and legs are hidden inside it (BeltSystem sets it). */
+  hiddenInTornado = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, Tex.Varu, { maxHp: PLAYER.maxHp, size: PLAYER.size, hitRadius: PLAYER.hitRadius });
     this.legL = scene.add.image(x, y, Tex.VaruLegL).setDepth(19);
     this.legR = scene.add.image(x, y, Tex.VaruLegR).setDepth(19);
     this.heldBelt = scene.add.image(x, y, Tex.VaruBelt).setDepth(21);
+    this.flipBody = scene.add.image(x, y, Tex.Varu).setDepth(20).setVisible(false);
     this.smoke = scene.add.particles(0, 0, Tex.Particle, {
       emitting: false,
       lifespan: CIG_SMOKE.lifespanMs,
@@ -109,19 +134,22 @@ export class Player extends Actor {
     if (!this.alive) return;
 
     if (!this.isKnockedBack) {
-      const speed = PLAYER.speed * this.speedMultiplier;
+      // Only when `ENERGY_FLIP.rooted` is on: planted during the back flip. By default he keeps full control while he flips.
+      const planted = ENERGY_FLIP.rooted && this.flipMs >= 0;
+      const speed = planted ? 0 : PLAYER.speed * this.speedMultiplier * this.terrainSlow;
       this.setVelocity(input.move.x * speed, input.move.y * speed);
     }
     this.facing.copy(input.aim);
     this.setRotation(input.aim.angle() + Math.PI / 2 + this.spinTurn);
     this.waddle();
+    this.rotation += this.habitTilt; // neck crack
     this.syncShadow();
   }
 
   /** Smooth waddle: rock left and right while walking, eased in and out. */
   private waddle(): void {
     if (!VARU_ANIM.enabled) return;
-    const dt = Math.min(this.scene.game.loop.delta, 50) / 1000;
+    const dt = Math.min(gameClock.scaled(this.scene.game.loop.delta), 50) / 1000; // game time: slow-mo slows the waddle too
     const speed = (this.body as Phaser.Physics.Arcade.Body).speed;
     const moving = speed >= VARU_ANIM.idleSpeed;
     if (moving) this.phase += speed * dt * VARU_ANIM.radPerPx;
@@ -130,6 +158,65 @@ export class Player extends Actor {
     this.legSwing = Math.sin(this.phase) * this.rockAmount * VARU_ANIM.legSwing;
     if (this.rockAmount < 0.01) return;
     this.rotation += Math.sin(this.phase) * this.rockAmount * Phaser.Math.DegToRad(VARU_ANIM.tiltDeg);
+  }
+
+  /** Standing still for a while: now and then he does a small thing (drag, check the belt, crack his neck). Any move, swing, spin or hit ends it. */
+  private updateIdleHabits(delta: number): void {
+    const H = IDLE_HABITS;
+    const body = this.body as Phaser.Physics.Arcade.Body | null;
+    const still =
+      H.enabled && this.alive && body !== null && body.speed < VARU_ANIM.idleSpeed && !this.isKnockedBack && this.beltInHand && this.spinTurn === 0 && !this.hiddenInTornado;
+    if (!still) {
+      this.idleMs = 0;
+      this.nextHabitAt = H.afterMs;
+      this.habit = null;
+      this.habitTilt = 0;
+      this.beltTilt = 0;
+      return;
+    }
+    this.idleMs += delta;
+    const habit = this.habit;
+    if (habit) {
+      habit.ms += delta;
+      const look = H[habit.kind];
+      const u = habit.ms / look.ms;
+      if (u >= 1) {
+        this.habit = null;
+        this.habitTilt = 0;
+        this.beltTilt = 0;
+        return;
+      }
+      const tilt = Phaser.Math.DegToRad(sampleKeys(u, look.times, look.tiltDeg));
+      if (habit.kind === 'neck') this.habitTilt = tilt;
+      else this.beltTilt = tilt;
+      return;
+    }
+    if (this.idleMs >= this.nextHabitAt && this.breakMs < 0 && this.flipMs < 0) this.startHabit();
+  }
+
+  /** Picks the next habit (never the same twice in a row, by weight) and sets when the one after it is due. */
+  private startHabit(): void {
+    const H = IDLE_HABITS;
+    this.nextHabitAt = this.idleMs + Phaser.Math.Between(H.gapMs.min, H.gapMs.max);
+    const kinds = (Object.keys(H.weights) as Array<'drag' | 'belt' | 'neck'>).filter((k) => k !== this.lastHabit);
+    let roll = Math.random() * kinds.reduce((sum, k) => sum + H.weights[k], 0);
+    let kind = kinds[0]!;
+    for (const k of kinds) {
+      roll -= H.weights[k];
+      if (roll <= 0) {
+        kind = k;
+        break;
+      }
+    }
+    this.lastHabit = kind;
+    if (kind === 'drag') {
+      this.smokeBreak(); // the cigarette pose, smoke and line that already exist
+      return;
+    }
+    this.habit = { kind, ms: 0 };
+    const at = kind === 'belt' ? this.handPosition() : { x: this.x, y: this.y };
+    const payload: IdleHabitPayload = { x: at.x, y: at.y, habit: kind };
+    bus.emit(Events.IdleHabit, payload);
   }
 
   /** A point on the body texture (relative to its center) in world space: follows his turn and size. */
@@ -170,6 +257,91 @@ export class Player extends Actor {
     this.breakMs = 0;
     this.exhaled = false;
     bus.emit(Events.SmokeBreak, { x: this.x, y: this.y });
+  }
+
+  /** The energy drink: he plants his feet, crouches, springs up and does one somersault on the spot. Animation only (ENERGY_FLIP); a second can in mid air does nothing. */
+  backflip(): void {
+    if (!ENERGY_FLIP.enabled || !this.alive || this.flipMs >= 0 || this.hiddenInTornado) return;
+    this.flipMs = 0;
+    this.flipGhostMs = 0;
+    this.flipLanded = false;
+    this.flipBody.setTexture(this.texture.key); // the pose he has right now
+  }
+
+  /** Moves the flip on one frame and works out where its parts are (`flipPose`). Runs BEFORE the body is shown or hidden, so the last frame is never empty. `delta` is game ms. */
+  private advanceBackflip(delta: number): void {
+    if (this.flipMs < 0) return;
+    const F = ENERGY_FLIP;
+    if (!this.alive || this.hiddenInTornado) {
+      this.endBackflip();
+      return;
+    }
+    this.flipMs += delta;
+    const u = this.flipMs / F.ms;
+    if (u >= 1) {
+      this.endBackflip();
+      return;
+    }
+    // `p` runs 0..1 from takeoff to touchdown; `air` is 0 on the ground and 1 at the top (a parabola, so he hangs at the top).
+    const p = Phaser.Math.Clamp((u - F.takeoff) / (F.touchdown - F.takeoff), 0, 1);
+    const air = 1 - (2 * p - 1) ** 2;
+    const turn = F.turns * Math.PI * 2 * Phaser.Math.Easing.Sine.InOut(p);
+    // Squash and stretch: crouch, push-off stretch, none in the air, squash on landing, settle.
+    const times = [0, F.takeoff, F.takeoff + F.launch, F.touchdown - F.launch, F.touchdown, 1];
+    const squashX = sampleKeys(u, times, [0, F.crouch.x, F.stretch.x, 0, F.landing.x, 0]);
+    const squashY = sampleKeys(u, times, [0, F.crouch.y, F.stretch.y, 0, F.landing.y, 0]);
+    // The somersault seen from above: his length (the way he faces) shrinks to a sliver, flips over (negative) and grows back.
+    let along = Math.cos(turn);
+    if (Math.abs(along) < F.minLength) along = along < 0 ? -F.minLength : F.minLength;
+    const grow = this.scaleX * (1 + F.hop * air);
+    const pose = this.flipPose;
+    pose.on = true;
+    pose.x = this.x; // rides along with him wherever he walks (his body and hitbox never leave the floor)
+    pose.y = this.y - F.jumpPx * air; // only up the screen
+    pose.rot = this.rotation;
+    pose.sx = grow * (1 + squashX);
+    pose.sy = grow * (1 + squashY) * along;
+    this.setShadowJump(1 - (1 - F.shadowSize) * air, 1 - (1 - F.shadowAlpha) * air);
+    if (!this.flipLanded && u >= F.touchdown) {
+      this.flipLanded = true;
+      bus.emit(Events.BackflipLand, { x: this.x, y: this.y });
+    }
+    this.flipGhostMs += delta;
+    if (air > 0.05 && this.flipGhostMs >= F.ghost.everyMs) {
+      this.flipGhostMs = 0;
+      this.dropGhost();
+    }
+  }
+
+  /** A green copy of the body that stays where it was and fades out: the speed lines of the spin. Tweens are scene-owned, so a restart cleans them up. */
+  private dropGhost(): void {
+    const G = ENERGY_FLIP.ghost;
+    const pose = this.flipPose;
+    const ghost = this.scene.add
+      .image(pose.x, pose.y, this.flipBody.texture.key)
+      .setRotation(pose.rot)
+      .setScale(pose.sx, pose.sy)
+      .setDepth(G.depth)
+      .setAlpha(G.alpha)
+      .setTint(G.tint)
+      .setTintMode(Phaser.TintModes.FILL);
+    this.scene.tweens.add({ targets: ghost, alpha: 0, scaleX: pose.sx * 0.85, scaleY: pose.sy * 0.85, duration: G.lifeMs, ease: 'Sine.easeOut', onComplete: () => ghost.destroy() });
+  }
+
+  /** Puts the stand-in body, the legs and the belt on the flip pose (after they were placed the normal way). */
+  private applyBackflip(): void {
+    const pose = this.flipPose;
+    for (const part of [this.flipBody, this.legL, this.legR, this.heldBelt]) part.setPosition(pose.x, pose.y).setScale(pose.sx, pose.sy);
+    this.flipBody.setRotation(pose.rot).setAlpha(this.alpha).setVisible(true);
+    for (const leg of [this.legL, this.legR]) leg.setRotation(pose.rot).setAlpha(this.alpha).setVisible(true);
+    this.heldBelt.setRotation(pose.rot + this.beltTilt).setVisible(this.beltInHand);
+  }
+
+  private endBackflip(): void {
+    this.flipMs = -1;
+    this.flipPose.on = false;
+    this.flipBody.setVisible(false);
+    this.setShadowJump(1, 1);
   }
 
   /** The golden belt just landed in his fist: it flashes gold and splats goo. */
@@ -453,7 +625,13 @@ export class Player extends Actor {
   /** Legs follow the body every frame (also during the death spin), swinging forward/back in turn. */
   override preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
+    delta = gameClock.scaled(delta); // from here on `delta` is game time, so the slow-mo of the last cat slows Varu's animation too
+    this.advanceBackflip(delta);
+    // Hide / show the body first: the legs and the cigarette ember follow `this.visible` below. A back flip hides it too (a stand-in plays it).
+    const hidden = this.hiddenInTornado || this.flipMs >= 0;
+    if (this.visible === hidden) this.setVisible(!hidden);
     this.updateSmokeBreak(delta);
+    this.updateIdleHabits(delta);
     this.updateHeldBelt(delta);
     this.updateMilkTrail(delta);
     this.updateEnergyTrail(delta);
@@ -469,8 +647,9 @@ export class Player extends Actor {
     place(this.legL, swing);
     place(this.legR, -swing);
     this.heldBelt
-      .setPosition(this.x, this.y).setRotation(r).setScale(k).setAlpha(this.alpha)
+      .setPosition(this.x, this.y).setRotation(r + this.beltTilt).setScale(k).setAlpha(this.alpha)
       .setVisible(this.visible && this.beltInHand);
+    if (this.flipPose.on) this.applyBackflip();
   }
 
   override flash(color = 0xffffff, ms = 80): void {
@@ -489,6 +668,7 @@ export class Player extends Actor {
     this.legL.destroy();
     this.legR.destroy();
     this.heldBelt.destroy();
+    this.flipBody.destroy();
     this.smoke.destroy();
     this.ember.destroy();
     this.goo.destroy();

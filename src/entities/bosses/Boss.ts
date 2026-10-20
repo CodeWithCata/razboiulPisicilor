@@ -1,3 +1,4 @@
+/** @file Boss state machine: intro -> idle -> telegraph -> active -> recover, phase 2, stun. Subclasses define attacks. */
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../../assets/keys';
 import { clampToArena } from '../../core/arena';
@@ -80,6 +81,9 @@ export abstract class Boss extends Enemy {
   protected abstract cooldown(): number;
   /** Called once when the boss drops below the phase 2 threshold. */
   protected onPhaseTwo(): void {}
+  /** Called when a deflected ball stuns the boss, and when the stun runs out. Visual hooks only. */
+  protected onStunned(): void {}
+  protected onStunEnd(): void {}
 
   // ---- overrides that make a boss a boss ---------------------------------
   override get isBoss(): boolean {
@@ -170,6 +174,7 @@ export abstract class Boss extends Enemy {
         this.setVelocity(0, 0);
         if (time >= this.modeUntil) {
           this.clearStars();
+          this.onStunEnd();
           this.enterIdle(time, 500);
         }
         break;
@@ -248,6 +253,7 @@ export abstract class Boss extends Enemy {
     this.mode = 'stunned';
     this.modeUntil = gameClock.now + ms;
     this.flash(0xfff2a0, 150);
+    this.onStunned();
     if (this.stunStars.length === 0) {
       for (let i = 0; i < 3; i++) {
         this.stunStars.push(this.scene.add.image(this.x, this.y, Tex.Star).setDisplaySize(22, 22).setDepth(60));
@@ -275,8 +281,18 @@ export abstract class Boss extends Enemy {
     return Phaser.Math.Angle.Between(this.x, this.y, this.ctx.player.x, this.ctx.player.y);
   }
 
+  /**
+   * The body rotation for looking along `heading` (radians). Bosses are big drawings facing UP, so turning them all the way
+   * round shows them upside down whenever Varu is below. Instead they stay upright and only lean toward the side of the
+   * heading (up = 0, right = +maxLeanDeg, down = 0 again, left = -maxLeanDeg), smoothly.
+   */
+  protected uprightRotation(heading: number): number {
+    const turn = Phaser.Math.Angle.Wrap(heading + Math.PI / 2);
+    return Math.sin(turn) * Phaser.Math.DegToRad(BOSS.maxLeanDeg);
+  }
+
   protected faceTarget(rate = 0.07): void {
-    this.rotation = Phaser.Math.Angle.RotateTo(this.rotation, this.angleToPlayer() + Math.PI / 2, rate);
+    this.rotation = Phaser.Math.Angle.RotateTo(this.rotation, this.uprightRotation(this.angleToPlayer()), rate);
   }
 
   /** Keep a warning marker so it can be cancelled if the boss is stunned. */

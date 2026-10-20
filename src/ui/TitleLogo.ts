@@ -1,3 +1,4 @@
+/** @file The animated game logo: VARU, red "vs." badge, PISICILE. */
 import Phaser from 'phaser';
 import { MENU } from '../config/menu';
 import { COLORS, FONT } from '../config/style';

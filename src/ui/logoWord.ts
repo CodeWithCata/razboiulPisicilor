@@ -1,3 +1,4 @@
+/** @file One word of logo lettering with a hard drop shadow. */
 import Phaser from 'phaser';
 import { MENU } from '../config/menu';
 import { FONT } from '../config/style';

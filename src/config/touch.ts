@@ -1,3 +1,4 @@
+/** @file Touch controls: stick, attack button, auto-aim numbers, and where the spin / throw / pause buttons sit. */
 import { shiftDown, shiftRight } from './balance';
 import { COLORS } from './style';
 
@@ -85,20 +86,15 @@ export const TOUCH = {
   outlineColor: COLORS.navy,
 
   /**
-   * The attack button's look: a fist holding a belt, in a soft disc like the other buttons. All sizes are shares of the button radius.
-   * The strap runs diagonally through the fist (from `strap.from` to `strap.to`, gold buckle at the end); the fist is the palm
-   * (a rounded block), four knuckles on top and the thumb across the front.
+   * The attack button's look: Varu's raised arm holding the belt, drawn with the same shapes and colors as his body (assets/art/beltArm.ts),
+   * inside a soft disc like the other buttons. The art is in body-texture pixels.
+   * `size` = scale of the art as a share of the button radius (so it follows the button when it squashes).
+   * `center` = the point of the art that sits on the button's center: the center of the smallest circle around the whole art, so the gap
+   * between the art and the ring is even all around.
    */
   attackIcon: {
-    outline: 3,
-    skin: 0xf2c28f,
-    skinShade: 0xd9a06b,
-    strapColor: 0x8a5a2b,
-    strap: { from: [-0.5, -0.38], to: [0.46, 0.5], width: 0.17, holes: [0.62, 0.74, 0.86], holeR: 0.025 },
-    buckle: { half: 0.13 },
-    palm: { x: -0.02, y: 0.08, w: 0.5, h: 0.4, radius: 0.1 },
-    knuckles: { y: -0.14, r: 0.105, xs: [-0.18, -0.06, 0.06, 0.18] },
-    thumb: { x: -0.04, y: 0.02, w: 0.36, h: 0.14, tiltDeg: -8 },
+    size: 1.45 / 70,
+    center: { x: 93.7, y: 54.3 },
   },
   /** The attack button squashes by this much (fraction) while a thumb holds it. */
   attackHeldSquash: 0.08,

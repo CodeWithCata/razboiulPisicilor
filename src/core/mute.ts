@@ -1,3 +1,4 @@
+/** @file The single source of truth for muted / unmuted (persisted, announced on the bus). */
 import { bus, Events, type MutePayload } from './events';
 import { loadMuted, saveMuted } from './storage';
 

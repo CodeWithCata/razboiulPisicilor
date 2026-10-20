@@ -1,3 +1,4 @@
+/** @file Boss names, phase-2 banners, attack shouts and the hidden ending message (Romanian). */
 import type { BossType } from '../config/balance';
 
 export interface BossText {
@@ -15,17 +16,17 @@ export const BOSS_TEXT: Record<BossType, BossText> = {
   queen: {
     name: 'Regina Pisicilor',
     phase2: 'Regina e furioasă!',
-    attacks: { decree: 'Decret regal!', charge: 'ÎNAINTE!' },
+    attacks: { decree: 'Decret regal!', charge: 'ÎNAINTE!', spin: 'Plecăciune!' },
   },
   mafia: {
-    name: 'Pisica Mafiotă',
-    phase2: 'Șefu s-a supărat...',
-    attacks: { rings: 'Pufff...', slam: 'Ia banii!', guards: 'Băieți!' },
+    name: 'Pisica Emo',
+    phase2: 'Acum chiar nu mai sunt OK...',
+    attacks: { hearts: 'Inimi frânte...', scream: 'NIMENI NU MĂ ÎNȚELEGE!', crew: 'Gașca neagră!' },
   },
   federer: {
     name: 'Pisica Federer',
     phase2: 'Acum e serios!',
-    attacks: { volley: 'Fault... al tău!', serve: 'SERVĂ!', dash: 'Smash!', ballboys: 'Mingi!' },
+    attacks: { volley: 'Fault... al tău!', serve: 'SERVĂ!', dash: 'Smash!', ballboys: 'Mingi!', lob: 'Ploaie de mingi!' },
   },
 };
 

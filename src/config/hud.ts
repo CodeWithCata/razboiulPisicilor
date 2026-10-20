@@ -1,3 +1,4 @@
+/** @file HUD layout and colors (score, wave, boss bar, fanfare, debug card), in game pixels. */
 import { shiftRight } from './balance';
 
 /**
@@ -114,6 +115,28 @@ export const HUD = {
     phaseColor: '#ff8a8a',
   },
 
+  /** The "wave cleared" fanfare (ui/WaveFanfare.ts): the wave number slides in letter by letter, a word pops, then it slides out. */
+  fanfare: {
+    delayMs: 450,
+    yOffset: -110,
+    subOffsetY: 84,
+    numberSize: 104,
+    subSize: 52,
+    numberColor: '#fff3d6',
+    subColor: '#f5c518',
+    depth: 80,
+    slideFromPx: 280,
+    slideOutPx: 340,
+    slideMs: 360,
+    staggerMs: 55,
+    popMs: 260,
+    holdMs: 800,
+    outMs: 320,
+    outStaggerMs: 35,
+    tiltDeg: 5,
+    jitterPx: 5,
+  },
+
   /** Big centered words ("VALUL 3", boss names). Offsets are from the middle of the screen. */
   banner: {
     yOffset: -120,
@@ -126,6 +149,10 @@ export const HUD = {
     endlessSize: 56,
     color: '#fff3d6',
     endlessColor: '#f5c518',
+    /** The lucky cat's banner (Pisica Norocoasă): gold, smaller than the wave banner. */
+    luckyColor: '#f5c518',
+    luckyYOffset: 40,
+    luckySize: 48,
     pickupColor: '#d9c8ff',
   },
 

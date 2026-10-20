@@ -1,3 +1,4 @@
+/** @file PWA numbers: service worker path, icon, update re-check, boot self-repair flag. */
 import { COLORS, css } from './style';
 
 /** Offline mode and installing the game as an app (core/pwa.ts, ui/PwaUi.ts). Texts: PWA_TEXT in content/lines.ts. */

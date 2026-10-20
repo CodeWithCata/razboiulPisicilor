@@ -1,16 +1,17 @@
+/** @file Code-drawn Varu: body, belt, legs, and the body colors the touch button reuses. */
 import { GOLD_BELT } from '../../config/animation';
 import { COLORS } from '../../config/style';
 import { C, E, P, R, S, T, flat, ink, layer, rod, type G, type Pt, type Shape } from './shapes';
 
-const SKIN = 0xf3c9a1;
-const DARK_BELT = 0x6b4423;
+export const SKIN = 0xf3c9a1;
+export const DARK_BELT = 0x6b4423;
 
 // Nike Tech Fleece set: deep red fleece, black piping on hem and cuffs, tonal seams.
-const FLEECE = 0xc42d34;
-const FLEECE_SHADE = 0x9c2229;
+export const FLEECE = 0xc42d34;
+export const FLEECE_SHADE = 0x9c2229;
 const JEANS = 0x3b5b92;
 const JEANS_SEAM = 0x2c4673;
-const PIPING = 0x12151d;
+export const PIPING = 0x12151d;
 
 /** One blue-jeans leg (same 128x128 canvas as the body, so the two line up). The game swings them while walking. */
 function drawLeg(g: G, x: number): void {

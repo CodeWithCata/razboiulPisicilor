@@ -2,6 +2,8 @@
 export const SOUND_IDS = [
   'swing', 'hit', 'miau', 'kill', 'hurt', 'pickup', 'bonk', 'caw',
   'explosion', 'deflect', 'stun', 'bossIntro', 'waveStart', 'victory', 'gameOver',
+  'rustle', 'thud', 'clank', 'boing', 'knock', 'smash', // arena props (config/props.ts)
+  'heartbeat', // Varu is low on health (systems/LowHpSystem.ts)
 ] as const;
 export type SoundId = (typeof SOUND_IDS)[number];
 

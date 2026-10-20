@@ -1,3 +1,4 @@
+/** @file Game over screen: score, kills, wave, best; again / menu input. */
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { GAME } from '../config/balance';

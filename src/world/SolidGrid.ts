@@ -1,3 +1,4 @@
+/** @file Which tiles are solid, as a plain grid (implements ArenaQuery). No Phaser. */
 import type { ArenaQuery, Point } from '../core/arena';
 
 /**
@@ -9,7 +10,7 @@ export class SolidGrid implements ArenaQuery {
     readonly cols: number,
     readonly rows: number,
     readonly tile: number,
-    private readonly solid: readonly boolean[],
+    private readonly solid: boolean[],
   ) {}
 
   static empty(cols: number, rows: number, tile: number): SolidGrid {
@@ -20,6 +21,18 @@ export class SolidGrid implements ArenaQuery {
   isSolidTile(col: number, row: number): boolean {
     if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) return false;
     return this.solid[row * this.cols + col] === true;
+  }
+
+  /** A prop was destroyed: this tile is open from now on. */
+  clearTile(col: number, row: number): void {
+    if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) return;
+    this.solid[row * this.cols + col] = false;
+  }
+
+  /** A prop grew back: this tile is solid again. */
+  setSolidTile(col: number, row: number): void {
+    if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) return;
+    this.solid[row * this.cols + col] = true;
   }
 
   isSolidAt(x: number, y: number): boolean {

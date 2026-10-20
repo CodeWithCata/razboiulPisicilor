@@ -1,3 +1,4 @@
+/** @file Entry point: starts PWA + font loading, then creates the Phaser game (Scale.EXPAND, 1280x720 base) and registers all scenes. */
 import Phaser from 'phaser';
 import { bindGameSize, GAME_BASE_HEIGHT, GAME_BASE_WIDTH } from './config/balance';
 import { usesTouchControls } from './core/device';

@@ -1,3 +1,4 @@
+/** @file Touch controls: floating move stick + big attack button; implements InputSource. */
 import Phaser from 'phaser';
 import { GAME } from '../../config/balance';
 import { TOUCH, TOUCH_BUTTON_IDS, type TouchButtonId } from '../../config/touch';

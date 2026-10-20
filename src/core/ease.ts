@@ -14,3 +14,20 @@ export function easeInOutBack(t: number, back = 1.70158): number {
   if (x < 0.5) return (Math.pow(2 * x, 2) * ((c2 + 1) * 2 * x - c2)) / 2;
   return (Math.pow(2 * x - 2, 2) * ((c2 + 1) * (2 * x - 2) + c2) + 2) / 2;
 }
+
+/**
+ * Smooth keyframes: `times` (0..1, rising) and `values` have the same length; between two keys the value glides with a smoothstep.
+ * Before the first key and after the last one it holds the first / last value.
+ */
+export function sampleKeys(u: number, times: readonly number[], values: readonly number[]): number {
+  const last = times.length - 1;
+  if (last < 0) return 0;
+  if (u <= times[0]!) return values[0]!;
+  if (u >= times[last]!) return values[last]!;
+  let i = 0;
+  while (i < last - 1 && u > times[i + 1]!) i++;
+  const span = times[i + 1]! - times[i]!;
+  const k = span > 0 ? (u - times[i]!) / span : 1;
+  const eased = k * k * (3 - 2 * k);
+  return values[i]! + (values[i + 1]! - values[i]!) * eased;
+}

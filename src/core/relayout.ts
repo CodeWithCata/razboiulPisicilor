@@ -1,3 +1,4 @@
+/** @file Rebuilds Menu / GameOver / Victory when the canvas size changes (fullscreen, rotation). */
 import type Phaser from 'phaser';
 import { RELAYOUT } from '../config/viewport';
 

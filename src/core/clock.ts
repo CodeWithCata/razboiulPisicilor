@@ -1,3 +1,4 @@
+/** @file gameClock: game time that stops during pause. Use it for every deadline, never scene.time.now. */
 import { CLOCK } from '../config/clock';
 
 /**
@@ -13,23 +14,39 @@ import { CLOCK } from '../config/clock';
 class GameClock {
   private current = 0;
   private lastFrame: number | null = null;
+  private scale = 1;
 
   /** Game time in ms. Constant during a frame. */
   get now(): number {
     return this.current;
   }
 
+  /** How fast game time runs next to real time (1 = normal, 0.12 = the slow-mo of the last cat). Set by SlowMoSystem. */
+  get timeScale(): number {
+    return this.scale;
+  }
+
+  set timeScale(value: number) {
+    this.scale = value > 0 ? value : 1;
+  }
+
+  /** A real frame time (ms) turned into game time: use it for anything that moves or animates by `delta`, so slow-mo reaches it too. */
+  scaled(ms: number): number {
+    return ms * this.scale;
+  }
+
   /** A new run starts: `start` is the scene's current time, so deadlines made right now line up. */
   reset(start: number): void {
     this.current = start;
     this.lastFrame = null;
+    this.scale = 1;
   }
 
   /** Call once per frame with the time Phaser passes to `update`. Returns the game time to use this frame. */
   advance(frameTime: number): number {
     if (this.lastFrame !== null) {
       const step = frameTime - this.lastFrame;
-      if (step > 0 && step <= CLOCK.maxStepMs) this.current += step;
+      if (step > 0 && step <= CLOCK.maxStepMs) this.current += step * this.scale;
     }
     this.lastFrame = frameTime;
     return this.current;

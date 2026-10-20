@@ -1,3 +1,4 @@
+/** @file Loads real assets from the manifests, waits for the font, fills gaps with placeholders, starts the menu. */
 import Phaser from 'phaser';
 import { musicKey, sfxKey, type MusicId, type SoundId } from '../assets/audioKeys';
 import { AUDIO_MANIFEST, MUSIC_MANIFEST } from '../assets/audioManifest';

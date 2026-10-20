@@ -1,9 +1,11 @@
+/** @file The thrown belt as a boomerang: out, pierce, turn at range or wall, back. */
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { GOLD_BELT, MILK_FX } from '../../config/animation';
 import { WORLD } from '../../config/arena';
 import { BELT_THROW, PROJECTILES } from '../../config/balance';
 import type { ArenaQuery } from '../../core/arena';
+import { bus, Events, type BeltFlightPayload } from '../../core/events';
 import { distToSegment } from '../../core/sweep';
 import { fitToSize } from '../../core/sprite';
 import type { Enemy } from '../../entities/Enemy';
@@ -70,6 +72,8 @@ export class ThrownBelt {
     this.dripMilk(stepMs);
     this.hitEnemies(prevX, prevY);
     this.swatProjectiles(prevX, prevY);
+    const flight: BeltFlightPayload = { x: this.sprite.x, y: this.sprite.y, prevX, prevY, radius: BELT_THROW.hitRadius };
+    bus.emit(Events.BeltFlight, flight); // the arena reacts to the belt flying through it
     return false;
   }
 

@@ -1,3 +1,4 @@
+/** @file Cream speech bubble with a tail, pops in. */
 import Phaser from 'phaser';
 import { PAUSE } from '../../config/pause';
 import { COLORS, FONT } from '../../config/style';

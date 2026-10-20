@@ -1,3 +1,4 @@
+/** @file Where real image / photo files are listed to replace the code-drawn placeholders (only the scene is real art so far). */
 import { Tex, type PhotoId, type TexKey } from './keys';
 
 /**

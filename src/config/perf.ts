@@ -1,3 +1,4 @@
+/** @file Numbers for the on-phone fps panel (ui/PerfPanel.ts, systems/PerfMonitor.ts). */
 import { COLORS } from './style';
 
 /** The fps / debug numbers shown on phones when the pause-menu switch "Date debug" is on (ui/PerfPanel.ts, systems/PerfMonitor.ts). */

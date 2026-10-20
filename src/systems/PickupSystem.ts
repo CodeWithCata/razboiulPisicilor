@@ -1,6 +1,7 @@
+/** @file Spawns pickups (timer + cat drops) and detects when Varu grabs one. */
 import Phaser from 'phaser';
-import { ARENA_RULES, WORLD } from '../config/arena';
-import { PICKUPS, PICKUP_SPAWN, type PickupKind } from '../config/balance';
+import { ARENA_RULES, PLAY_AREA } from '../config/arena';
+import { LUCKY, PICKUPS, PICKUP_SPAWN, type PickupKind } from '../config/balance';
 import type { ArenaQuery } from '../core/arena';
 import { bus, Events, listen, type BossDefeatedPayload, type EnemyKilledPayload, type PickupPayload } from '../core/events';
 import { weightedPick } from '../core/random';
@@ -38,15 +39,19 @@ export class PickupSystem {
     });
 
     this.off.push(
-      listen<EnemyKilledPayload>(Events.EnemyKilled, ({ x, y }) => {
+      listen<EnemyKilledPayload>(Events.EnemyKilled, ({ x, y, type }) => {
+        if (type === 'lucky') {
+          this.luckyReward(x, y); // caught the lucky cat: a pile of pickups, always
+          return;
+        }
         if (Math.random() < PICKUP_SPAWN.killDropChance && this.hasRoom()) {
-          this.spawnAt(this.pickKind(), Phaser.Math.Clamp(x, 60, WORLD.width - 60), Phaser.Math.Clamp(y, 60, WORLD.height - 60));
+          this.spawnAt(this.pickKind(), Phaser.Math.Clamp(x, PLAY_AREA.left + 60, PLAY_AREA.right - 60), Phaser.Math.Clamp(y, PLAY_AREA.top + 60, PLAY_AREA.bottom - 60));
         }
       }),
       // Beating a boss always drops a heal and something fun.
       listen<BossDefeatedPayload>(Events.BossDefeated, ({ x, y }) => {
-        const cx = Phaser.Math.Clamp(x, 120, WORLD.width - 120);
-        const cy = Phaser.Math.Clamp(y, 120, WORLD.height - 120);
+        const cx = Phaser.Math.Clamp(x, PLAY_AREA.left + 120, PLAY_AREA.right - 120);
+        const cy = Phaser.Math.Clamp(y, PLAY_AREA.top + 120, PLAY_AREA.bottom - 120);
         this.spawnAt('crochete', cx - 50, cy);
         this.spawnAt(this.pickKind(), cx + 50, cy);
       }),
@@ -77,13 +82,26 @@ export class PickupSystem {
     return pickup;
   }
 
+  /** Varu caught the lucky cat: `LUCKY.dropCount` of the usual random pickups land in a small ring around her. They ignore the field limit, like the golden belt. */
+  private luckyReward(x: number, y: number): void {
+    const start = Math.random() * Math.PI * 2;
+    for (let i = 0; i < LUCKY.dropCount; i++) {
+      const a = start + (i / LUCKY.dropCount) * Math.PI * 2;
+      this.spawnAt(
+        this.pickKind(),
+        Phaser.Math.Clamp(x + Math.cos(a) * LUCKY.dropRadius, PLAY_AREA.left + 60, PLAY_AREA.right - 60),
+        Phaser.Math.Clamp(y + Math.sin(a) * LUCKY.dropRadius, PLAY_AREA.top + 60, PLAY_AREA.bottom - 60),
+      );
+    }
+  }
+
   /** Debug helper: drop a specific kind next to Varu. */
   spawnNearPlayer(kind: PickupKind): void {
     const a = Math.random() * Math.PI * 2;
     this.spawnAt(
       kind,
-      Phaser.Math.Clamp(this.player.x + Math.cos(a) * 110, 60, WORLD.width - 60),
-      Phaser.Math.Clamp(this.player.y + Math.sin(a) * 110, 60, WORLD.height - 60),
+      Phaser.Math.Clamp(this.player.x + Math.cos(a) * 110, PLAY_AREA.left + 60, PLAY_AREA.right - 60),
+      Phaser.Math.Clamp(this.player.y + Math.sin(a) * 110, PLAY_AREA.top + 60, PLAY_AREA.bottom - 60),
     );
   }
 
@@ -106,8 +124,8 @@ export class PickupSystem {
     const margin = 90;
     const { nearbyHalfWidth: hw, nearbyHalfHeight: hh } = ARENA_RULES; // the world is bigger than the screen: land where Varu can see
     for (let i = 0; i < 12; i++) {
-      const x = Phaser.Math.Clamp(this.player.x + Phaser.Math.Between(-hw, hw), margin, WORLD.width - margin);
-      const y = Phaser.Math.Clamp(this.player.y + Phaser.Math.Between(-hh, hh), margin, WORLD.height - margin);
+      const x = Phaser.Math.Clamp(this.player.x + Phaser.Math.Between(-hw, hw), PLAY_AREA.left + margin, PLAY_AREA.right - margin);
+      const y = Phaser.Math.Clamp(this.player.y + Phaser.Math.Between(-hh, hh), PLAY_AREA.top + margin, PLAY_AREA.bottom - margin);
       const farFromVaru = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y) > 160;
       if (farFromVaru && this.arena.isCircleFree(x, y, PICKUPS.size / 2)) return [x, y];
     }

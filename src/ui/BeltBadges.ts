@@ -1,3 +1,4 @@
+/** @file Spin and throw cooldown badges (also the touch buttons for them). */
 import Phaser from 'phaser';
 import { poly } from '../assets/paint';
 import { GAME, type BeltAttackId } from '../config/balance';

@@ -1,3 +1,4 @@
+/** @file Cheap wall avoidance for cats walking straight (`steerAround`). Pure math. */
 import type { ArenaQuery, Point } from './arena';
 
 const DEG = Math.PI / 180;
