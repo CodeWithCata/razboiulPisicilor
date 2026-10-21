@@ -6,6 +6,7 @@ import type { DebugId } from '../config/debug';
 import type { FightReport } from './bossVerdict';
 import type { JokeCategory, JokeChannel } from '../config/jokes';
 import type { AmbientAction, PropKind } from '../config/props';
+import type { Enemy } from '../entities/Enemy';
 
 /**
  * Global event bus. Gameplay code EMITS things that happened ("a cat died"),
@@ -26,6 +27,9 @@ export const Events = {
   EnemyKilled: 'enemy:killed', // EnemyKilledPayload (only when Varu kills it)
   CatBump: 'enemy:bump', // CatBumpPayload (a flung cat slammed into another cat)
   CatPopped: 'enemy:popped', // CatPoppedPayload (a cat that jumped out of a bush or box just landed: it says something cheeky)
+  CatCaged: 'bed:caged', // CatCagedPayload (a flung cat was locked into a bed)
+  CatReleased: 'bed:released', // CatReleasedPayload (the cat got out of the bed: escaped, or the bed broke)
+  BedRearmed: 'bed:rearmed', // BedRearmedPayload (the bed has its pillow back and can catch again)
   CatSurrender: 'enemy:surrender', // CatSurrenderPayload (a cat gave up and raised the white flag: its line, the sound, and the HUD's fanfare word)
   LuckySpawn: 'lucky:spawn', // PointPayload (the lucky cat just appeared: gold sparks, a word, the banner, a sound)
   LuckyGone: 'lucky:gone', // PointPayload (she got away: a line and a sound; catching her is a normal EnemyKilled with type 'lucky')
@@ -123,6 +127,24 @@ export interface CatBumpPayload extends PointPayload {
 export interface CatPoppedPayload extends PointPayload {
   /** The cat came out of a bed: it yawns and says a sleepy line instead of a taunt. */
   sleepy: boolean;
+}
+
+/** A flung cat was locked into a bed. x/y is the bed's center. */
+export interface CatCagedPayload extends PointPayload {
+  cat: Enemy;
+  bedId: number;
+}
+
+/** A caged cat got out. `escaped` false = the bed broke. */
+export interface CatReleasedPayload extends PointPayload {
+  cat: Enemy;
+  bedId: number;
+  escaped: boolean;
+}
+
+/** A bed got its pillow back. */
+export interface BedRearmedPayload extends PointPayload {
+  bedId: number;
 }
 
 export interface CatSurrenderPayload extends PointPayload {

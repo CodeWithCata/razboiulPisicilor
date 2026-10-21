@@ -127,7 +127,7 @@ export abstract class Enemy extends Actor {
 
   /** False while a cat can't be hit (a ninja mid-teleport, or a cat that gave up). Subclasses that override it must keep `&& super.hittable`. */
   get hittable(): boolean {
-    return this.giveUp === null;
+    return this.giveUp === null && !this.cagedIn;
   }
 
   /** True once the cat has raised the white flag (systems/CatChatter.ts skips it). */
@@ -146,7 +146,7 @@ export abstract class Enemy extends Actor {
 
   /** Damage dealt to Varu when this cat touches him. */
   get contactDamage(): number {
-    return this.giveUp ? 0 : this.stats.contactDamage;
+    return this.giveUp || this.cagedIn ? 0 : this.stats.contactDamage;
   }
 
   /** Multiplier on damage from the belt and crows. Bosses use it for armor. */
@@ -179,6 +179,10 @@ export abstract class Enemy extends Actor {
 
   tick(time: number, delta: number, ctx: EnemyContext): void {
     if (!this.alive) return;
+    if (this.cagedIn) {
+      this.setVelocity(0, 0); // locked in a bed: it does not think, move or show (it stays active, so the wave waits for it)
+      return;
+    }
     this.undoTerrainSlow();
     this.rotation -= this.swayApplied; // undo last frame's sway so think() steers from the true heading
     this.swayApplied = 0;
@@ -362,6 +366,8 @@ export abstract class Enemy extends Actor {
     super.destroy(fromScene);
   }
 
+  /** Locked in a bed (`cage`). */
+  private cagedIn = false;
   /** Hide and seek: when the cat sprang out of a bush or box (`popOut`) and for how long. 0 = not popping. */
   private popAt = 0;
   /** The landing taunt (Events.CatPopped) is sent once per pop. */
@@ -513,6 +519,49 @@ export abstract class Enemy extends Actor {
   get flungSpeed(): number {
     if (this.isBoss || !this.alive || !this.isKnockedBack || !this.body) return 0;
     return (this.body as Phaser.Physics.Arcade.Body).speed;
+  }
+
+  /** True while the cat is locked in a bed (see `cage` / `release`, systems/props/BedCageSystem.ts). */
+  get caged(): boolean {
+    return this.cagedIn;
+  }
+
+  /**
+   * A bed locks the cat in: hidden, frozen, harmless and out of every collision, but still alive and `active`, so the wave waits for it.
+   * Bosses are too heavy to be caged. `x/y` is where it is kept (the bed's center).
+   */
+  cage(x: number, y: number): void {
+    if (this.isBoss || this.cagedIn || !this.body) return;
+    this.cagedIn = true;
+    this.knockbackUntil = 0;
+    this.popAt = 0;
+    this.fadeAlpha = 1;
+    this.clearTint();
+    this.setTintMode(Phaser.TintModes.MULTIPLY);
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    body.enable = false;
+    this.setPosition(x, y);
+    this.setVisible(false);
+    this.setShadowVisible(false);
+  }
+
+  /**
+   * The cat gets out of the bed: it appears at (x, y) and leaves toward `dirX/dirY` at `speed`. With `flingMs` above 0 the exit
+   * counts as a fling (pinball sees it); otherwise it is only a short hop out where it does not think.
+   */
+  release(x: number, y: number, dirX: number, dirY: number, speed: number, flingMs: number): void {
+    if (!this.cagedIn) return;
+    this.cagedIn = false;
+    const body = this.body as Phaser.Physics.Arcade.Body | null;
+    if (!body) return;
+    body.enable = true;
+    body.reset(x, y);
+    this.setVisible(true);
+    this.setShadowVisible(true);
+    this.syncShadow();
+    this.setVelocity(dirX * speed, dirY * speed);
+    this.knockbackUntil = gameClock.now + (flingMs > 0 ? flingMs : 200);
   }
 
   /** True while the cat is still springing out of its hideout (that hop is not a fling). */

@@ -32,6 +32,8 @@ export class Prop {
   /** Bushes: index into BUSH_VARIANTS (leaf colors). Other props: 0. */
   readonly variant: number;
   hp: number;
+  /** Called after every hit with its power (BedCageSystem uses it to count the shakes). Null = nobody listens. */
+  onHit: ((power: number) => void) | null = null;
 
   private readonly feel: PropFeel;
   private readonly tilt = new Spring();
@@ -89,6 +91,14 @@ export class Prop {
     this.shiftY.kick(dirY * f.nudge * power * omega);
     if (f.hop > 0) this.vz = Math.sqrt(2 * PROP_TUNING.hopGravity * f.hop * power);
     this.countHit(power);
+    this.onHit?.(power);
+  }
+
+  /** Changes the picture to the one of another 2x2 object (a bed with or without its pillow). The springs, hp and `kind` stay the same. */
+  setLook(look: ObjectName): void {
+    if (this.dead) return;
+    const key = propKey(look);
+    if (this.scene.textures.exists(key)) this.sprite.setTexture(key);
   }
 
   /** A puff of wind: only a lean, no squash and no shove. */

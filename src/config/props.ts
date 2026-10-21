@@ -289,6 +289,35 @@ export const BED_BOUNCE = {
   power: 1,
 } as const;
 
+/**
+ * Bed cages: a cat flung into a READY bed (one that shows its pillow) is locked in: hidden, frozen, harmless (it stays alive, so the
+ * wave still waits for it). It gets out after `holdMs`, after `escapeShakes` real hits on the bed, or when the bed breaks.
+ * Then the bed rests (no pillow) for `rearmCooldownMs` and traps nothing. Beds need `readyKind` / `emptyKind` pictures from the tileset.
+ */
+export const BED_CAGE = {
+  enabled: true,
+  /** Every bed starts READY. False = only beds that the map shows with the pillow (`readyKind`) start ready. */
+  startReady: true,
+  /** The picture of a READY bed (with the pillow) and of one with no pillow (a cat inside, or resting). */
+  readyKind: 'bedCushion',
+  emptyKind: 'bed',
+  /** The cat must be flung at least this fast (px/s) to be caught. */
+  captureSpeed: 200,
+  /** Reaction starts this far (px) before the body would touch, plus the distance one frame at its speed. */
+  probe: 6,
+  /** How long a cat stays locked in (ms). */
+  holdMs: 4000,
+  /** Real hits on the occupied bed that shake the cat loose. 0 = hits never free it. */
+  escapeShakes: 3,
+  /** After the cat left, the bed waits this long (ms) before it gets its pillow back. */
+  rearmCooldownMs: 6000,
+  /** The released cat flies out at this speed (px/s). A hard shake makes it a real fling for `releaseFlingMs` (otherwise it just hops out). */
+  releaseFlingSpeed: 380,
+  releaseFlingMs: 300,
+  /** Power (0..1) of the bed's squash when it traps a cat, lets it go and gets its pillow back. */
+  power: { trap: 1, release: 0.8, rearm: 0.5 },
+} as const satisfies { readyKind: ObjectName; emptyKind: ObjectName } & Record<string, unknown>;
+
 /** Destroying the arena. Fences never break. Rocks and the rest only break to bosses; bushes also to Varu. */
 export const PROP_HP: Record<ObjectName, { hp: number; byPlayer: boolean; byBoss: boolean }> = {
   bush: { hp: 5, byPlayer: true, byBoss: true },
