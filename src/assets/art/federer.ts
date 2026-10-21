@@ -1,5 +1,5 @@
 /** @file Code-drawn Pisica Federer (128x128, facing up): the body plus the loose layers FedererRig moves (racket arm, racket, tail, feet). */
-import { C, E, P, S, T, Tpart, ellipsePts, flat, ink, layer, type G, type Pt } from './shapes';
+import { C, E, P, R, S, T, Tpart, ellipsePts, flat, ink, layer, type G, type Pt } from './shapes';
 
 const CREAM = 0xf0d9a8;
 const TAN = 0xd9a864;
@@ -66,4 +66,20 @@ export function drawFedererFootL(g: G): void {
 
 export function drawFedererFootR(g: G): void {
   layer(g, [E(84, 104, 14, 16)], CREAM);
+}
+
+/**
+ * Federer's ball machine (96x96, facing up: the barrel points the way it fires): two wheels, a green box with a white stripe, a clear hopper
+ * full of tennis balls and a grey barrel with a muzzle ring. v147.
+ */
+export function drawBallMachine(g: G): void {
+  layer(g, [R(12, 52, 14, 28, 5), R(70, 52, 14, 28, 5)], 0x3b3f4a); // wheels
+  layer(g, [R(38, 6, 20, 48, 6)], 0x5a606e); // barrel
+  layer(g, [R(34, 4, 28, 12, 5)], 0x9aa0ad); // muzzle ring
+  layer(g, [R(22, 46, 52, 42, 10)], 0x3fa35a); // body
+  flat(g, [R(24, 72, 48, 6, 2)], 0xffffff); // stripe
+  layer(g, [E(48, 56, 38, 28)], 0xe3f4ff, 2.5); // hopper
+  flat(g, [C(40, 56, 6), C(54, 52, 6), C(50, 63, 6), C(60, 60, 5)], 0xc9e33a);
+  ink(g, [[35, 56], [43, 54]], 1.2, 0x9ab07a);
+  flat(g, [C(30, 81, 3)], 0xff4d4d); // little red light
 }

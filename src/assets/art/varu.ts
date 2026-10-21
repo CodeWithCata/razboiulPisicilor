@@ -66,11 +66,34 @@ function drawCigarette(g: G, tip: Pt, base: Pt): void {
   flat(g, [C(tip[0], tip[1], 3)], COLORS.red);
 }
 
+/** Where the hood is: lying on his back (normal), halfway pushed back while he lifts the cigarette, or pulled up over his head (the bad pickup "emo"). */
+export type HoodState = 'down' | 'half' | 'up';
+
+/**
+ * The EMO look, seen from behind: the hood is pulled up over his head and ears (a big rounded cowl of the same red fleece that drops
+ * to his shoulders), so no blond hair shows. `half`: the cowl is bunched up on his shoulders and the top of his head shows (he is pushing it back
+ * to smoke). The cowl is squashed toward its lower part instead of moved whole, so it never hangs below the hoodie.
+ */
+function drawCowl(g: G, half: boolean): void {
+  const k = half ? 0.62 : 1; // squash of the cowl
+  const dy = half ? 21 : 0; // and how far it slid down
+  const at = (x: number, y: number): Pt => [x, 36 + dy + (y - 36) * k];
+  const pts = (list: ReadonlyArray<readonly [number, number]>): Pt[] => list.map(([x, y]) => at(x, y));
+  const cowl = S(pts([[64, 36], [77, 40], [85, 52], [87, 66], [82, 79], [73, 88], [64, 90], [55, 88], [46, 79], [41, 66], [43, 52], [51, 40]]));
+  layer(g, [cowl], FLEECE);
+  flat(g, [T(pts([[46, 81], [55, 88.5], [64, 90.5], [73, 88.5], [82, 81]]), 3.6 * k)], FLEECE_SHADE); // shaded fold where it meets the shoulders
+  if (!half) flat(g, [E(...at(54, 50), 7, 13)], 0xe0545a); // a light patch on the upper left of the cowl
+  ink(g, pts([[64, 39], [64, 85]]), 1.8, FLEECE_SHADE); // the seam down the middle
+  ink(g, pts([[49, 46], [46, 56]]), 1.6, FLEECE_SHADE); // two folds where the cowl bunches up
+  ink(g, pts([[79, 46], [82, 56]]), 1.6, FLEECE_SHADE);
+}
+
 /**
  * Varu seen from behind (128x128, facing UP, legs are separate textures): red tech-fleece hoodie, blond head, belt is its own texture, cigarette in the left.
  * `pose` is the cigarette drag: 0 = arm down, 1 = cigarette at his mouth (then the arm is drawn last, over the head).
+ * `hood`: where the hood is (`up` = the EMO look, `half` = being pushed back for a drag).
  */
-export function drawVaru(g: G, pose = 0): void {
+export function drawVaru(g: G, pose = 0, hood: HoodState = 'down'): void {
   const arm = leftArm(pose);
   const raised = pose > 0;
   // Body and both sleeves are one silhouette.
@@ -92,19 +115,24 @@ export function drawVaru(g: G, pose = 0): void {
   // Cigarette in the left hand (paper, filter, red tip).
   if (!raised) drawCigarette(g, arm.tip, arm.base);
 
-  // Big fleece hood lying on the back: seam down the middle, shaded fold at the bottom.
-  const hood = S([[43, 70], [48, 60], [64, 55], [80, 60], [85, 70], [83, 82], [75, 91], [64, 94], [53, 91], [45, 82]]);
-  layer(g, [hood], FLEECE);
-  flat(g, [T([[50, 86], [57, 91], [64, 92.5], [71, 91], [78, 86]], 3.2)], FLEECE_SHADE);
-  ink(g, [[64, 76], [64, 90]], 1.8, FLEECE_SHADE);
+  if (hood === 'down') {
+    // Big fleece hood lying on the back: seam down the middle, shaded fold at the bottom.
+    const hood = S([[43, 70], [48, 60], [64, 55], [80, 60], [85, 70], [83, 82], [75, 91], [64, 94], [53, 91], [45, 82]]);
+    layer(g, [hood], FLEECE);
+    flat(g, [T([[50, 86], [57, 91], [64, 92.5], [71, 91], [78, 86]], 3.2)], FLEECE_SHADE);
+    ink(g, [[64, 76], [64, 90]], 1.8, FLEECE_SHADE);
+  }
 
-  // Head, ears.
-  layer(g, [E(46, 61, 7, 11), E(82, 61, 7, 11)], SKIN, 2.5);
-  layer(g, [C(64, 59, 17)], COLORS.blond);
-  ink(g, [[60, 44], [57, 52], [60, 60]], 1.8);
-  ink(g, [[66, 44], [67, 52], [73, 58]], 1.8);
-  ink(g, [[53, 50], [51, 57]], 1.8);
-  ink(g, [[56, 42], [53, 40]], 2);
+  if (hood !== 'up') {
+    // Head, ears.
+    layer(g, [E(46, 61, 7, 11), E(82, 61, 7, 11)], SKIN, 2.5);
+    layer(g, [C(64, 59, 17)], COLORS.blond);
+    ink(g, [[60, 44], [57, 52], [60, 60]], 1.8);
+    ink(g, [[66, 44], [67, 52], [73, 58]], 1.8);
+    ink(g, [[53, 50], [51, 57]], 1.8);
+    ink(g, [[56, 42], [53, 40]], 2);
+  }
+  if (hood !== 'down') drawCowl(g, hood === 'half'); // over the head: all of it, or bunched up on his shoulders
 
   // Raised arm: drawn over the head, with its cuff, the cigarette and the hand.
   if (raised) {

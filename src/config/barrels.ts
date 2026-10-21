@@ -23,8 +23,12 @@ export const BARREL = {
   minGap: 200,
   /** Random spots tried per barrel before it gives up (the arena is big, this is plenty). */
   tries: 60,
-  /** Walking through a barrel does nothing: it is a decoration that only the belt, blasts and bosses break. */
+  /** A barrel is solid: Varu and walking cats cannot walk through it (flying cats pass over). The belt, blasts and bosses break it, and so does a walking cat that runs into it. */
   hp: 2,
+  /** The solid part: a rectangle (px) covering the whole barrel body from its base up (`offsetY` above its spot), so Varu can never stand on top of the barrel, not even behind it. */
+  solid: { w: 46, h: 54, offsetY: -29 },
+  /** A cat breaks the barrel when its edge is this close (px) to the barrel's hit box, so a cat stopped by the solid part (which is a bit bigger than the hit box at the top) still breaks it. */
+  catBreakSlackPx: 6,
   /** The part the belt can touch: half width and height above its base. */
   hitbox: { halfWidth: 26, height: 54 },
   /** A walking cat that runs into a barrel breaks it too (and leaves the puddle). */
@@ -41,22 +45,22 @@ export const BARREL = {
   respawn: { everyMs: { min: 25000, max: 40000 }, popMs: 350 },
   puddle: {
     /** Texture 96x96 drawn at this scale; its middle is at `centerY` (share of the height) and sits `offsetY` above the barrel's base. */
-    scale: 1.35, // 1.5x bigger than before (0.9)
+    scale: 1.8, // bigger again (was 1.35, before that 0.9); the sticky zone below grows with it
     centerY: 0.656,
     offsetY: -4,
     depth: ARENA.depth.decor + 0.15,
     growMs: 380,
     /** It does not stay as big as it was: from the end of its growth it shrinks steadily to this share of its size by the time it starts to dry (the sticky zone shrinks with it). */
-    shrinkTo: 0.4,
+    shrinkTo: 0.3,
     /** Never more than this many at once (the oldest dry up first). */
     max: 14,
     /** A puddle dries up on its own: it stays this long (game ms), then fades away over `dryMs` and stops slowing anyone. */
-    lifeMs: 20000,
+    lifeMs: 16000,
     dryMs: 4000,
     /** Fade time of the oldest puddle when `max` is exceeded. */
     fadeMs: 600,
     /** The sticky part: an ellipse around its middle, in px (it grows with the puddle). */
-    zone: { rx: 54, ry: 27 },
+    zone: { rx: 72, ry: 36 },
     /** Speed left while standing in it: 0.5 = half speed. Flying cats ignore it. */
     slow: { player: 0.55, cat: 0.5, boss: 0.7 },
     /** A cat that is flung (belt hit, pinball bump) while it stands in a puddle slips: faster, spinning, sliding on. Bosses never slip. */

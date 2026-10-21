@@ -11,6 +11,7 @@ import { BootScene } from './scenes/BootScene';
 import { GameOverScene } from './scenes/GameOverScene';
 import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
+import { CutsceneScene } from './scenes/CutsceneScene';
 import { PauseScene } from './scenes/PauseScene';
 import { UIScene } from './scenes/UIScene';
 import { VictoryScene } from './scenes/VictoryScene';
@@ -45,7 +46,7 @@ const game = new Phaser.Game({
   // phone shows Varu moving only every second frame, which looks choppy, and uneven when the refresh rate wanders.
   physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, fixedStep: false } },
   input: { activePointers: 4 }, // the move stick + spin + throw + pause at the same time
-  scene: [BootScene, MenuScene, GameScene, UIScene, GameOverScene, VictoryScene, PauseScene],
+  scene: [BootScene, MenuScene, GameScene, UIScene, GameOverScene, VictoryScene, CutsceneScene, PauseScene],
 });
 
 bindGameSize(game.scale); // GAME.width / GAME.height now follow the real canvas size

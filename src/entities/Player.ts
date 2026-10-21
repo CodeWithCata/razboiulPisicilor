@@ -3,15 +3,18 @@ import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { PLAYER } from '../config/balance';
 import { sampleKeys } from '../core/ease';
-import { bus, Events, type IdleHabitPayload, type PlayerHealthPayload } from '../core/events';
+import { bus, Events, type IdleHabitPayload, type PlayerHealthPayload, type PlayerHurtPayload } from '../core/events';
 import type { InputSource } from '../input/InputSource';
 import { Actor } from './Actor';
 import { gameClock } from '../core/clock';
-import { CIG_SMOKE, ENERGY_FLIP, ENERGY_TRAIL, GOLD_BELT, IDLE_HABITS, MILK_FX, MILK_TRAIL, SMOKE_BREAK, VARU_ANIM } from '../config/animation';
+import { CIG_SMOKE, ENERGY_FLIP, ENERGY_TRAIL, EMO_FX, GOLD_BELT, IDLE_HABITS, MILK_FX, MILK_TRAIL, RUST_FX, SMOKE_BREAK, VARU_ANIM, type ZLook } from '../config/animation';
+import { setCircleHitbox } from '../core/sprite';
 import { BELT_FX, css, FONT } from '../config/style';
 
 /** Body frames of the cigarette drag: arm down, half way, cigarette at his mouth. */
 const BODY_FRAMES: readonly TexKey[] = [Tex.Varu, Tex.VaruDrag1, Tex.VaruDrag2];
+/** The emo bad buff: hood up, then pushed back as the arm rises, and down while the cigarette is at his mouth (he is the normal Varu then). */
+const EMO_BODY_FRAMES: readonly TexKey[] = [Tex.VaruEmo, Tex.VaruEmoDrag1, Tex.VaruDrag2];
 
 const smoothstep = (u: number): number => u * u * (3 - 2 * u);
 
@@ -21,14 +24,25 @@ export class Player extends Actor {
   speedMultiplier = 1;
   /** Slowed by the floor (a mustard puddle): 1 = normal. BarrelSystem sets it every frame before Varu moves; it never mixes with the power-up speed above. */
   terrainSlow = 1;
+  /** Slowed by the emo cat's tear puddles (`TearPuddles`, 1 = normal). Separate from `terrainSlow`, which the mustard puddles set every frame. */
+  tearSlow = 1;
   damageMultiplier = 1;
   rangeMultiplier = 1;
+  /** Bad buffs (PowerUpSystem sets them): the pause between plain swings and the spin / throw cooldowns get this many times longer, and the body grows (1 = normal). */
+  swingCooldownMultiplier = 1;
+  specialCooldownMultiplier = 1;
+  sizeMultiplier = 1;
+  /** True while the emo buff is active (PowerUpSystem sets it): hood up, broken hearts over his head. */
+  emo = false;
   /** True while the golden belt is active (PowerUpSystem sets it): gold strap, sticky white goo. */
   goldenBelt = false;
   /** True while the milk buff is active (PowerUpSystem sets it): drippy white trail. */
   milkTrail = false;
   /** True while the energy drink buff is active (PowerUpSystem sets it): small green Z z z letters behind him. */
   energyTrail = false;
+  /** True while the rusty belt buff is active (PowerUpSystem sets it): rust flakes come off the belt. */
+  rustyFlakes = false;
+  private rustTimer = 0;
 
   /** Current aim direction (normalized). Ninja cats use it to appear behind Varu. */
   readonly facing = new Phaser.Math.Vector2(0, -1);
@@ -70,6 +84,13 @@ export class Player extends Actor {
   private zLast: { x: number; y: number } | null = null;
   private zCount = 0;
   private zTimer = 0;
+  private emoTimer = 0;
+  private bodyEmo = false;
+  /** Big Varu: the scale he was built with, and how big he is right now (eases toward `sizeMultiplier`). */
+  private baseScale = 1;
+  private sizeNow = 1;
+  /** The smoke break: he cannot walk or start a swing until this game time (gameClock). */
+  private frozenUntil = 0;
   /**
    * The energy drink back flip (config ENERGY_FLIP): ms since it started (-1 = not flipping). While it runs the real body is hidden and
    * `flipBody` plays the somersault in its place (with the legs and belt), so the body's scale and hitbox never change.
@@ -127,6 +148,7 @@ export class Player extends Actor {
     this.milkGfx = scene.add.graphics().setDepth(3);
     this.setCollideWorldBounds(true);
     this.setDepth(20);
+    this.baseScale = this.scaleX;
     this.emitHealth();
   }
 
@@ -136,7 +158,7 @@ export class Player extends Actor {
     if (!this.isKnockedBack) {
       // Only when `ENERGY_FLIP.rooted` is on: planted during the back flip. By default he keeps full control while he flips.
       const planted = ENERGY_FLIP.rooted && this.flipMs >= 0;
-      const speed = planted ? 0 : PLAYER.speed * this.speedMultiplier * this.terrainSlow;
+      const speed = planted || this.frozen ? 0 : PLAYER.speed * this.speedMultiplier * this.terrainSlow * this.tearSlow;
       this.setVelocity(input.move.x * speed, input.move.y * speed);
     }
     this.facing.copy(input.aim);
@@ -252,11 +274,28 @@ export class Player extends Actor {
   }
 
   /** Food or energy drink: he takes a drag. The arm swings up, the tip glows, then a cloud of smoke goes out in front of him. Visual only. */
-  smokeBreak(): void {
+  smokeBreak(quiet = false): void {
     if (!SMOKE_BREAK.enabled || !this.alive) return;
     this.breakMs = 0;
     this.exhaled = false;
-    bus.emit(Events.SmokeBreak, { x: this.x, y: this.y });
+    bus.emit(Events.SmokeBreak, { x: this.x, y: this.y, quiet });
+  }
+
+  /** True while he is stuck in a smoke break (BeltSystem starts no new attack then). */
+  get frozen(): boolean {
+    return gameClock.now < this.frozenUntil;
+  }
+
+  /** Dev helper: ends a smoke break freeze at once. */
+  thaw(): void {
+    this.frozenUntil = 0;
+  }
+
+  /** The bad smoke break: he stops (no walking, no new swing) for `ms` and takes a drag. The line comes from the pickup's label, so the drag is quiet. */
+  freeze(ms: number): void {
+    if (!this.alive) return;
+    this.frozenUntil = gameClock.now + ms;
+    this.smokeBreak(true);
   }
 
   /** The energy drink: he plants his feet, crouches, springs up and does one somersault on the spot. Animation only (ENERGY_FLIP); a second can in mid air does nothing. */
@@ -384,9 +423,10 @@ export class Player extends Actor {
     }
 
     const frame = this.breakPose < 0.25 ? 0 : this.breakPose < 0.75 ? 1 : 2;
-    if (frame !== this.bodyFrame) {
+    if (frame !== this.bodyFrame || this.emo !== this.bodyEmo) {
       this.bodyFrame = frame;
-      this.setTexture(BODY_FRAMES[frame]);
+      this.bodyEmo = this.emo;
+      this.setTexture((this.emo ? EMO_BODY_FRAMES : BODY_FRAMES)[frame]); // emo: the hood is up, except during the drag
     }
 
     // The tip glows brighter and pulses while the cigarette is at his mouth.
@@ -573,13 +613,122 @@ export class Player extends Actor {
     }
   }
 
+  /** While the emo buff lasts (hood up, see `updateSmokeBreak`), little broken hearts drift up over his head. */
+  private updateEmo(delta: number): void {
+    if (!this.emo || !this.alive) {
+      this.emoTimer = 0;
+      return;
+    }
+    this.emoTimer += delta;
+    if (this.emoTimer < EMO_FX.everyMs) return;
+    this.emoTimer = 0;
+    this.dropHeart();
+  }
+
+  /** Big Varu: grows / shrinks toward `sizeMultiplier`. The body, legs and belt follow `scaleX`; the hurtbox (physics circle and `hitRadius`) and the shadow are resized with it. */
+  private easeSize(delta: number): void {
+    if (this.sizeNow === this.sizeMultiplier) return;
+    const gap = this.sizeMultiplier - this.sizeNow;
+    this.sizeNow = Math.abs(gap) < 0.005 ? this.sizeMultiplier : this.sizeNow + gap * Math.min(1, (PLAYER.sizeEasePerSec * delta) / 1000);
+    this.setScale(this.baseScale * this.sizeNow);
+    setCircleHitbox(this, PLAYER.hitRadius * this.sizeNow);
+    this.hitRadius = PLAYER.hitRadius * this.sizeNow;
+    this.setShadowScale(this.sizeNow);
+  }
+
+  /** While the rusty belt lasts, rust flakes come off the strap (faster while he walks). */
+  private updateRust(delta: number): void {
+    const cfg = RUST_FX;
+    if (!cfg.enabled || !this.rustyFlakes || !this.alive || !this.beltInHand) {
+      this.rustTimer = 0;
+      return;
+    }
+    const moving = this.body ? (this.body as Phaser.Physics.Arcade.Body).speed > 5 : false;
+    this.rustTimer += delta;
+    const every = moving ? cfg.everyMs : cfg.idleEveryMs;
+    if (this.rustTimer < every) return;
+    this.rustTimer -= every;
+    for (let i = 0; i < cfg.perDrop; i++) this.dropRust();
+  }
+
+  /** A point on the held belt's strap, from its texture coordinates (128x128, centered), in the world. */
+  private strapPoint(tx: number, ty: number, out: Phaser.Math.Vector2): Phaser.Math.Vector2 {
+    const k = this.scaleX;
+    const a = this.rotation + this.beltTilt; // the held belt sprite turns with its own tilt
+    const lx = (tx - 64) * k;
+    const ly = (ty - 64) * k;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    return out.set(this.x + lx * c - ly * s, this.y + lx * s + ly * c);
+  }
+
+  /** One flake: comes off a random point on the strap, pops in, falls, tumbles, drifts a little and fades. Tweens are scene-owned. */
+  private dropRust(): void {
+    const cfg = RUST_FX;
+    const path = cfg.strapPath;
+    const seg = Phaser.Math.Between(0, path.length - 2);
+    const t = Math.random();
+    const [ax, ay] = path[seg]!;
+    const [bx, by] = path[seg + 1]!;
+    const at = this.strapPoint(ax + (bx - ax) * t, ay + (by - ay) * t, new Phaser.Math.Vector2());
+    const x = at.x + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
+    const y = at.y + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
+    const size = Phaser.Math.Between(cfg.sizePx.min, cfg.sizePx.max);
+    const color = Phaser.Utils.Array.GetRandom([...cfg.colors]);
+    const flake = this.scene.add
+      .image(x, y, Tex.Chip)
+      .setDisplaySize(size * cfg.popScale, size * cfg.popScale)
+      .setTint(color)
+      .setDepth(cfg.depth)
+      .setAlpha(cfg.alpha)
+      .setAngle(Phaser.Math.FloatBetween(0, 360));
+    const life = Phaser.Math.Between(cfg.lifeMs.min, cfg.lifeMs.max);
+    const drift = (Math.random() < 0.5 ? -1 : 1) * cfg.driftPx;
+    const fall = Phaser.Math.Between(cfg.fallPx.min, cfg.fallPx.max);
+    const spin = Phaser.Math.Between(cfg.spinDeg.min, cfg.spinDeg.max) * (Math.random() < 0.5 ? -1 : 1);
+    this.scene.tweens.add({ targets: flake, displayWidth: size, displayHeight: size, duration: life * 0.15, ease: 'Back.easeOut' });
+    this.scene.tweens.add({ targets: flake, y: y + fall, duration: life, ease: 'Quad.easeIn' });
+    this.scene.tweens.add({ targets: flake, x: x + drift, duration: life, ease: 'Sine.easeInOut' });
+    this.scene.tweens.add({ targets: flake, angle: flake.angle + spin, duration: life, ease: 'Linear' });
+    this.scene.tweens.add({
+      targets: flake,
+      alpha: 0,
+      duration: life,
+      delay: life * 0.5,
+      ease: 'Sine.easeIn',
+      onComplete: () => flake.destroy(),
+    });
+  }
+
+  /** One broken heart: pops up over his head, floats up, sways and fades. Tweens are scene-owned, so a restart cleans them up. */
+  private dropHeart(): void {
+    const cfg = EMO_FX;
+    const x = this.x + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
+    const y = this.y + cfg.offsetY * this.sizeNow + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
+    const size = Phaser.Math.Between(cfg.sizePx.min, cfg.sizePx.max);
+    const heart = this.scene.add.image(x, y, Tex.Heart).setDisplaySize(size, size).setDepth(cfg.depth).setAlpha(cfg.alpha).setAngle(Phaser.Math.FloatBetween(cfg.tiltDeg.min, cfg.tiltDeg.max));
+    const full = heart.scaleX; // the scale that gives the displayed size
+    heart.setScale(full * 0.4);
+    const life = Phaser.Math.Between(cfg.lifeMs.min, cfg.lifeMs.max);
+    const sway = (Math.random() < 0.5 ? -1 : 1) * cfg.swayPx;
+    this.scene.tweens.add({ targets: heart, scale: full, duration: life * 0.2, ease: 'Back.easeOut' });
+    this.scene.tweens.add({ targets: heart, x: x + sway, duration: life, ease: 'Sine.easeInOut' });
+    this.scene.tweens.add({
+      targets: heart,
+      y: y - Phaser.Math.Between(cfg.riseY.min, cfg.riseY.max),
+      alpha: 0,
+      duration: life,
+      ease: 'Sine.easeIn',
+      onComplete: () => heart.destroy(),
+    });
+  }
+
   /** One letter of the trail: appears at his feet, floats up, sways and fades. Tweens are scene-owned, so a restart cleans them up. */
-  private dropZ(): void {
-    const cfg = ENERGY_TRAIL;
+  private dropZ(cfg: ZLook = ENERGY_TRAIL, offsetY = 0): void {
     const step = cfg.cycle[this.zCount % cfg.cycle.length]!;
     this.zCount++;
     const x = this.x + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
-    const y = this.y + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
+    const y = this.y + offsetY + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
     const letter = this.scene.add
       .text(x, y, step.letter, {
         fontFamily: FONT,
@@ -626,6 +775,7 @@ export class Player extends Actor {
   override preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
     delta = gameClock.scaled(delta); // from here on `delta` is game time, so the slow-mo of the last cat slows Varu's animation too
+    this.easeSize(delta);
     this.advanceBackflip(delta);
     // Hide / show the body first: the legs and the cigarette ember follow `this.visible` below. A back flip hides it too (a stand-in plays it).
     const hidden = this.hiddenInTornado || this.flipMs >= 0;
@@ -635,6 +785,8 @@ export class Player extends Actor {
     this.updateHeldBelt(delta);
     this.updateMilkTrail(delta);
     this.updateEnergyTrail(delta);
+    this.updateEmo(delta);
+    this.updateRust(delta);
     this.puffSmoke(delta);
     const r = this.rotation;
     const k = this.scaleX;
@@ -677,8 +829,8 @@ export class Player extends Actor {
     super.destroy(fromScene);
   }
 
-  /** Returns true if the hit landed (false during i-frames). */
-  takeDamage(amount: number, fromX: number, fromY: number): boolean {
+  /** Returns true if the hit landed (false during i-frames). `source` says what hurt him (a cat type, a projectile kind...) for the bad luck system. */
+  takeDamage(amount: number, fromX: number, fromY: number, source?: string): boolean {
     const now = gameClock.now;
     if (!this.alive || this.godMode || now < this.invincibleUntil) return false;
 
@@ -688,7 +840,8 @@ export class Player extends Actor {
     this.flash(0xff4444, 100);
     this.scene.tweens.add({ targets: this, alpha: 0.35, duration: 70, yoyo: true, repeat: 4, onComplete: () => this.setAlpha(1) });
 
-    bus.emit(Events.PlayerHurt, { x: this.x, y: this.y });
+    const hurt: PlayerHurtPayload = { x: this.x, y: this.y, source, amount };
+    bus.emit(Events.PlayerHurt, hurt);
     this.emitHealth();
     if (!this.alive) {
       this.setVelocity(0, 0);
@@ -700,6 +853,13 @@ export class Player extends Actor {
   heal(amount: number): void {
     if (!this.alive) return;
     this.hp = Math.min(this.maxHp, this.hp + amount);
+    this.emitHealth();
+  }
+
+  /** Dev only (debug card): sets health to this share of the maximum (at least 1 HP, so it never kills). */
+  debugSetHealth(share: number): void {
+    if (!this.alive) return;
+    this.hp = Math.min(this.maxHp, Math.max(1, Math.round(this.maxHp * share)));
     this.emitHealth();
   }
 

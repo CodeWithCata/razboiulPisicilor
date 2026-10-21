@@ -14,10 +14,12 @@ export interface ActorOptions {
 export abstract class Actor extends Phaser.Physics.Arcade.Sprite {
   hp: number;
   readonly maxHp: number;
-  readonly hitRadius: number;
+  /** Varu changes it when he grows ("Big Varu"); for every cat it stays what it was. */
+  hitRadius: number;
   protected knockbackUntil = 0;
   private readonly shadow: Phaser.GameObjects.Image;
   private readonly shadowSize: number;
+  private shadowGrow = 1;
 
   protected constructor(scene: Phaser.Scene, x: number, y: number, texture: TexKey, opts: ActorOptions) {
     super(scene, x, y, texture);
@@ -69,11 +71,18 @@ export abstract class Actor extends Phaser.Physics.Arcade.Sprite {
 
   /** The shadow while an actor jumps: `size` and `alpha` are shares of the normal ones (1 and 1 = on the ground, call that to put it back). */
   protected setShadowJump(size: number, alpha: number): void {
-    this.shadow.setDisplaySize(this.shadowSize * 0.9 * size, this.shadowSize * 0.45 * size).setAlpha(alpha);
+    this.shadow.setDisplaySize(this.shadowSize * 0.9 * size * this.shadowGrow, this.shadowSize * 0.45 * size * this.shadowGrow).setAlpha(alpha);
   }
 
-  protected syncShadow(): void {
-    this.shadow.setPosition(this.x, this.y + this.shadowSize * 0.28);
+  /** The ground shadow grows with the body (Varu when he is big). 1 = normal. */
+  protected setShadowScale(k: number): void {
+    this.shadowGrow = k;
+    this.setShadowJump(1, 1);
+  }
+
+  /** Puts the shadow under the sprite. Public so cutscenes can move a cat and keep its shadow with it. */
+  syncShadow(): void {
+    this.shadow.setPosition(this.x, this.y + this.shadowSize * 0.28 * this.shadowGrow);
   }
 
   override destroy(fromScene?: boolean): void {

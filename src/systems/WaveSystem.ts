@@ -20,6 +20,8 @@ export class WaveSystem {
   /** Game time the current wave began (0 before the first wave). */
   private startedAt = 0;
   private bossWave = false;
+  /** Dev only: no new wave starts, nothing more spawns and the wave never ends (debug card). */
+  debugHold = false;
 
   constructor(
     private readonly spawn: (type: EnemyType) => void,
@@ -67,8 +69,18 @@ export class WaveSystem {
     this.nextWaveAt = time;
   }
 
-  update(time: number): void {
+  /** Dev only (debug card): drop what is left of this wave and start wave `n` on the next frame (the campaign stops at its last wave). */
+  jumpToWave(n: number, time: number): void {
     if (!this.running) return;
+    const target = this.mode === 'campaign' ? Math.min(n, FINAL_WAVE) : n;
+    this.queue = [];
+    this.wave = Math.max(1, target) - 1;
+    this.waitingForNextWave = true;
+    this.nextWaveAt = time;
+  }
+
+  update(time: number): void {
+    if (!this.running || this.debugHold) return;
 
     if (this.waitingForNextWave) {
       if (time >= this.nextWaveAt) this.startWave(time);

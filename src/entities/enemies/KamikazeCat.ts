@@ -39,7 +39,7 @@ export class KamikazeCat extends Enemy {
   }
 
   private explode(): void {
-    const payload: ExplosionPayload = { x: this.x, y: this.y, radius: KAMIKAZE.blastRadius, damage: KAMIKAZE.blastDamage, shockwave: true };
+    const payload: ExplosionPayload = { x: this.x, y: this.y, radius: KAMIKAZE.blastRadius, damage: KAMIKAZE.blastDamage, shockwave: true, source: 'kamikaze' };
     bus.emit(Events.Explosion, payload);
     this.destroy(); // self-destruct: no score for Varu
   }

@@ -15,6 +15,7 @@
     "check": "tsc --noEmit && node scripts/gen-codemap.mjs --check",
     "codemap": "node scripts/gen-codemap.mjs",
     "codemap:check": "node scripts/gen-codemap.mjs --check",
+    "balance": "node scripts/boss-budget.mjs",
     "gen:map": "node scripts/generate-arena-map.mjs"
   },
   "dependencies": {

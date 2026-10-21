@@ -79,6 +79,16 @@ export class TouchOverlay {
       .setVisible(false);
   }
 
+  /** A cutscene hides the thumb controls (it never calls `update` meanwhile); false brings them back. */
+  setHidden(hidden: boolean): void {
+    this.gfx.clear();
+    this.gfx.setVisible(!hidden);
+    this.attackIcon.setVisible(!hidden);
+    this.caption.setVisible(!hidden && !this.input.usedStick);
+    this.attackTag.setVisible(!hidden);
+    this.laserHint.setVisible(!hidden);
+  }
+
   update(): void {
     const g = this.gfx;
     g.clear();

@@ -1,10 +1,12 @@
-/** @file Day to night: a colored sheet over the arena that follows the wave number, plus floor lamps that glow when it gets dark. */
+/** @file Day to night: a colored sheet over the arena that follows the wave number, plus floor lamps that rise out of the floor when it gets dark. */
 import Phaser from 'phaser';
 import { DAY_NIGHT } from '../config/dayNight';
 import { GAME } from '../config/balance';
 import { ENDLESS, FINAL_WAVE } from '../config/waves';
 import type { RunMode } from '../core/run';
 import { Events, listen, type WavePayload } from '../core/events';
+import { FloorLamp } from './FloorLamp';
+import type { Obstacles } from './props/Obstacles';
 
 const channel = (color: number, shift: number): number => (color >> shift) & 0xff;
 
@@ -19,17 +21,20 @@ export function nightProgress(wave: number, mode: RunMode): number {
 
 /**
  * The sky follows `WaveStarted`: it eases toward the new wave's value (config/dayNight.ts), so the change is slow and never pops.
- * Lamps are plain shapes plus a soft glow texture made once in a canvas. All of it belongs to the scene.
+ * Lamps (`FloorLamp`) are hidden by day; once the night is dark enough they rise out of the floor one after the other and light up, and sink
+ * back when the day returns. The soft glow texture is made once in a canvas. All of it belongs to the scene.
  */
 export class DayNight {
   private readonly sheet: Phaser.GameObjects.Rectangle;
-  private readonly glows: Phaser.GameObjects.Image[] = [];
-  private readonly bulbs: Phaser.GameObjects.Arc[] = [];
+  /** The street lamps (LampSystem breaks them). */
+  readonly lamps: FloorLamp[] = [];
   private current: number;
   private target: number;
   private clock = 0;
+  /** The game ms of the frame being applied (the lamps' rise runs on it). */
+  private step = 0;
 
-  constructor(scene: Phaser.Scene, private readonly mode: RunMode) {
+  constructor(scene: Phaser.Scene, private readonly mode: RunMode, private readonly obstacles: Obstacles) {
     this.current = this.target = nightProgress(mode === 'endless' ? ENDLESS.startWave : 1, mode);
     const M = DAY_NIGHT.margin;
     this.sheet = scene.add
@@ -39,6 +44,8 @@ export class DayNight {
       .setDepth(DAY_NIGHT.depth);
     this.buildLamps(scene);
     this.apply();
+    const startUp = this.current >= DAY_NIGHT.lamp.onAt;
+    for (const lamp of this.lamps) lamp.snapTo(startUp); // no emerge animation at the very start of a run
 
     const off = listen<WavePayload>(Events.WaveStarted, ({ wave }) => {
       this.target = nightProgress(wave, this.mode);
@@ -49,6 +56,7 @@ export class DayNight {
   update(delta: number): void {
     if (!DAY_NIGHT.enabled) return;
     this.clock += delta;
+    this.step = delta;
     this.current += (this.target - this.current) * (1 - Math.exp(-delta / (DAY_NIGHT.transitionMs / 3)));
     this.apply();
   }
@@ -70,13 +78,7 @@ export class DayNight {
       }
     }
     const haveGlow = scene.textures.exists(L.glowKey);
-    for (const lamp of DAY_NIGHT.lamps) {
-      scene.add.circle(lamp.x, lamp.y, L.baseRadius, L.baseColor).setDepth(L.floorDepth);
-      this.bulbs.push(scene.add.circle(lamp.x, lamp.y, L.bulbRadius, L.bulbColor).setDepth(L.floorDepth + 0.1));
-      if (haveGlow) {
-        this.glows.push(scene.add.image(lamp.x, lamp.y, L.glowKey).setDisplaySize(L.glowRadius * 2, L.glowRadius * 2).setDepth(L.glowDepth).setAlpha(0));
-      }
-    }
+    DAY_NIGHT.lamps.forEach((lamp, n) => this.lamps.push(new FloorLamp(scene, lamp.x, lamp.y, haveGlow ? L.glowKey : null, n, this.obstacles)));
   }
 
   /** Sets the sheet color and the lamps for the current progress. */
@@ -91,13 +93,10 @@ export class DayNight {
     const mix = (shift: number): number => Math.round(channel(a.color, shift) + (channel(b.color, shift) - channel(a.color, shift)) * k);
     this.sheet.setFillStyle((mix(16) << 16) | (mix(8) << 8) | mix(0), a.alpha + (b.alpha - a.alpha) * k);
 
-    // Lamps: off in the afternoon, full at night, with a slow flicker.
+    // Lamps: underground in the afternoon, out from `onAt` on, brighter the darker it gets.
     const L = DAY_NIGHT.lamp;
-    const lit = Phaser.Math.Clamp((p - L.onAt) / (1 - L.onAt), 0, 1);
-    this.glows.forEach((glow, n) => {
-      const flicker = 1 - L.flicker * (0.5 + 0.5 * Math.sin(this.clock / L.flickerMs * Math.PI * 2 + n * 1.7));
-      glow.setAlpha(lit * L.glowAlpha * flicker);
-    });
-    this.bulbs.forEach((bulb) => bulb.setAlpha(0.55 + 0.45 * lit));
+    const up = p >= L.onAt;
+    const bright = Phaser.Math.Clamp((p - L.onAt) / (1 - L.onAt), 0, 1);
+    for (const lamp of this.lamps) lamp.update(this.step, up, bright, this.clock);
   }
 }

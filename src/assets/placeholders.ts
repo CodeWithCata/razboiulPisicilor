@@ -3,15 +3,17 @@ import Phaser from 'phaser';
 import { COLORS } from '../config/style';
 import { Tex } from './keys';
 import { drawBossMafia } from './art/bosses';
-import { drawBossFederer, drawFedererArm, drawFedererFootL, drawFedererFootR, drawFedererRacket, drawFedererTail } from './art/federer';
+import { drawEmoBack, drawEmoSide, drawFedererFront, drawFedererSide, drawQueenBack, drawQueenSide } from './art/views';
+import { drawBallMachine, drawBossFederer, drawFedererArm, drawFedererFootL, drawFedererFootR, drawFedererRacket, drawFedererTail } from './art/federer';
 import { drawBarrel, drawBarrelBroken, drawBarrelPuddle } from './art/barrel';
 import { CROW_GOLD, CROW_KAMIKAZE, CROW_NORMAL, POSE_FLAP, POSE_FOLD, POSE_OPEN, drawCrow, drawFeather } from './art/crows';
 import { drawBossQueen, drawQueenCape, drawQueenCrown, drawQueenFootL, drawQueenFootR, drawQueenScepter } from './art/queen';
 import { drawCatFat, drawCatFlying, drawCatFlyingBody, drawWingLeft, drawWingRight, drawCatKamikaze, drawCatLucky, drawCatNinja, drawCatNormal, drawCatTennis, drawTennisArm, drawTennisRacket } from './art/cats';
 import {
-  drawBeltThrown, drawPickupCrochete, drawPickupGoldenBelt, drawPickupLapte, drawPickupLaser, drawPickupMonster, drawPickupMystery,
-  drawBrokenHeart, drawTennis, drawYarn,
+  drawBeltThrown, drawPetard, drawPickupCrochete, drawPickupCigarettes, drawPickupVape, drawPickupGoldenBelt, drawPickupLapte, drawPickupMilkBottle, drawPickupLaser, drawPickupMonster, drawPickupRedBull, drawPickupMystery, drawPickupRoulette, drawPickupSnail, drawPickupDumbbell, drawPickupEmo, drawPickupRusty, drawPickupBig, drawPickupSmoke,
+  drawBrokenHeart, drawFireball, drawTennis, drawYarn,
 } from './art/items';
+import { drawLampBase, drawLampHead, drawLampStem } from './art/lamp';
 import { drawVaru, drawVaruBelt, drawVaruLegL, drawVaruLegR } from './art/varu';
 import { make, poly } from './paint';
 
@@ -33,6 +35,8 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.VaruBeltGold, 128, 128, (g) => drawVaruBelt(g, true));
   make(scene, Tex.VaruDrag1, 128, 128, (g) => drawVaru(g, 0.5)); // cigarette drag: arm half way up...
   make(scene, Tex.VaruDrag2, 128, 128, (g) => drawVaru(g, 1)); // ...and at his mouth
+  make(scene, Tex.VaruEmo, 128, 128, (g) => drawVaru(g, 0, 'up')); // emo: the hood is up...
+  make(scene, Tex.VaruEmoDrag1, 128, 128, (g) => drawVaru(g, 0.5, 'half')); // ...he pushes it back to smoke (at his mouth he is the normal VaruDrag2)
   make(scene, Tex.CatNormal, 96, 96, drawCatNormal);
   make(scene, Tex.CatFat, 96, 96, drawCatFat);
   make(scene, Tex.CatNinja, 96, 96, drawCatNinja);
@@ -47,6 +51,7 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.CatTennisRacket, 96, 96, drawTennisRacket);
   make(scene, Tex.Yarn, 32, 32, drawYarn);
   make(scene, Tex.Tennis, 32, 32, drawTennis);
+  make(scene, Tex.Fireball, 32, 32, drawFireball);
   make(scene, Tex.Heart, 32, 32, drawBrokenHeart);
   make(scene, Tex.BeltThrown, 32, 96, (g) => drawBeltThrown(g));
   make(scene, Tex.BeltThrownGold, 32, 96, (g) => drawBeltThrown(g, true));
@@ -79,11 +84,26 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   });
 
   make(scene, Tex.PickupCrochete, 64, 64, drawPickupCrochete);
+  make(scene, Tex.PickupCigarettes, 64, 64, drawPickupCigarettes);
+  make(scene, Tex.PickupVape, 64, 64, drawPickupVape);
   make(scene, Tex.PickupLapte, 64, 64, drawPickupLapte);
+  make(scene, Tex.PickupMilkBottle, 64, 64, drawPickupMilkBottle);
   make(scene, Tex.PickupMonster, 64, 64, drawPickupMonster);
+  make(scene, Tex.PickupRedBull, 64, 64, drawPickupRedBull);
   make(scene, Tex.PickupGoldenBelt, 64, 64, drawPickupGoldenBelt);
   make(scene, Tex.PickupLaser, 64, 64, drawPickupLaser);
   make(scene, Tex.PickupMystery, 64, 64, drawPickupMystery);
+  make(scene, Tex.PickupRoulette, 64, 64, drawPickupRoulette);
+  make(scene, Tex.PickupSnail, 64, 64, drawPickupSnail);
+  make(scene, Tex.PickupDumbbell, 64, 64, drawPickupDumbbell);
+  make(scene, Tex.PickupEmo, 64, 64, drawPickupEmo);
+  make(scene, Tex.PickupRusty, 64, 64, drawPickupRusty);
+  make(scene, Tex.PickupBig, 64, 64, drawPickupBig);
+  make(scene, Tex.PickupSmoke, 64, 64, drawPickupSmoke);
+  make(scene, Tex.Petard, 32, 64, drawPetard);
+  make(scene, Tex.LampStem, 14, 48, drawLampStem);
+  make(scene, Tex.LampHead, 44, 64, drawLampHead);
+  make(scene, Tex.LampBase, 36, 20, drawLampBase);
 
   // ---- Crows ----
   // Dazed crow lying on the ground (the Crow Rain pickup). Stars are added in code.
@@ -121,9 +141,9 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   // Bits that fly off the arena props when they are hit (systems/props/PropFx.ts tints them per prop).
   make(scene, Tex.Leaf, 24, 24, (g) => {
     const blade = poly([[12, 1], [20, 7], [21, 15], [12, 23], [3, 15], [4, 7]]);
-    g.fillStyle(0x58a84c, 1).fillPoints(blade, true);
+    g.fillStyle(0xffffff, 1).fillPoints(blade, true); // white: every bush color tints it (a green leaf would only ever look green)
     g.lineStyle(2, NAVY, 1).strokePoints(blade, true);
-    g.lineStyle(2, 0x2f7035, 1).lineBetween(12, 5, 12, 19);
+    g.lineStyle(2, 0xa8a8a8, 1).lineBetween(12, 5, 12, 19);
   });
   make(scene, Tex.Chip, 12, 10, (g) => {
     g.fillStyle(0xffffff, 1).fillPoints(poly([[1, 3], [9, 0], [12, 6], [5, 10]]), true);
@@ -137,12 +157,19 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.BossQueenFootL, 128, 128, drawQueenFootL);
   make(scene, Tex.BossQueenFootR, 128, 128, drawQueenFootR);
   make(scene, Tex.BossMafia, 128, 128, drawBossMafia);
+  make(scene, Tex.BossMafiaBack, 128, 128, drawEmoBack); // the other looks of the three bosses (v148): they turn to show back, front or side
+  make(scene, Tex.BossMafiaSide, 128, 128, drawEmoSide);
+  make(scene, Tex.BossQueenBack, 128, 128, drawQueenBack);
+  make(scene, Tex.BossQueenSide, 128, 128, drawQueenSide);
+  make(scene, Tex.BossFedererFront, 128, 128, drawFedererFront);
+  make(scene, Tex.BossFedererSide, 128, 128, drawFedererSide);
   make(scene, Tex.BossFederer, 128, 128, drawBossFederer);
   make(scene, Tex.BossFedererArm, 128, 128, drawFedererArm);
   make(scene, Tex.BossFedererRacket, 128, 128, drawFedererRacket);
   make(scene, Tex.BossFedererTail, 128, 128, drawFedererTail);
   make(scene, Tex.BossFedererFootL, 128, 128, drawFedererFootL);
   make(scene, Tex.BossFedererFootR, 128, 128, drawFedererFootR);
+  make(scene, Tex.BallMachine, 96, 96, drawBallMachine);
 
   // Milk: a teardrop (the particles fall, so the tip points up) and a gooey puddle made of merged blobs.
   make(scene, Tex.MilkDrop, 24, 28, (g) => {

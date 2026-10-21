@@ -26,6 +26,8 @@ export class SlowMoSystem {
   private shutDown = false;
   /** How fast the physics step runs (1 = normal). Read by `stepPhysics`. */
   private physicsScale = 1;
+  /** Dev only (debug card): the speed the player picked; it multiplies whatever the slow-mo beat does. */
+  private debugScale = 1;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -50,6 +52,7 @@ export class SlowMoSystem {
       // The scene's camera manager is already torn down by the time this runs, so only reset speed (never touch the camera here).
       this.elapsed = -1;
       this.shutDown = true;
+      this.debugScale = 1; // a restarted run starts at normal speed
       this.apply(1);
     });
   }
@@ -75,6 +78,12 @@ export class SlowMoSystem {
     const k = (1 - scale) / (1 - minScale); // 0 = normal, 1 = deepest
     this.setZoom(1 + (zoom - 1) * k);
     this.setFocus(k);
+  }
+
+  /** Dev only (debug card): runs the whole game at this speed (1 = normal) until it is set again. */
+  setDebugSpeed(scale: number): void {
+    this.debugScale = scale;
+    if (this.elapsed < 0) this.apply(1);
   }
 
   /** Back to normal speed and zoom right now. */
@@ -122,7 +131,8 @@ export class SlowMoSystem {
     events.once(Phaser.Scenes.Events.SHUTDOWN, () => events.off(UPDATE, stepPhysics));
   }
 
-  private apply(scale: number): void {
+  private apply(beat: number): void {
+    const scale = beat * this.debugScale;
     gameClock.timeScale = scale;
     this.physicsScale = scale;
     if (this.scene.tweens) this.scene.tweens.timeScale = scale;

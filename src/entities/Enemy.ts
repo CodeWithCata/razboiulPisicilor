@@ -5,7 +5,8 @@ import { ANIM, FLINCH } from '../config/animation';
 import { ARENA_RULES } from '../config/arena';
 import { ENEMIES, LASER, SURRENDER, type EnemyStats, type EnemyType } from '../config/balance';
 import type { ArenaQuery } from '../core/arena';
-import { bus, Events, type CatSurrenderPayload, type EnemyKilledPayload } from '../core/events';
+import { bus, Events, type CatPoppedPayload, type CatSurrenderPayload, type EnemyKilledPayload } from '../core/events';
+import { HIDEOUT } from '../config/props';
 import { gameClock } from '../core/clock';
 import type { FlowField } from '../core/flowField';
 import { hasClearLine, steerAround } from '../core/steering';
@@ -17,6 +18,12 @@ import type { Player } from './Player';
 export interface EnemyContext {
   player: Player;
   lure: Phaser.Types.Math.Vector2Like | null;
+  /** Every projectile in flight (the tennis cat watches for balls Varu sends back). */
+  projectiles?: Phaser.Physics.Arcade.Group;
+  /** The wave number (1 = first). The tennis cat gets smarter with it. */
+  wave?: number;
+  /** Every cat and boss alive (the queen counts her royal guard in it). */
+  enemies?: Phaser.Physics.Arcade.Group;
 }
 
 /** How a cat slides on a mustard puddle (numbers in config/barrels.ts, started by systems/props/BarrelSystem.ts). */
@@ -110,6 +117,11 @@ export abstract class Enemy extends Actor {
 
   /** Flying cats don't bump into other cats (or walls). */
   get flies(): boolean {
+    return false;
+  }
+
+  /** True while this cat runs straight through other cats instead of being stopped by them (the queen's charge: the others are shoved aside). */
+  get ignoresCats(): boolean {
     return false;
   }
 
@@ -350,6 +362,61 @@ export abstract class Enemy extends Actor {
     super.destroy(fromScene);
   }
 
+  /** Hide and seek: when the cat sprang out of a bush or box (`popOut`) and for how long. 0 = not popping. */
+  private popAt = 0;
+  /** The landing taunt (Events.CatPopped) is sent once per pop. */
+  private tauntSent = false;
+  /** The cat came out of a bed (so its landing line is a sleepy one). */
+  private popSleepy = false;
+
+  /**
+   * The cat springs out of a bush or box: a short hop toward `dirX/dirY` (it does not think meanwhile), a squash-and-stretch pop from small to
+   * full size with a little overshoot, and a quick fade-in (HIDEOUT.exit). The pop is a bit of looks and a short move, nothing more.
+   */
+  popOut(dirX: number, dirY: number, sleepy = false): void {
+    if (!ANIM.enabled) return; // the pop is part of the animation: without it the cat just walks out
+    const X = HIDEOUT.exit;
+    this.popAt = gameClock.now;
+    this.tauntSent = false;
+    this.popSleepy = sleepy;
+    this.knockbackUntil = Math.max(this.knockbackUntil, this.popAt + X.ms);
+    this.fadeAlpha = 0;
+    this.setAlpha(0);
+    if (this.body) this.setVelocity(dirX * this.stats.speed * X.hopSpeed, dirY * this.stats.speed * X.hopSpeed);
+  }
+
+  /**
+   * The look of the pop at this moment: extra squash, a size factor and a cheeky wobble (radians), or null when it is over.
+   * Also eases the hop and the fade. When the cat lands it tells the world (Events.CatPopped) so it can taunt Varu.
+   */
+  private popLook(): { squash: number; size: number; wiggle: number } | null {
+    if (this.popAt === 0) return null;
+    const X = HIDEOUT.exit;
+    const t = (gameClock.now - this.popAt) / X.ms;
+    if (t >= 1) {
+      this.popAt = 0;
+      this.fadeAlpha = 1;
+      return null;
+    }
+    if (t >= X.tauntAt && !this.tauntSent) {
+      this.tauntSent = true;
+      const payload: CatPoppedPayload = { x: this.x, y: this.y - this.displayHeight / 2, sleepy: this.popSleepy };
+      bus.emit(Events.CatPopped, payload);
+    }
+    this.fadeAlpha = Math.min(1, t / X.fadeInShare);
+    // grow from small to full with a little overshoot (ease out back)
+    const g = Math.min(1, t / 0.7) - 1;
+    const back = 1 + 2.2 * g * g * g + 1.2 * g * g;
+    const size = X.startScale + (1 - X.startScale) * back;
+    // stretched while it springs out, then a squash when it lands (around 60%), then it settles
+    const squash = t < 0.5 ? X.stretch * (1 - t / 0.5) : X.landSquash * Math.sin(Math.min(1, (t - 0.5) / 0.5) * Math.PI) * (1 - t) * 1.6;
+    if (this.body) (this.body as Phaser.Physics.Arcade.Body).velocity.scale(0.94); // the hop slows down
+    // the cheeky wobble: starts when it lands, swings a few times and dies out
+    const after = Math.max(0, (t - X.tauntAt) / (1 - X.tauntAt));
+    const wiggle = Math.sin(after * Math.PI * 2 * X.wiggleCycles) * (1 - after) * Phaser.Math.DegToRad(X.wiggleDeg);
+    return { squash, size, wiggle };
+  }
+
   /** Sway and squash. Scale changes the hitbox by a few percent at most, which is fine. */
   private animate(delta: number, speed: number): void {
     if (!ANIM.enabled) return;
@@ -373,7 +440,13 @@ export abstract class Enemy extends Actor {
     squash += this.poseSquash;
     swayRad += Phaser.Math.DegToRad(this.poseTiltDeg);
     swayRad += Phaser.Math.DegToRad(this.slipAngle);
-    this.setScale(this.baseScale * (1 + squash), this.baseScale * (1 - squash));
+    const pop = this.popLook();
+    if (pop) {
+      squash += pop.squash;
+      swayRad += pop.wiggle;
+    }
+    const size = pop ? pop.size : 1;
+    this.setScale(this.baseScale * size * (1 + squash), this.baseScale * size * (1 - squash));
     this.swayApplied = swayRad;
     this.rotation += swayRad;
   }
@@ -442,6 +515,18 @@ export abstract class Enemy extends Actor {
     return (this.body as Phaser.Physics.Arcade.Body).speed;
   }
 
+  /** True while the cat is still springing out of its hideout (that hop is not a fling). */
+  get popping(): boolean {
+    return this.popAt !== 0;
+  }
+
+  /** A bed boinged this cat: it flies off at (vx, vy) and counts as flung for `ms`, so pinball sees it. */
+  boing(vx: number, vy: number, ms: number): void {
+    if (!this.body) return;
+    this.setVelocity(vx, vy);
+    this.knockbackUntil = Math.max(this.knockbackUntil, gameClock.now + ms);
+  }
+
   /** A flung cat slammed into this one (pinball, systems/PinballSystem.ts). Bosses shrug it off. Returns true if the bump landed (the cat got hurt or killed). */
   takeBump(damage: number, fromX: number, fromY: number, knockback: number, gapMs: number): boolean {
     if (this.isBoss || !this.alive || !this.hittable) return false;
@@ -452,8 +537,8 @@ export abstract class Enemy extends Actor {
     return true;
   }
 
-  /** A deflected tennis ball hit this cat. Bosses override this (stun!). */
-  onDeflectedHit(damage: number, fromX: number, fromY: number): void {
+  /** A deflected tennis ball hit this cat. Bosses override this (stun!). `_rallies` = how often a tennis cat or Federer returned the ball first. */
+  onDeflectedHit(damage: number, fromX: number, fromY: number, _rallies = 0): void {
     if (this.alive && this.hittable) this.applyHit(damage, fromX, fromY, 300);
   }
 

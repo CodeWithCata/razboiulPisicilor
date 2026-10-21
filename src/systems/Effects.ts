@@ -1,10 +1,10 @@
 /** @file The juice: screen shake, particles, floating words (listens to the bus). */
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
-import { BALL_FX, ENERGY_FLIP, GOLD_BELT, IDLE_HABITS, KAMIKAZE_BLAST, MILK_FX, NINJA_POOF, SMOKE_BREAK } from '../config/animation';
+import { BALL_FX, ENERGY_FLIP, GOLD_BELT, IDLE_HABITS, KAMIKAZE_BLAST, MILK_FX, NINJA_POOF, SMOKE_BREAK, TENNIS_RETURN_FX } from '../config/animation';
 import { ARENA } from '../config/arena';
 import { LUCKY, SURRENDER } from '../config/balance';
-import { PICKUP_VISUALS } from '../config/pickups';
+import { BAD_PICKUP_FX, PICKUP_VISUALS } from '../config/pickups';
 import { css, FONT, FONT_SFX } from '../config/style';
 import {
   Events,
@@ -20,11 +20,11 @@ import {
   type JokePayload,
   type PickupPayload,
   type PointPayload,
-  type ShoutPayload,
+  type SmokeBreakPayload,
   type TeleportPayload,
 } from '../core/events';
 import { gameClock } from '../core/clock';
-import { BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, pick } from '../content/lines';
+import { BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, pick } from '../content/lines';
 import { createDrops, createPuddles } from './belt/gooEmitters';
 
 /**
@@ -110,7 +110,9 @@ export class Effects {
         this.sparks.explode(10, x, y);
         this.shake(160, 0.008);
       }),
-      listen<PointPayload>(Events.SmokeBreak, ({ x, y }) => this.floatText(x, y + SMOKE_BREAK.textOffsetY, pick(SMOKE_LINES), '#e6e6ee', 26)),
+      listen<SmokeBreakPayload>(Events.SmokeBreak, ({ x, y, quiet }) => {
+        if (!quiet) this.floatText(x, y + SMOKE_BREAK.textOffsetY, pick(SMOKE_LINES), '#e6e6ee', 26);
+      }),
       listen<TeleportPayload>(Events.Teleport, (e) => this.teleport(e)),
       listen<PointPayload>(Events.BackflipLand, (e) => this.backflipLand(e)),
       listen<PointPayload>(Events.ProjectileBlocked, ({ x, y }) => {
@@ -121,6 +123,14 @@ export class Effects {
       listen<PickupPayload>(Events.PickupCollected, ({ kind, x, y }) => {
         this.sparks.explode(14, x, y);
         this.floatText(x, y - 34, PICKUP_LABELS[kind], css(PICKUP_VISUALS[kind].color), 30);
+      }),
+      listen<PickupPayload>(Events.BadPickup, ({ kind, x, y }) => {
+        const B = BAD_PICKUP_FX;
+        const color = css(PICKUP_VISUALS[kind].color);
+        this.sparks.explode(B.sparks, x, y);
+        this.shake(B.shake.ms, B.shake.intensity);
+        this.floatText(x, y + B.word.offsetY, BAD_LUCK_WORD, B.word.color, B.word.size);
+        this.floatText(x, y - 34, PICKUP_LABELS[kind], color, 30);
       }),
       listen<CrowImpactPayload>(Events.CrowImpact, (e) => this.crowImpact(e)),
       listen<BallLandedPayload>(Events.BallLanded, (e) => this.ballLanded(e)),
@@ -133,12 +143,18 @@ export class Effects {
         this.floatText(x, y - 16, 'RETUR!', '#a8ffb0', 26, FONT_SFX);
         this.shake(60, 0.003);
       }),
+      listen<PointPayload>(Events.TennisReturn, ({ x, y }) => {
+        const R = TENNIS_RETURN_FX;
+        this.sparks.explode(R.sparks, x, y);
+        this.floatText(x, y - 16, R.word.text, R.word.color, R.word.size, FONT_SFX);
+        this.shake(R.shake.ms, R.shake.intensity);
+      }),
       listen<PointPayload>(Events.BossStunned, ({ x, y }) => {
         this.sparks.explode(18, x, y);
         this.floatText(x, y - 90, 'AMEȚIT!', '#ffe066', 46);
         this.shake(200, 0.01);
       }),
-      listen<ShoutPayload>(Events.BossShout, ({ x, y, text }) => this.floatText(x, y, text, '#ffd9a8', 36)),
+      // Boss shouts are speech bubbles now: systems/CatChatter.ts listens to Events.BossShout.
       listen<BossDefeatedPayload>(Events.BossDefeated, ({ x, y }) => {
         this.fur.explode(40, x, y);
         this.feathers.explode(24, x, y);
@@ -221,8 +237,8 @@ export class Effects {
   }
 
   /** Expanding ring + fur burst. The ring is the visible blast radius. */
-  private explosion({ x, y, radius, shockwave }: ExplosionPayload): void {
-    this.fur.explode(32, x, y);
+  private explosion({ x, y, radius, shockwave, fur }: ExplosionPayload): void {
+    if (fur !== false) this.fur.explode(32, x, y);
     this.sparks.explode(16, x, y);
     if (shockwave) {
       const B = KAMIKAZE_BLAST;

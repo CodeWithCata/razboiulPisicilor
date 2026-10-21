@@ -30,6 +30,8 @@ export class ThrownBelt {
   private readonly dir: Phaser.Math.Vector2;
   private readonly maxRange: number;
   private readonly alreadyHit = new Set<Enemy>();
+  /** Tough projectiles (the emo cat's hearts: `throwHits` 2) this leg has already hit: one hit per leg, so out and back = 2 hits. */
+  private readonly alreadyCracked = new Set<Projectile>();
   private leg: Leg = 'out';
   private travelled = 0;
   private legMs = 0;
@@ -140,6 +142,7 @@ export class ThrownBelt {
     this.leg = 'back';
     this.legMs = 0;
     this.alreadyHit.clear(); // every cat can be hit again on the way back
+    this.alreadyCracked.clear();
   }
 
   private hitEnemies(prevX: number, prevY: number): void {
@@ -162,6 +165,13 @@ export class ThrownBelt {
       if (!proj.active || proj.friendly) continue;
       const reach = BELT_THROW.hitRadius + PROJECTILES[proj.kind].hitRadius;
       if (distToSegment(proj.x, proj.y, prevX, prevY, this.sprite.x, this.sprite.y) > reach) continue;
+      if (proj.throwHitsLeft > 1) {
+        if (this.alreadyCracked.has(proj)) continue; // the belt is still passing through it: one hit per leg
+        this.alreadyCracked.add(proj);
+        proj.throwHitsLeft -= 1;
+        proj.crack();
+        continue;
+      }
       swatProjectile(proj, this.enemies);
     }
   }

@@ -3,11 +3,11 @@ import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { ARENA } from '../../config/arena';
 import { BARREL } from '../../config/barrels';
-import { BUSH_VARIANTS, FENCE_SPLINTERS, PROP_AMBIENT, PROP_DEBRIS, PROP_FX, PROP_LOOK, PROP_TUNING, ROCK_CRACKS, SMASH, type FxId } from '../../config/props';
+import { BUSH_STATES, BUSH_VARIANTS, FENCE_SPLINTERS, PROP_AMBIENT, PROP_DEBRIS, PROP_FX, PROP_LOOK, PROP_TUNING, ROCK_CRACKS, SMASH, type FxId } from '../../config/props';
 import { FONT_SFX } from '../../config/style';
-import { BARREL_DESTROY_WORDS, PROP_AMBIENT_TEXT, PROP_CRACK_WORDS, PROP_DESTROY_WORDS, PROP_WORDS, pick } from '../../content/lines';
+import { BARREL_DESTROY_WORDS, LAMP_DESTROY_WORDS, PROP_AMBIENT_TEXT, PROP_CRACK_WORDS, PROP_DESTROY_WORDS, PROP_WORDS, pick } from '../../content/lines';
 import { gameClock } from '../../core/clock';
-import { Events, listen, type PropAmbientPayload, type PropCrackedPayload, type PropDestroyedPayload, type PropHitPayload } from '../../core/events';
+import { Events, listen, type PropAmbientPayload, type PropCrackedPayload, type PropDestroyedPayload, type PropHitPayload, type PropThinnedPayload } from '../../core/events';
 import type { Effects } from '../Effects';
 
 const PARTICLE_DEPTH = 38;
@@ -40,6 +40,7 @@ export class PropFx {
       listen<PropAmbientPayload>(Events.PropAmbient, (e) => this.onAmbient(e)),
       listen<PropDestroyedPayload>(Events.PropDestroyed, (e) => this.onDestroyed(e)),
       listen<PropCrackedPayload>(Events.PropCracked, ({ x, y }) => this.onCrack(x, y)),
+      listen<PropThinnedPayload>(Events.PropThinned, (e) => this.onThinned(e)),
     );
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off.forEach((f) => f()));
   }
@@ -70,6 +71,14 @@ export class PropFx {
       this.effects.floatText(x, y - 20, pick(BARREL_DESTROY_WORDS), PROP_LOOK.barrel.wordColor, SMASH.word.size, FONT_SFX);
       return;
     }
+    if (kind === 'lamp') {
+      // The lantern shatters: glass glints and bits fly, then the light is gone.
+      for (const [id, count] of PROP_LOOK.lamp.fx) this.emitterFor(id)?.explode(Math.round(count * SMASH.burstFactor), x, y);
+      this.emitters.get('dust')?.explode(SMASH.dust, x, y + 40);
+      this.effects.shake(SMASH.shake.ms, SMASH.shake.intensity);
+      this.effects.floatText(x, y - 30, pick(LAMP_DESTROY_WORDS), PROP_LOOK.lamp.wordColor, SMASH.word.size, FONT_SFX);
+      return;
+    }
     if (kind === 'fence' || kind === 'cans' || kind === 'ball') return; // only the 2x2 objects break
     for (const [id, count] of PROP_LOOK[kind].fx) this.emitterFor(id, variant)?.explode(Math.round(count * SMASH.burstFactor), x, y);
     this.emitters.get('dust')?.explode(SMASH.dust, x, y);
@@ -84,7 +93,7 @@ export class PropFx {
     return this.emitters.get(id);
   }
 
-  private scatterDebris(kind: Exclude<PropDestroyedPayload['kind'], 'fence' | 'cans' | 'ball' | 'barrel'>, x: number, y: number, variant?: number): void {
+  private scatterDebris(kind: Exclude<PropDestroyedPayload['kind'], 'fence' | 'cans' | 'ball' | 'barrel' | 'lamp'>, x: number, y: number, variant?: number): void {
     const def = PROP_DEBRIS[kind];
     const tints = kind === 'bush' && variant != null ? (BUSH_VARIANTS[variant]?.leafTint ?? def.tint) : def.tint;
     for (let i = 0; i < def.count; i++) {
@@ -132,6 +141,11 @@ export class PropFx {
     this.emitters.get('dust')?.explode(burst.dust, x, y);
     this.effects.shake(ROCK_CRACKS.shake.ms, ROCK_CRACKS.shake.intensity);
     this.effects.floatText(x, y - 30, pick(PROP_CRACK_WORDS), ROCK_CRACKS.word.color, ROCK_CRACKS.word.size, FONT_SFX);
+  }
+
+  /** A bush got a size smaller: a few more leaves in its own color fly off. */
+  private onThinned({ x, y, variant }: PropThinnedPayload): void {
+    this.emitterFor('leaf', variant)?.explode(BUSH_STATES.burst.leaf, x, y);
   }
 
   private onAmbient({ x, y, action, variant }: PropAmbientPayload): void {

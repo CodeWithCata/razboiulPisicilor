@@ -1,4 +1,4 @@
-/** @file Procedural animation numbers (cat sway / squash / flap, Varu walk, smoke break, milk and crow FX, golden belt, blasts). */
+/** @file Procedural animation numbers (cat sway / squash / flap, Varu walk, smoke break, milk and crow FX, golden belt, rust flakes off the rusty belt, blasts). */
 import type { PickupKind } from './balance';
 
 /**
@@ -20,6 +20,8 @@ export const ANIM = {
   /** Wing flap (FlyingCatRig): `rate` = radians per ms, `foldX` = how narrow a wing gets at the top of the beat (1 = no change), `swingDeg` = how far it lifts, `lag` = the far wing is this many radians behind (0 = both together). */
   wing: { rate: 0.03, foldX: 0.45, swingDeg: 14, lag: 0.25, depth: 9 },
   boss: { swayDeg: 3, squash: 0.03, stride: 0.6 },
+  /** Which drawing a boss shows (front / back / side, `entities/bosses/BossViews.ts`). The side look wins when the way it faces is more sideways than up or down by `sideEnter` (1.25 = clearly sideways) and is kept until it is less than `sideExit` (below 1.25 so it never flickers on a diagonal). `dashSpeedPx`: a boss locked into a charge or dash looks the way it moves once it is faster than this. */
+  views: { sideEnter: 1.25, sideExit: 0.8, dashSpeedPx: 40 },
   /** Standing still. `rate` is radians per ms. */
   idle: { rate: 0.004, squash: 0.03 },
   /** Below this speed (px/s) a cat counts as standing still. */
@@ -147,6 +149,20 @@ export const MILK_TRAIL = {
  * him, like he is sleepwalking on caffeine. Each drop takes the next size of the cycle (big Z, then smaller z, z).
  * Visual only.
  */
+/** How a floating "Z z z" looks and moves (the energy drink trail, `Player.dropZ`). */
+export interface ZLook {
+  readonly color: number;
+  readonly outline: number;
+  readonly cycle: readonly { readonly letter: string; readonly sizePx: number; readonly strokePx: number }[];
+  readonly jitterPx: number;
+  readonly tiltDeg: { readonly min: number; readonly max: number };
+  readonly riseY: { readonly min: number; readonly max: number };
+  readonly swayPx: number;
+  readonly lifeMs: { readonly min: number; readonly max: number };
+  readonly alpha: number;
+  readonly depth: number;
+}
+
 export const ENERGY_TRAIL = {
   enabled: true,
   /** Monster green with the navy outline the rest of the game uses. */
@@ -172,6 +188,56 @@ export const ENERGY_TRAIL = {
   alpha: 0.95,
   /** Under Varu (depth 20), over the floor and the milk trail. */
   depth: 18,
+} as const;
+
+/**
+ * The EMO bad buff: Varu pulls his hood up (the hooded body textures `Tex.VaruEmo*`, see `drawVaru(g, pose, 'up')`; the hood slides back while he smokes) and little broken
+ * hearts (`Tex.Heart`) drift up over his head, slowly, now and then. Visual only; the slow swings are `BUFFS.emo`.
+ */
+export const EMO_FX = {
+  /** A new heart every this many ms, starting this far above his center (px, negative = up). */
+  everyMs: 650,
+  offsetY: -34,
+  jitterPx: 12,
+  /** Displayed size of a heart (px). */
+  sizePx: { min: 16, max: 24 },
+  tiltDeg: { min: -20, max: 20 },
+  riseY: { min: 40, max: 60 },
+  swayPx: 10,
+  lifeMs: { min: 1400, max: 1900 },
+  alpha: 0.95,
+  /** Over Varu (depth 20). */
+  depth: 24,
+} as const;
+
+/**
+ * The RUSTY belt (BAD buff, `BUFFS.rusty`): while it lasts, rust flakes come off the strap of the belt in his fist, drop to the
+ * floor, tumble and fade. The flakes start at a random point along the strap (`strapPath`, the 128x128 belt texture, relative to
+ * its center), so they really come off the belt. Colors are the rust of the belt icon (assets/art/items.ts), lightened so they show.
+ * Visual only; the slow spins are `BUFFS.rusty`.
+ */
+export const RUST_FX = {
+  enabled: true,
+  /** A new drop every this many ms while he walks; standing still it is slower (`idleEveryMs`). Each drop is `perDrop` flakes. */
+  everyMs: 70,
+  idleEveryMs: 180,
+  perDrop: 2,
+  /** The strap as points in the 128x128 belt texture, from the loop end, past the fist, down to the buckle. */
+  strapPath: [[84, 20], [92, 24], [99, 32], [104, 42], [111, 44], [115, 54], [116, 66]] as readonly (readonly [number, number])[],
+  /** A flake starts this many px off the exact strap point (so it sits on the leather). */
+  jitterPx: 1.5,
+  /** Displayed size (px). It pops in bigger and settles to this size. */
+  sizePx: { min: 6, max: 9.75 },
+  popScale: 1.35,
+  colors: [0x8a3b17, 0xc4602a, 0xe8843a, 0xffb36b] as readonly number[],
+  /** How far it falls (px) and sways sideways (px), and how long it takes. */
+  fallPx: { min: 36, max: 64.8 },
+  driftPx: 14,
+  lifeMs: { min: 900, max: 1300 },
+  spinDeg: { min: 160, max: 340 },
+  alpha: 1,
+  /** Over the belt and Varu (the belt is depth 21), so the flakes visibly leave it. */
+  depth: 22,
 } as const;
 
 /**
@@ -398,6 +464,8 @@ export const QUEEN_RIG = {
   ring: { color: 0xffd166, alpha: 0.12, strokeAlpha: 0.8 },
   dizzy: { stars: 3, headPx: 62, orbitPx: 48, rate: 0.0038, crownTiltDeg: 16, crownRate: 0.011, scepterDroopDeg: 38 },
   death: { crownRisePx: 90, crownSpinDeg: 420, lifeMs: 1000 },
+  /** The bubble around her while her elite guards live (she takes half damage). */
+  shield: { radius: 96, color: 0x6fd3ff, alpha: 0.14, pulseAlpha: 0.06, pulseRate: 0.008 },
 } as const;
 
 /** Poses of Regina's loose parts per attack moment (see `QueenPose` in `entities/bosses/QueenRig.ts`), and how long each change takes (ms). */
@@ -410,6 +478,8 @@ export const QUEEN_POSES = {
   spinWindup: { scepterDeg: 100, scepterScale: 1.4, crownLift: -3, glow: 1, capeFlare: 0.3, squash: 0.08 },
   spinGo: { crownTiltDeg: -18, capeFlare: 1, squash: -0.05 },
   furyPop: { crownLift: 10, scepterDeg: -20, glow: 1 },
+  scepterWind: { scepterDeg: -35, scepterScale: 1.3, crownLift: 6, glow: 1, squash: 0.06 },
+  scepterThrow: { scepterDeg: 75, scepterScale: 1.5, squash: -0.1, glow: 0 },
 } as const;
 
 export const QUEEN_POSE_MS = {
@@ -417,6 +487,7 @@ export const QUEEN_POSE_MS = {
   chargeWindup: 650, chargeRush: 120, chargeEnd: 350,
   spinWindup: 600, spinGo: 200, spinEnd: 400,
   furyPop: 200, furyBack: 600, furyBackDelay: 700,
+  scepterWind: 600, scepterThrow: 140, scepterBack: 400,
 } as const;
 
 /**
@@ -428,6 +499,9 @@ export const EMO_RIG = {
   /** Where the eyes are, relative to the texture center (the sprite faces UP). Left one is hidden under the fringe: tears just leak out from it. */
   eye: { x: 14, y: -14 },
   fringeEye: { x: -17, y: -10 },
+  /** The same for his side drawing (it faces right; mirrored when he looks left): the one eye and the mouth. From behind there is no eye. */
+  eyeSide: { x: 22, y: -21 },
+  mouthSide: { x: 38, y: -4 },
   /** Mouth, where sighs come out. */
   mouth: { x: 0, y: 8 },
   /** Always-on slump (squash) and the slow sway of his head, in degrees. */
@@ -483,10 +557,10 @@ export const EMO_POSES = {
 } as const;
 
 export const EMO_POSE_MS = {
-  heartsWind: 520, heartsFire: 90, heartsBack: 500,
-  screamWind: 700, screamFire: 90, screamBack: 650,
-  crewWind: 560, crewFire: 110, crewBack: 520,
-  stunned: 220, stunBack: 500,
+  heartsWind: 520, heartsFire: 130, heartsBack: 650, // v143: fires and recoveries a little slower and eased both ways (was 90 / 500)
+  screamWind: 700, screamFire: 120, screamBack: 800,
+  crewWind: 560, crewFire: 150, crewBack: 650,
+  stunned: 300, stunBack: 600,
   breakdown: 250, breakdownBack: 700, breakdownBackDelay: 800,
   hurt: 70, hurtBack: 260,
 } as const;
@@ -515,6 +589,11 @@ export const FEDERER_RIG = {
   aura: { sizePx: 280, color: 0xd7f03a, alpha: 0.13, pulseAlpha: 0.06, pulseRate: 0.0065 },
   /** The racket twirl of the phase 2 roar. */
   twirl: { ms: 620 },
+  /** v147 tie-break rage: her loose parts are tinted red, the aura turns red. The towel: size and where it hangs (texture px from her middle). */
+  rage: { tint: 0xff9a9a, auraColor: 0xff3d3d, auraAlpha: 0.17 },
+  towel: { widthPx: 46, heightPx: 15, offsetY: -6 },
+  /** The broken racket that flies off when she smashes it (game px, ms). */
+  broken: { flyPx: 150, spinDeg: 720, ms: 650 },
   /** She is beaten: the racket flies off spinning, the ball bounces away. */
   death: { racketRisePx: 110, racketSpinDeg: 540, ballHopPx: 70, lifeMs: 1000 },
   /** Dropped ball when she is stunned (a few bounces on the spot). */
@@ -537,6 +616,13 @@ export const FEDERER_POSES = {
   callUp: { armDeg: 18, wristDeg: -14, squash: -0.05, tiltDeg: 0 },
   stunned: { armDeg: 58, wristDeg: 64, squash: 0.2, tiltDeg: 13, tailStretch: -0.25, ballShow: 0 },
   roar: { armDeg: -10, wristDeg: -20, squash: -0.1, tiltDeg: 0, tailStretch: 0.5 },
+  /** The sidestep away from a swatted ball (v146 rally): low and stretched, tail streaming. */
+  dodge: { armDeg: 30, wristDeg: 10, squash: -0.1, tiltDeg: 8, tailStretch: 0.6 },
+  /** v147 towel break: slumped, racket drooping, no ball (a towel hangs over her shoulders, see `FedererRig.setTowel`). */
+  towel: { armDeg: 58, wristDeg: 70, squash: 0.16, tiltDeg: 6, tailStretch: -0.3, ballShow: 0 },
+  /** v147 the tie-break racket smash: racket way up and back, then down hard. */
+  rageWind: { armDeg: 100, wristDeg: 62, squash: 0.16, tiltDeg: -6, ballShow: 0, tailStretch: 0.2 },
+  rageSmash: { armDeg: -92, wristDeg: -98, squash: -0.2, tiltDeg: 9, tailStretch: 0.7 },
 } as const;
 
 export const FEDERER_POSE_MS = {
@@ -547,6 +633,9 @@ export const FEDERER_POSE_MS = {
   callUp: 380, callBack: 460, callBackDelay: 160,
   stunned: 200, stunBack: 520,
   roar: 220, roarBack: 600, roarBackDelay: 700,
+  dodge: 110, dodgeBack: 340, dodgeBackDelay: 200,
+  towel: 420, towelBack: 520,
+  rageWind: 640, rageSmash: 90, rageBackDelay: 180, rageBack: 620,
 } as const;
 
 /**
@@ -580,6 +669,29 @@ export const BALL_LOB = {
   /** The pop on the ground: a ring (game px) that spreads. */
   pop: { ringMs: 300, color: 0xf1fba0 },
   depth: { marker: 6, ball: 50, fuzz: 49, dust: 11 },
+} as const;
+
+/** The fireball's little flames (`systems/ProjectileSystem.ts`): a few embers leave the ball every `everyMs` and rise while they fade. Visual only. */
+export const FIREBALL_FX = {
+  depth: 24,
+  everyMs: 28,
+  perTick: 2,
+  /** Embers start this far (px) behind the ball and scatter this much sideways. */
+  backPx: 7,
+  jitterPx: 5,
+  lifespanMs: { min: 220, max: 420 },
+  speed: { min: 10, max: 50 },
+  gravityY: -90,
+  scale: { start: 0.9, end: 0 },
+  alpha: { start: 0.95, end: 0 },
+  tint: [0xfff3a0, 0xffb347, 0xff7a2a, 0xe0402a],
+} as const;
+
+/** The word and pop when the tennis cat smashes Varu's ball back (`systems/Effects.ts`). */
+export const TENNIS_RETURN_FX = {
+  word: { text: 'CONTRA!', color: '#ffe066', size: 26 },
+  sparks: 9,
+  shake: { ms: 60, intensity: 0.003 },
 } as const;
 
 /** The juice of a landing ball of the tennis cat's rain (`systems/Effects.ts`): a small shake, and a word every `gapMs` at most. */

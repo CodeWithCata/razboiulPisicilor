@@ -10,7 +10,7 @@ import { STANDS } from './stands';
  * Moods: `calm` (default), `cheer` (wave start, kill streaks, the last cat, a boss walking in), `roar` (wave cleared, boss beaten,
  * victory) and `gloom` (game over). Every number of a mood is EASED, so a mood never snaps.
  */
-export type CrowdMood = 'calm' | 'cheer' | 'roar' | 'gloom';
+export type CrowdMood = 'calm' | 'cheer' | 'roar' | 'gloom' | 'boo';
 
 /** One mood as plain numbers. Rates are in times per second (Hz). */
 export interface MoodLook {
@@ -47,10 +47,29 @@ const MOODS: Record<CrowdMood, MoodLook> = {
   roar: { hop: 0.14, hopHz: 2.2, tiltDeg: 10, swayDeg: 8, swayHz: 0.9, breath: 0.02, breathHz: 1, lean: 3.5, sync: 0.45, arms: 0.9, slump: 0 },
   /** Slumped and slow, nobody hops. */
   gloom: { hop: 0, hopHz: 0.5, tiltDeg: 0, swayDeg: 2.5, swayHz: 0.12, breath: 0.012, breathHz: 0.18, lean: 0, sync: 0, arms: 0, slump: -0.07 },
+  /** v147 booing: nobody cheers, the fans stomp angrily (small fast hops, a shaking sway) and lean a bit toward the field. */
+  boo: { hop: 0.05, hopHz: 2.6, tiltDeg: 5, swayDeg: 7, swayHz: 1.4, breath: 0.015, breathHz: 0.9, lean: 2.5, sync: 0.1, arms: 0, slump: -0.03 },
 };
 
 /** What the crowd shouts, and when (`CROWD_LINES` in content/lines.ts has the words). */
-export type ShoutKind = 'cheer' | 'roar' | 'boss' | 'surrender' | 'gloom';
+export type ShoutKind = 'cheer' | 'roar' | 'boss' | 'surrender' | 'gloom' | 'boo';
+
+/** What the fan throw (systems/FanThrowSystem.ts) asks of the crowd: a fan on the first terrace rows, `minDist`..`maxDist` px from (x, y), that winds up for `windUpMs`. */
+export interface ThrowPick {
+  x: number;
+  y: number;
+  minDist: number;
+  maxDist: number;
+  /** Highest terrace row that may throw (0 = the row at the fence). */
+  maxTier: number;
+  windUpMs: number;
+}
+
+/** The fan that was picked: where it stands. */
+export interface ThrowSpot {
+  x: number;
+  y: number;
+}
 
 export const CROWD = {
   enabled: true,
@@ -65,10 +84,12 @@ export const CROWD = {
   liveFadeMs: 350,
   moods: MOODS,
   /** How long a mood takes to settle when the crowd moves INTO it (ms, about a third of the full change). */
-  easeMs: { calm: 1800, cheer: 500, roar: 320, gloom: 380 },
+  easeMs: { calm: 1800, cheer: 500, roar: 320, gloom: 380, boo: 350 },
   /** How long an event keeps the crowd in a mood before it calms down again (ms). Gloom stays until the run ends. */
-  cheer: { waveStartMs: 3600, lastCatMs: 3200, streakMs: 2800, bossMs: 4200, surrenderMs: 1800 },
+  cheer: { waveStartMs: 3600, lastCatMs: 3200, streakMs: 2800, bossMs: 4200, surrenderMs: 1800, throwMs: 2200 },
   roar: { waveClearedMs: 5600, bossDefeatedMs: 4200, victoryMs: 60000 },
+  /** v147: how long the stands boo when Federer is stunned (ms; a bit longer than her stun). */
+  boo: { stunMs: 2400 },
   /** Kills that follow each other within `windowMs`: every `kills`-th one makes the crowd cheer. */
   streak: { windowMs: 1600, kills: 4 },
   /** How often the crowd looks whether only one cat is left (game ms). */
@@ -83,6 +104,12 @@ export const CROWD = {
   fidget: { periodMs: 5200, chance: 0.22, hopMs: 520, hop: 0.07, tiltDeg: 5 },
   /** A one-off shock (a boss walks in, a cat gives up): everybody hops at once and it fades away. */
   pulse: { decayMs: 650, hop: 0.16, tiltDeg: 9, armsAbove: 0.45 },
+  /**
+   * The fan that throws something (`beginThrow` / `releaseThrow` in world/StandsCrowd.ts, picked by systems/FanThrowSystem.ts): with its arms up
+   * it leans back, swells and wobbles while it winds up, then lunges at the field when it lets go and settles back. `pulse` (0..1) is the
+   * little hop of the whole crowd at that moment. If the throw is never let go (the scene hiccuped) the fan relaxes after `maxHoldMs`.
+   */
+  thrower: { windGrow: 0.16, windLeanPx: 6, windTiltDeg: 7, wobbleHz: 6, releaseMs: 420, releaseLeanPx: 16, releaseGrow: 0.2, pulse: 0.5, maxHoldMs: 4000 },
   /** La Ola: one pulse runs once round the whole ring, starting at the stands nearest to the camera. */
   ola: { enabled: true, speedPxPerSec: 1100, widthPx: 480, hop: 0.34, lean: 6, tiltDeg: 6, armsAbove: 0.3, laps: 1 },
   /** The VIPs in the balcony boxes lean on the railing: they rock forward and back, and hop a bit less. */
@@ -110,7 +137,7 @@ export const CROWD = {
     color: '#f5c518',
     /** Lift above the fan (px). */
     liftPx: 22,
-    chance: { cheer: 0.45, roar: 0.9, boss: 1, surrender: 0.7, gloom: 1 },
+    chance: { cheer: 0.45, roar: 0.9, boss: 1, surrender: 0.7, gloom: 1, boo: 1 },
   },
   /** Dev key Z: how long a forced mood stays before the crowd calms down (ms). Gloom stays until the next press. */
   debugHoldMs: 6000,

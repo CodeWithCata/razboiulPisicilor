@@ -42,6 +42,8 @@ export const PLAYER = {
   hitRadius: 20, // hurtbox
   invincibleMs: 700, // i-frames after getting hit
   hurtKnockback: 320,
+  /** How fast Varu grows / shrinks to the size a bad buff asks for (the "Big Varu" pickup): share of the way per second. */
+  sizeEasePerSec: 6,
 } as const;
 
 export type BeltAttackId = 'swing' | 'spin' | 'throw';
@@ -112,8 +114,8 @@ export const ENEMIES = {
   tennis: { hp: 2, speed: 150, size: 64, hitRadius: 16, contactDamage: 6, score: 30, knockbackResist: 0 },
   // Bosses (their attack numbers are in config/bosses.ts). Armor makes belt hits weaker, see BOSS.armor.
   queen: { hp: 30, speed: 70, size: 150, hitRadius: 52, contactDamage: 14, score: 300, knockbackResist: 0.9 },
-  mafia: { hp: 36, speed: 80, size: 140, hitRadius: 48, contactDamage: 14, score: 400, knockbackResist: 0.9 },
-  federer: { hp: 60, speed: 90, size: 150, hitRadius: 50, contactDamage: 14, score: 1000, knockbackResist: 0.95 },
+  mafia: { hp: 46, speed: 80, size: 140, hitRadius: 48, contactDamage: 14, score: 400, knockbackResist: 0.9 },
+  federer: { hp: 75, speed: 90, size: 150, hitRadius: 50, contactDamage: 14, score: 1000, knockbackResist: 0.95 },
 } as const satisfies Record<string, EnemyStats>;
 
 export type EnemyType = keyof typeof ENEMIES;
@@ -125,11 +127,11 @@ export const isBossType = (type: EnemyType): type is BossType => (BOSS_TYPES as 
 
 /** Per-cat special behavior numbers. */
 export const NINJA = {
-  teleportMinMs: 2400,
-  teleportMaxMs: 3800,
-  minDistance: 150, // only teleports when farther than this
-  vanishMs: 380,
-  behindDistance: 110, // lands this far behind Varu's back
+  teleportMinMs: 4200, // v141 nerf: was 2400 to 3800 (a teleport roughly every 5 s instead of every 3 s)
+  teleportMaxMs: 6500,
+  minDistance: 220, // only teleports when farther than this (was 150)
+  vanishMs: 520, // gone this long before it lands (was 380): more time to see it coming
+  behindDistance: 170, // lands this far behind Varu's back (was 110): not right on top of him
 } as const;
 
 export const KAMIKAZE = {
@@ -179,6 +181,38 @@ export const TENNIS = {
   /** How often she re-checks that nothing blocks the line to Varu (ms), and how fast she turns to face him (radians per frame). */
   sightMs: 150,
   turnRate: 0.15,
+  /** She does not stand still while she waits for the next serve: she circles Varu sideways, and turns the other way now and then. */
+  strafe: { speedFactor: 0.55, stepPx: 120, flipMs: { min: 900, max: 1900 } },
+  /** She aims ahead of a walking Varu: `factor` = how much of his walk during the ball's flight she leads (1 = perfect shot), never more than `maxPx`. */
+  lead: { factor: 0.6, maxPx: 110 },
+  /**
+   * A ball Varu swatted back at her (a friendly tennis ball coming straight at her): when it is `senseRange` away she decides, once per ball:
+   * return it (`chance`: she stops and smashes it back at Varu, faster, once it is inside `reachPx`), jump out of the way (`dodgeChance`), or take it.
+   * A returned ball is a normal tennis ball again, Varu can swat it back again (a rally), but she returns one ball at most `maxReturns` times.
+   * `chance` grows with the waves (see `scale`): `base` at the tennis cat's first wave, `perWave` more each wave after it, never above `max`.
+   * If she could NOT answer a ball she gets angry: her next serve is the fireball.
+   */
+  ret: {
+    chance: { base: 0.4, perWave: 0.035, max: 0.6 },
+    dodgeChance: 0.3,
+    senseRange: 240,
+    /** The ball must be flying at her: not more than this far (px) off her middle. */
+    lateralPx: 45,
+    reachPx: 56,
+    /** The racket starts to swing this far (px) before the ball is in reach, so the hit lands on time. */
+    swingLeadPx: 32,
+    speedFactor: 1.15,
+    maxSpeed: 560,
+    maxReturns: 3,
+    /** After a return she cannot return again for this long (ms). */
+    cooldownMs: 1200,
+    dodgeMs: 380,
+    dodgeSpeedFactor: 1.5,
+  },
+  /** Wave numbers: the return and fireball chances start growing from the tennis cat's first wave (config/waves.ts). */
+  scale: { fromWave: 8 },
+  /** The fireball: a longer windup (red flash) so Varu can see it coming; picked at random, and always after a ball she could not answer. */
+  fire: { chance: { base: 0.2, perWave: 0.035, max: 0.4 }, minGapMs: 5000, windUpMs: 700, windUpColor: 0xff4a2a, projectileSpeed: 340, spreadDeg: 3 },
 } as const;
 
 /**
@@ -297,12 +331,22 @@ export interface ProjectileStats {
   lifetimeMs: number;
   /** True = the belt sends it back (and it can stun a boss). False = the belt just destroys it. */
   deflectable: boolean;
+  /** True = the belt cannot touch it at all (it neither sends it back nor breaks it). Walls, its lifetime and Varu still end it. */
+  indestructible?: boolean;
+  /** How many hits of the THROWN belt it takes to break it (default 1). A swing or a spin always breaks it in one. The belt flies out and back, so 2 = out and back. */
+  throwHits?: number;
+  /** Homing (only for the ones the boss spawns with `homing: true`): it turns toward Varu at `turnRadPerSec` for `followMs`, then flies straight; `lifetimeMs` replaces its normal life. */
+  homing?: { readonly turnRadPerSec: number; readonly followMs: number; readonly lifetimeMs: number };
 }
 
 export const PROJECTILES = {
   yarn: { size: 30, hitRadius: 11, damage: 7, spinPerSec: 540, lifetimeMs: 4000, deflectable: false },
   tennis: { size: 36, hitRadius: 13, damage: 10, spinPerSec: 720, lifetimeMs: 5000, deflectable: true },
-  heart: { size: 42, hitRadius: 15, damage: 9, spinPerSec: 100, lifetimeMs: 3500, deflectable: false }, // the emo cat's broken heart
+  /** The tennis cat's red serve: a little harder than the green ball. The belt can neither send it back nor break it. */
+  fireball: { size: 36, hitRadius: 13, damage: 13, spinPerSec: 720, lifetimeMs: 5000, deflectable: false, indestructible: true },
+  /** The emo cat's broken heart. v148: the thrown belt needs 2 hits (out and back) to break it; the slow "sad" hearts home in on Varu for a while. */
+  heart: { size: 42, hitRadius: 15, damage: 11, spinPerSec: 100, lifetimeMs: 3500, deflectable: false, throwHits: 2, homing: { turnRadPerSec: 1.5, followMs: 3200, lifetimeMs: 5200 } },
+  sparkle: { size: 28, hitRadius: 10, damage: 7, spinPerSec: 360, lifetimeMs: 2600, deflectable: false }, // the queen's scepter sparkles (spin and scepter throw)
 } as const satisfies Record<string, ProjectileStats>;
 
 export type ProjectileKind = keyof typeof PROJECTILES;
@@ -320,19 +364,31 @@ export const WAVE_TIMING = {
 // Pickups, buffs, laser pointer, Crow Rain
 // ---------------------------------------------------------------------------
 
-export type PickupKind = 'crochete' | 'lapte' | 'monster' | 'goldenBelt' | 'laser' | 'crow' | 'mystery';
+export type PickupKind = 'crochete' | 'lapte' | 'monster' | 'goldenBelt' | 'laser' | 'crow' | 'mystery' | 'snail' | 'dumbbell' | 'emo' | 'rusty' | 'big' | 'smoke';
 
-/** What the question mark can turn into: every pickup except itself. */
-export type MysteryPrize = Exclude<PickupKind, 'mystery'>;
+/** The BAD pickups: they only ever come out of the question mark (their spawn weight is 0), never lie on the floor by themselves. */
+export const BAD_PICKUPS = ['snail', 'dumbbell', 'emo', 'rusty', 'big', 'smoke'] as const;
+export type BadKind = (typeof BAD_PICKUPS)[number];
+export type GoodPrize = Exclude<PickupKind, 'mystery' | BadKind>;
+export const isBadPickup = (kind: PickupKind): kind is BadKind => (BAD_PICKUPS as readonly string[]).includes(kind);
 
-/** Timed effects. Crochete (instant heal), the crow (one-off event) and the question mark (turns into one of the others) are not buffs. */
-export type BuffKind = 'lapte' | 'monster' | 'goldenBelt' | 'laser';
+/** What the question mark can turn into: every pickup except itself, good or bad. */
+export type MysteryPrize = GoodPrize | BadKind;
+
+/** Timed effects. Crochete (instant heal), the crow (one-off event) and the question mark (turns into one of the others) are not buffs. The snail, dumbbell, emo, rusty belt and big Varu are timed BAD effects (`bad: true`); the smoke break is a bad one-off (Varu freezes, `SMOKE_FREEZE`). */
+export type BuffKind = 'lapte' | 'monster' | 'goldenBelt' | 'laser' | 'snail' | 'dumbbell' | 'emo' | 'rusty' | 'big';
 
 export interface BuffStats {
   durationMs: number;
   speed?: number; // movement multiplier
   damage?: number; // belt damage multiplier
   range?: number; // belt reach multiplier
+  /** A bad effect: speed / damage / range are BELOW 1 and the worst one wins (a good buff takes the best). Good and bad then multiply. */
+  bad?: boolean;
+  /** Bad effects only, ABOVE 1 (higher = worse, the highest wins): the pause between plain swings, the cooldown of the spin and the throw, and Varu's size (body and hurtbox). */
+  swingCooldown?: number;
+  specialCooldown?: number;
+  size?: number;
 }
 
 export const BUFFS: Record<BuffKind, BuffStats> = {
@@ -340,7 +396,17 @@ export const BUFFS: Record<BuffKind, BuffStats> = {
   monster: { durationMs: 8000, damage: 2 },
   goldenBelt: { durationMs: 7000, damage: 2.5, range: 1.25 },
   laser: { durationMs: 6000 }, // cats chase the red dot, see LASER
+  snail: { durationMs: 6000, speed: 0.55, bad: true }, // the snail: Varu crawls
+  dumbbell: { durationMs: 6000, damage: 0.5, bad: true }, // the dumbbell: the belt feels heavy and hits for half
+  emo: { durationMs: 7000, swingCooldown: 2, specialCooldown: 1.5, bad: true }, // emo: he can't be bothered, slow swings (300 -> 600 ms), slow spin and throw; hood up and broken hearts over his head
+  rusty: { durationMs: 7000, specialCooldown: 2.5, bad: true }, // the rusty belt: the spin and the throw take 2.5x as long to come back
+  big: { durationMs: 8000, size: 1.4, speed: 0.85, bad: true }, // Big Varu: a bigger body and hurtbox (easier to hit), a bit slower
 };
+
+/** The smoke break (a bad one-off, no timer): Varu freezes (no walking, no new swings) while he takes a drag of his cigarette. */
+export const SMOKE_FREEZE = {
+  ms: 1000,
+} as const;
 
 export const PICKUPS = {
   crocheteHeal: 30,
@@ -360,17 +426,21 @@ export const PICKUP_SPAWN = {
   goldenBeltFirstMs: 12000,
   goldenBeltEveryMs: 25000,
   /** Higher = more common. */
-  weights: { crochete: 3, lapte: 2, monster: 4, goldenBelt: 5, laser: 1.5, crow: 1.5, mystery: 2 } satisfies Record<PickupKind, number>,
+  weights: { crochete: 3, lapte: 2, monster: 4, goldenBelt: 5, laser: 1.5, crow: 1.5, mystery: 2, snail: 0, dumbbell: 0, emo: 0, rusty: 0, big: 0, smoke: 0 } satisfies Record<PickupKind, number>, // the bad ones never spawn alone: only the question mark gives them
   lowHpThreshold: 0.4, // below this HP fraction...
   lowHpHealBoost: 3, // ...crochete is this many times more likely
 } as const;
 
-/** The question mark: Varu grabs it, a beat later it turns into a random OTHER pickup and that one takes effect. */
+/** The question mark is a GAMBLE: Varu grabs it, a beat later it turns into a good OR a bad pickup and that one takes effect. */
 export const MYSTERY = {
-  /** The pause (game ms) between grabbing the "?" and the reveal. */
-  revealMs: 450,
-  /** Higher = more likely. Equal = every prize is as likely as the others. */
-  prizeWeights: { crochete: 1, lapte: 1, monster: 1, goldenBelt: 1, laser: 1, crow: 1 } satisfies Record<MysteryPrize, number>,
+  /** The pause (game ms) between grabbing the "?" and the reveal (the suspense). */
+  revealMs: 700,
+  /** Chance (0..1) that the prize is a BAD one (the snail, dumbbell, emo, rusty belt, big Varu or the smoke break). 0 = never, 1 = always. */
+  badChance: 0.4,
+  /** When the prize is good: higher = more likely. Equal = every good prize is as likely as the others. */
+  goodWeights: { crochete: 1, lapte: 1, monster: 1, goldenBelt: 1, laser: 1, crow: 1 } satisfies Record<GoodPrize, number>,
+  /** When the prize is bad: which one. */
+  badWeights: { snail: 1, dumbbell: 1, emo: 1, rusty: 1, big: 1, smoke: 1 } satisfies Record<BadKind, number>,
 } as const;
 
 export const LASER = {

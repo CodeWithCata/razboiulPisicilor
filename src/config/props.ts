@@ -1,4 +1,4 @@
-/** @file Living-arena numbers: prop springs, FX, kickables, rock cracks, hide-and-seek, hp / smash, gold leaf, fence splinters. */
+/** @file Living-arena numbers: prop springs, FX, kickables, rock cracks, hide-and-seek, bouncy beds, hp / smash, gold leaf, fence splinters. */
 import type { SoundId } from '../assets/audioKeys';
 import { Tex, type TexKey } from '../assets/keys';
 import type { ObjectName } from './arena';
@@ -11,7 +11,7 @@ import type { CrowVariant } from './balance';
  */
 
 /** Everything in the arena that reacts. The 2x2 objects use their `OBJECTS` names (config/arena.ts). */
-export type PropKind = ObjectName | 'fence' | 'cans' | 'ball' | 'barrel';
+export type PropKind = ObjectName | 'fence' | 'cans' | 'ball' | 'barrel' | 'lamp';
 /** Props that wobble on springs (the kickable cans and ball use KICKABLE instead). */
 export type SpringKind = ObjectName | 'fence';
 /** Decor you can kick across the floor. */
@@ -115,6 +115,7 @@ export const PROP_LOOK: Record<PropKind, PropLook> = {
   cans: { sound: 'clank', pitch: 1, wordColor: '#bfe6ff', fx: [['glint', 5]], ambient: { action: 'glint', weight: 0.8 } },
   ball: { sound: 'boing', pitch: 1.35, wordColor: '#ffe066', fx: [] },
   barrel: { sound: 'knock', pitch: 0.7, wordColor: '#ffd84a', fx: [['goo', 5]] },
+  lamp: { sound: 'clank', pitch: 0.8, wordColor: '#ffe9a0', fx: [['glint', 6]], shake: 0.0012 },
 };
 
 /** Particle recipes. Same shape as the other emitters in systems/Effects.ts. */
@@ -131,7 +132,7 @@ export interface FxDef {
 }
 
 export const PROP_FX: Record<FxId, FxDef> = {
-  leaf: { tex: Tex.Leaf, tint: [0xffffff, 0xd6f0a0, 0xa9d982, 0x7fc06c], lifespan: { min: 800, max: 1300 }, speed: { min: 50, max: 200 }, gravityY: 150, scale: { start: 0.85, end: 0.45 }, alpha: { start: 1, end: 0 }, spin: true },
+  leaf: { tex: Tex.Leaf, tint: [0x8fdc72, 0x6cbd58, 0xa9d982, 0x58a84c], lifespan: { min: 800, max: 1300 }, speed: { min: 50, max: 200 }, gravityY: 150, scale: { start: 0.85, end: 0.45 }, alpha: { start: 1, end: 0 }, spin: true },
   stone: { tex: Tex.Chip, tint: [0x9aa0b0, 0xc6cad6, 0x7d8497], lifespan: { min: 380, max: 580 }, speed: { min: 90, max: 230 }, gravityY: 560, scale: { start: 1, end: 0.4 }, alpha: { start: 1, end: 0 }, spin: true },
   wood: { tex: Tex.Chip, tint: [0xc98f4f, 0xe0b070, 0x8b5a2b], lifespan: { min: 380, max: 600 }, speed: { min: 80, max: 210 }, gravityY: 520, scale: { start: 1, end: 0.4 }, alpha: { start: 1, end: 0 }, spin: true },
   cardboard: { tex: Tex.Chip, tint: [0xd9a766, 0xc6925a, 0xe8c48c], lifespan: { min: 450, max: 700 }, speed: { min: 70, max: 190 }, gravityY: 380, scale: { start: 1.15, end: 0.5 }, alpha: { start: 1, end: 0 }, spin: true },
@@ -205,7 +206,7 @@ export const KICK_HIT = {
   minSpeed: 170,
   /** Too high above the floor (still in its hop) and it flies over the cat's head. */
   maxHeightPx: 30,
-  damage: { cans: 1, ball: 1 } as const,
+  damage: { cans: 0.2, ball: 0.2 } as const,
   knockback: 280,
   /** The same cat can be hit by flying things this often. */
   gapMs: 400,
@@ -230,12 +231,12 @@ export const ROCK_CRACKS = {
   word: { color: '#e6e6ee', size: 26 },
 } as const;
 
-/** Hide and seek: now and then a cat does not walk in from a spawn point, it jumps out of a bush or a box near Varu. */
+/** Hide and seek: now and then a cat does not walk in from a spawn point, it jumps out of a bush, a box or a bed near Varu (a cat from a bed comes out yawning, with a sleepy line). */
 export const HIDEOUT = {
   enabled: true,
   /** Chance that a normal cat uses a hideout (when one fits). */
   chance: 0.3,
-  kinds: ['bush', 'box'] as readonly PropKind[],
+  kinds: ['bush', 'box', 'bed'] as readonly PropKind[],
   /** The prop shakes this long before the cat jumps out, in pulses this far apart (the warning). */
   telegraphMs: 800,
   pulseMs: 200,
@@ -244,6 +245,48 @@ export const HIDEOUT = {
   cooldownMs: 1800,
   /** The cat appears this many px beyond the prop's edge, on the side facing Varu. */
   exitGap: 8,
+  /**
+   * How the cat comes out (visual + a short hop; Enemy.popOut): it springs out stretched and small, grows to full size with a
+   * little overshoot, lands with a squash and settles. It hops toward Varu at `hopSpeed` times its walking speed, with no thinking
+   * for `ms`, and fades in over the first part. Bushes also lose a few more leaves (`leaves`).
+   * The cheeky bit: when it lands (`tauntAt`, share of `ms`) it wobbles (`wiggleDeg` each way, `wiggleCycles` swings, dying out)
+   * and says a taunt line above its head (content/lines.ts HIDEOUT_TAUNTS, shown by systems/CatChatter.ts).
+   */
+  exit: {
+    ms: 460,
+    hopSpeed: 1.15,
+    startScale: 0.5,
+    stretch: -0.24,
+    landSquash: 0.3,
+    fadeInShare: 0.2,
+    leaves: 1,
+    tauntAt: 0.6,
+    wiggleDeg: 12,
+    wiggleCycles: 2,
+  },
+} as const;
+
+/**
+ * Bouncy beds: a cat that is flung into a bed (belt hit, pinball bump) boings back off it like a pinball bumper,
+ * and the rebound is a real fling, so it slams into whatever stands behind it (systems/PinballSystem.ts does the hurting).
+ * Checked a few px BEFORE the cat touches the bed, because the physics would stop it dead on contact.
+ */
+export const BED_BOUNCE = {
+  enabled: true,
+  kinds: ['bed', 'bedCushion'] as readonly PropKind[],
+  /** The cat must be flung at least this fast (px/s). A slower one just bumps the bed like any prop. */
+  minSpeed: 150,
+  /** Share of its speed the cat keeps (above 1 = the bed gives it extra energy), and the slowest rebound allowed (px/s; above PINBALL.minSpeed so it always counts as a fling). */
+  keep: 1.05,
+  minOut: 300,
+  /** The rebound counts as a fling for this long, so it flies far enough to reach the cats behind it (ms). */
+  flingMs: 380,
+  /** Reaction starts this far (px) before the body would touch, plus the distance one frame at its speed. */
+  probe: 6,
+  /** The same cat can be boinged again after this long (ms). */
+  catGapMs: 250,
+  /** Power of the bed's own squash and BOING (0..1, see PROP_FEEL.bed). */
+  power: 1,
 } as const;
 
 /** Destroying the arena. Fences never break. Rocks and the rest only break to bosses; bushes also to Varu. */
@@ -255,6 +298,19 @@ export const PROP_HP: Record<ObjectName, { hp: number; byPlayer: boolean; byBoss
   bed: { hp: 4, byPlayer: false, byBoss: true },
   bedCushion: { hp: 4, byPlayer: false, byBoss: true },
 };
+
+/**
+ * A bush that is hit gets smaller (only its picture: the solid part stays). `sizeSteps[n]` is its size (1 = full) after it lost n whole hp:
+ * with 5 hp that is full, then 4 smaller steps, the last one just before it breaks. It shrinks smoothly (`ease` = how fast, per second).
+ * A bush that grows back is full size again.
+ */
+export const BUSH_STATES = {
+  enabled: true,
+  sizeSteps: [1, 0.925, 0.85, 0.775, 0.7] as readonly number[],
+  ease: 14,
+  /** A few extra leaves fly off every time it gets a size smaller (colored like the bush). */
+  burst: { leaf: 5 },
+} as const;
 
 /** A smashed bush grows back on its spot after a while (systems/props/PropSystem.ts). It waits while Varu or a cat stands there. */
 export const BUSH_REGROW = {
@@ -286,7 +342,7 @@ export const SMASH = {
 
 /** What a broken prop leaves on the floor. */
 export const PROP_DEBRIS: Record<ObjectName, { tex: TexKey; tint: readonly number[]; count: number }> = {
-  bush: { tex: Tex.Leaf, tint: [0xffffff, 0xd6f0a0, 0xa9d982, 0x7fc06c], count: 7 },
+  bush: { tex: Tex.Leaf, tint: [0x8fdc72, 0x6cbd58, 0xa9d982, 0x58a84c], count: 7 },
   box: { tex: Tex.Chip, tint: [0xd9a766, 0xc6925a, 0xe8c48c], count: 6 },
   rock: { tex: Tex.Chip, tint: [0x9aa0b0, 0xc6cad6, 0x7d8497], count: 7 },
   scratcher: { tex: Tex.Chip, tint: [0xd8b779, 0xc9a45f, 0xeed39a], count: 6 },
@@ -306,22 +362,29 @@ export interface BushVariant {
   /** How often it is picked (bigger = more bushes). */
   weight: number;
   leafTint: readonly number[];
+  /** Light multiply tint on the picture (null = none). Kept for compatibility; the real recolor is `hueShift`. */
   bodyTint: number | null;
+  /** Degrees the bush's greens are turned around the color wheel when its picture is baked (0 = untouched). The navy outline stays. */
+  hueShift: number;
+  /** Multiplies the saturation of the turned greens (1 = same). */
+  saturation: number;
 }
 
 export const BUSH_VARIANTS: readonly BushVariant[] = [
-  { name: 'green', weight: 5, leafTint: [0xffffff, 0xd6f0a0, 0xa9d982, 0x7fc06c], bodyTint: null },
-  { name: 'autumn', weight: 2, leafTint: [0xffb347, 0xf28c28, 0xe0562b, 0xf5d04c], bodyTint: 0xffe3b0 },
-  { name: 'blossom', weight: 2, leafTint: [0xffd1e8, 0xffa6cf, 0xff7fb8, 0xffffff], bodyTint: 0xffe0f0 },
-  { name: 'lilac', weight: 1, leafTint: [0xe0c8ff, 0xc19bff, 0xa476f0, 0xffffff], bodyTint: 0xe8dcff },
+  { name: 'green', weight: 1, leafTint: [0x8fdc72, 0x6cbd58, 0xa9d982, 0x58a84c], bodyTint: null, hueShift: 0, saturation: 1 },
+  { name: 'autumn', weight: 1, leafTint: [0xffb347, 0xf28c28, 0xe0562b, 0xf5d04c], bodyTint: null, hueShift: -70, saturation: 1.3 },
+  { name: 'blossom', weight: 1, leafTint: [0xffd1e8, 0xffa6cf, 0xff7fb8, 0xffe6f2], bodyTint: null, hueShift: 205, saturation: 0.85 },
+  { name: 'lilac', weight: 1, leafTint: [0xe0c8ff, 0xc19bff, 0xa476f0, 0xf0e4ff], bodyTint: null, hueShift: 150, saturation: 0.8 },
 ];
 
-/** Which variant the bush at this tile gets. Same tile = same answer, so it never changes during a run. */
+/**
+ * Which variant the bush at this tile gets. Same tile = same answer, so it never changes during a run.
+ * All four variants have the same weight, and this mix is checked against the 8 bushes of the arena map so that every
+ * variant shows up (twice each). A bush that grows back on its tile keeps its look.
+ */
 export function bushVariantFor(col: number, row: number): number {
-  const hash = ((Math.imul(col + 1, 73856093) ^ Math.imul(row + 1, 19349663)) >>> 0) % 1000;
-  let roll = (hash / 1000) * BUSH_VARIANTS.reduce((sum, v) => sum + v.weight, 0);
-  const index = BUSH_VARIANTS.findIndex((v) => (roll -= v.weight) < 0);
-  return index >= 0 ? index : 0;
+  const hash = (Math.imul(col + 1, 40503) ^ Math.imul(row + 1, 668265263)) >>> 0;
+  return (hash >>> 7) % BUSH_VARIANTS.length;
 }
 
 /** The rare gold leaf: it drifts down from a bush, lies on the floor for a while, and heals a little when Varu steps on it. */

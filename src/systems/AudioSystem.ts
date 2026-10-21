@@ -3,12 +3,16 @@ import Phaser from 'phaser';
 import { musicKey, sfxKey, type MusicId, type SoundId } from '../assets/audioKeys';
 import { AUDIO_MANIFEST, MUSIC_MANIFEST } from '../assets/audioManifest';
 import { AUDIO } from '../config/audio';
+import { BAD_PICKUP_FX } from '../config/pickups';
 import { PROP_LOOK } from '../config/props';
 import { Cooldowns } from '../core/cooldown';
 import {
   Events,
   listen,
   type CrowImpactPayload,
+  type CutsceneBlipPayload,
+  type CutsceneSfxPayload,
+  type FanLandedPayload,
   type HeartbeatPayload,
   type IdleHabitPayload,
   type MusicPayload,
@@ -116,8 +120,10 @@ export class AudioSystem {
     sound(Events.BeltCaught, 'pickup', { pitch: 0.8 });
     sound(Events.PlayerHurt, 'hurt');
     sound(Events.PickupCollected, 'pickup');
+    sound(Events.BadPickup, 'bonk', { pitch: BAD_PICKUP_FX.pitch }); // the sad version of the pickup jingle
     sound(Events.Explosion, 'explosion');
     sound(Events.ProjectileDeflected, 'deflect');
+    sound(Events.TennisReturn, 'deflect', { pitch: 0.8 });
     sound(Events.ProjectileBlocked, 'bonk');
     sound(Events.BackflipLand, 'bonk', { pitch: 0.7 });
     sound(Events.BossStunned, 'stun');
@@ -158,10 +164,14 @@ export class AudioSystem {
         habit === 'neck' ? this.play('knock', { pitch: 1.7, gain: 0.5 }) : this.play('clank', { pitch: 1.8, gain: 0.35 }),
       ),
       listen(Events.CatBump, () => this.play('bonk', { pitch: AUDIO.pitch.bump })), // a flung cat hits another cat
+      listen(Events.FanThrow, () => this.play('swing', { pitch: AUDIO.pitch.fanThrow })), // a fan lets go: a light whoosh
+      listen<FanLandedPayload>(Events.FanLanded, ({ bad }) => (bad ? this.play('thud', { pitch: AUDIO.pitch.petardLand }) : this.play('boing', { pitch: AUDIO.pitch.fanGift }))), // a petard thuds, a gift boings
       listen(Events.LuckySpawn, () => this.play('pickup', { pitch: AUDIO.pitch.luckySpawn })), // a bright ding: the lucky cat is here
       listen(Events.LuckyGone, () => this.play('boing', { pitch: AUDIO.pitch.luckyGone })), // and a boing when she gets away
       listen(Events.CatSurrender, () => this.play('miau', { pitch: AUDIO.pitch.surrender })), // a small, high, sad "miau" as the white flag goes up
       listen<HeartbeatPayload>(Events.Heartbeat, ({ intensity }) => this.play('heartbeat', { gain: 0.65 + 0.35 * intensity })),
+      listen<CutsceneBlipPayload>(Events.CutsceneBlip, ({ pitch }) => this.play('blip', { pitch })), // a cutscene voice: one chirp per typed letter
+      listen<CutsceneSfxPayload>(Events.CutsceneSfx, ({ id }) => this.play(id)), // a cutscene asked for a sound
       listen(Events.PropCracked, () => this.play('thud', { pitch: 0.6 })),
       listen<MutePayload>(Events.MuteChanged, () => this.applyMute()),
       listen<VolumePayload>(Events.VolumeChanged, ({ kind }) => {

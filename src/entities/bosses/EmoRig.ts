@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { EMO_RIG as RIG } from '../../config/animation';
+import type { BossLook } from './BossViews';
 
 const IDLE_SPEED = 12; // px/s: below this he counts as standing still
 const toRad = Phaser.Math.DegToRad;
@@ -77,6 +78,9 @@ export class EmoRig {
   private cloudX: number;
   private cloudY: number;
   private destroyed = false;
+  /** Which drawing of him is showing (and whether the side one is mirrored): decides where the tears and sighs come from. */
+  private look: BossLook = 'front';
+  private left = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -88,6 +92,24 @@ export class EmoRig {
       this.puffs.push(scene.add.circle(x, y, r, RIG.cloud.color).setStrokeStyle(RIG.cloud.outlineW, RIG.cloud.outline));
     }
     this.cloud = scene.add.container(this.cloudX, this.cloudY, this.puffs).setDepth(RIG.cloud.depth).setAlpha(RIG.cloud.alpha);
+  }
+
+  /** He turned to show his back or his side (see `BossViews`). */
+  setLook(look: BossLook, left: boolean): void {
+    this.look = look;
+    this.left = left;
+  }
+
+  /** Where his eye is now, relative to his center; null = none in sight (from behind). */
+  private eyeSpot(): { x: number; y: number } | null {
+    if (this.look === 'back') return null;
+    if (this.look === 'side') return { x: RIG.eyeSide.x * (this.left ? -1 : 1), y: RIG.eyeSide.y };
+    return RIG.eye;
+  }
+
+  private mouthSpot(): { x: number; y: number } {
+    if (this.look === 'side') return { x: RIG.mouthSide.x * (this.left ? -1 : 1), y: RIG.mouthSide.y };
+    return RIG.mouth;
   }
 
   // ---- posing ---------------------------------------------------------------
@@ -158,7 +180,8 @@ export class EmoRig {
   /** A spurt of tears out of his eye (or all around him with `all`): they fly out and fall. */
   spray(count: number, all = false): void {
     if (this.destroyed) return;
-    const from = all ? this.world(0, 0, this.tmp) : this.world(RIG.eye.x, RIG.eye.y, this.tmp);
+    const eye = this.eyeSpot() ?? { x: 0, y: 0 };
+    const from = all ? this.world(0, 0, this.tmp) : this.world(eye.x, eye.y, this.tmp);
     for (let i = 0; i < count; i++) {
       const a = all ? (i / count) * Math.PI * 2 + Math.random() * 0.5 : Math.random() * Math.PI * 2;
       const speed = between(RIG.spray.speed);
@@ -172,7 +195,8 @@ export class EmoRig {
     const s = RIG.sigh;
     this.to({ squash: s.sinkSquash, tiltDeg: s.sinkTiltDeg }, s.sinkMs, 'inOut');
     this.to({ squash: 0, tiltDeg: 0 }, s.backMs, 'inOut', s.sinkMs + 250);
-    const at = this.world(RIG.mouth.x, RIG.mouth.y, this.tmp);
+    const mouth = this.mouthSpot();
+    const at = this.world(mouth.x, mouth.y, this.tmp);
     const puff = this.scene.add.image(at.x, at.y, Tex.Smoke).setDepth(RIG.tear.depth).setTint(s.puffColor).setAlpha(s.puffAlpha).setScale(0.25);
     this.scene.tweens.add({
       targets: puff, x: at.x - 26 + Math.random() * 12, y: at.y - 34, scale: 0.85, alpha: 0, duration: s.puffMs, ease: 'Sine.easeOut',
@@ -230,14 +254,19 @@ export class EmoRig {
     this.tearIn -= dt;
     if (this.tearIn <= 0) {
       this.tearIn = RIG.tear.everyMs / cry;
-      const at = this.world(RIG.eye.x, RIG.eye.y, this.tmp);
-      this.emitTear(at.x, at.y);
+      const eye = this.eyeSpot();
+      if (eye) {
+        const at = this.world(eye.x, eye.y, this.tmp);
+        this.emitTear(at.x, at.y);
+      }
     }
     this.fringeTearIn -= dt;
     if (this.fringeTearIn <= 0) {
       this.fringeTearIn = RIG.tear.fringeEveryMs / cry;
-      const at = this.world(RIG.fringeEye.x, RIG.fringeEye.y, this.tmp);
-      this.emitTear(at.x, at.y);
+      if (this.look === 'front') {
+        const at = this.world(RIG.fringeEye.x, RIG.fringeEye.y, this.tmp); // the other eye hides under the fringe, and is only there from the front
+        this.emitTear(at.x, at.y);
+      }
     }
   }
 

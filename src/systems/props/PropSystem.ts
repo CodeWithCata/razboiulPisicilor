@@ -1,7 +1,7 @@
 /** @file The living arena: creates props, reacts to belt / projectiles / walking / bosses, hide-and-seek, destruction. */
 import Phaser from 'phaser';
 import { ARENA, ARENA_RULES } from '../../config/arena';
-import { BUSH_REGROW, HIDEOUT, KICKABLE, KICK_HIT, PROP_AMBIENT, PROP_HP, PROP_LOOK, PROP_TUNING, SMASH, type AmbientAction, type KickKind, type PropKind } from '../../config/props';
+import { BED_BOUNCE, BUSH_REGROW, HIDEOUT, KICKABLE, KICK_HIT, PROP_AMBIENT, PROP_HP, PROP_LOOK, PROP_TUNING, SMASH, type AmbientAction, type KickKind, type PropKind } from '../../config/props';
 import type { ArenaQuery } from '../../core/arena';
 import { gameClock } from '../../core/clock';
 import {
@@ -16,6 +16,7 @@ import {
   type PointPayload,
   type PropAmbientPayload,
   type PropCrackedPayload,
+  type PropThinnedPayload,
   type PropDestroyedPayload,
   type PropHitPayload,
 } from '../../core/events';
@@ -130,6 +131,7 @@ export class PropSystem implements KickHost {
     this.viewBottom = view.bottom + m;
 
     this.regrowBushes(now);
+    this.bedBounce(now, dt); // before the physics stops a flung cat dead against the bed
     this.touchByActors(now);
     for (const prop of this.props) prop.update(dt, now, this.onScreen(prop.cx, prop.cy));
     for (const kick of this.kickables) kick.update(dt);
@@ -142,12 +144,14 @@ export class PropSystem implements KickHost {
   // ---- hide and seek ----
 
   /**
-   * Maybe hide the next cat in a bush or box near Varu (on screen, not too close, not too far). The hideout shakes as a warning,
+   * Maybe hide the next cat in a bush, box or bed near Varu (on screen, not too close, not too far). The hideout shakes as a warning,
    * then `reveal` gets the spot just outside it, on the side facing Varu. Returns false when the cat should spawn the normal way.
+   * `force` (debug key R) always tries, ignoring the chance and the cooldown.
    */
-  hideCat(radius: number, reveal: (x: number, y: number) => void): boolean {
+  hideCat(radius: number, reveal: (x: number, y: number, dirX: number, dirY: number, kind: PropKind) => void, force = false): boolean {
     const now = gameClock.now;
-    if (!this.active || !HIDEOUT.enabled || now < this.nextHideAt || Math.random() >= HIDEOUT.chance) return false;
+    if (!this.active || !HIDEOUT.enabled) return false;
+    if (!force && (now < this.nextHideAt || Math.random() >= HIDEOUT.chance)) return false; // the debug key (force) skips the chance and the cooldown
 
     const { minSpawnDistanceFromPlayer: min, maxSpawnDistanceFromPlayer: max } = ARENA_RULES;
     const spots = this.props.filter((p) => {
@@ -187,12 +191,78 @@ export class PropSystem implements KickHost {
       prop.hit(-dirX, -dirY, 1);
       this.emitHit(prop.kind, prop.cx, prop.cy, dirX, dirY, 1, false);
       const out = T + radius + HIDEOUT.exitGap; // from the center of the 2x2 object to just past its edge
-      reveal(prop.cx + dirX * out, prop.cy + dirY * out);
+      if (prop.kind === 'bush') {
+        // a second puff of leaves as the cat bursts out
+        for (let i = 0; i < HIDEOUT.exit.leaves; i++) {
+          const leaves: PropAmbientPayload = { x: prop.cx + dirX * T * 0.6, y: prop.box.y + prop.box.h * 0.3, kind: 'bush', action: 'leaf', variant: prop.variant };
+          bus.emit(Events.PropAmbient, leaves);
+        }
+      }
+      reveal(prop.cx + dirX * out, prop.cy + dirY * out, dirX, dirY, prop.kind);
     });
     return true;
   }
 
+  // ---- bouncy beds ----
+
+  /** Cats that were boinged lately: when each may be boinged again (game ms). */
+  private readonly boingedAt = new WeakMap<Enemy, number>();
+
+  /**
+   * A cat flung into a bed boings back, pinball style. The check looks a few px AHEAD of the cat (the physics would stop it dead
+   * on contact), mirrors its velocity around the bed's surface and sends it back as a fresh fling, so PinballSystem sees it
+   * and it hurts whatever stands behind it. The bed squashes and says BOING like it does for any hit.
+   */
+  private bedBounce(now: number, dt: number): void {
+    if (!BED_BOUNCE.enabled) return;
+    const beds = this.props.filter((p) => BED_BOUNCE.kinds.includes(p.kind) && !p.dead);
+    if (beds.length === 0) return;
+    for (const child of this.enemies.getChildren()) {
+      const cat = child as Enemy;
+      if (!cat.active || cat.flies || cat.popping) continue;
+      const speed = cat.flungSpeed;
+      if (speed < BED_BOUNCE.minSpeed) continue;
+      if (now < (this.boingedAt.get(cat) ?? 0)) continue;
+      const body = cat.body as Phaser.Physics.Arcade.Body;
+      const vx = body.velocity.x;
+      const vy = body.velocity.y;
+      const reach = cat.hitRadius + BED_BOUNCE.probe + speed * dt;
+      for (const bed of beds) {
+        const near = nearestOnBox(cat.x, cat.y, bed.box);
+        let nx = cat.x - near.x;
+        let ny = cat.y - near.y;
+        const dist = Math.hypot(nx, ny);
+        if (dist > reach) continue;
+        if (dist < 0.001) {
+          nx = -vx / speed; // the center is already inside: push back the way it came
+          ny = -vy / speed;
+        } else {
+          nx /= dist;
+          ny /= dist;
+        }
+        const into = vx * nx + vy * ny; // negative = moving toward the bed
+        if (into >= 0) continue;
+        const outX = vx - 2 * into * nx;
+        const outY = vy - 2 * into * ny;
+        const outLen = Math.hypot(outX, outY) || 1;
+        const outSpeed = Math.max(BED_BOUNCE.minOut, outLen * BED_BOUNCE.keep);
+        cat.boing((outX / outLen) * outSpeed, (outY / outLen) * outSpeed, BED_BOUNCE.flingMs);
+        this.boingedAt.set(cat, now + BED_BOUNCE.catGapMs);
+        bed.readyAt = now + PROP_TUNING.hitCooldownMs;
+        bed.hit(-nx, -ny, BED_BOUNCE.power); // the bed is shoved away from the cat
+        this.emitHit(bed.kind, near.x, near.y, -nx, -ny, BED_BOUNCE.power, false);
+        break;
+      }
+    }
+  }
+
+  /** A rock got a new crack, or a bush got thinner (it has its own event: leaves, not chips). */
   private cracked(prop: Prop, stage: number): void {
+    if (prop.kind === 'bush') {
+      const thinned: PropThinnedPayload = { x: prop.cx, y: prop.cy - 6, stage, variant: prop.variant };
+      bus.emit(Events.PropThinned, thinned);
+      return;
+    }
     const payload: PropCrackedPayload = { x: prop.cx, y: prop.cy - 6, stage };
     bus.emit(Events.PropCracked, payload);
   }

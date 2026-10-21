@@ -1,12 +1,14 @@
 /** @file The HUD, running in parallel on top of GameScene; it only listens to events. */
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
+import { CUTSCENE } from '../config/cutscene';
 import { HUD } from '../config/hud';
 import { TOUCH } from '../config/touch';
 import { ENDLESS } from '../config/waves';
+import { MARTI_13 } from '../config/curses';
 import { showWaveFanfare } from '../ui/WaveFanfare';
 import { FONT } from '../config/style';
-import { ENDLESS_TEXT, LUCKY_TEXT, PICKUP_LABELS, TOUCH_TEXT } from '../content/lines';
+import { ENDLESS_TEXT, LUCKY_TEXT, MARTI_13_TEXT, PICKUP_LABELS, TOUCH_TEXT } from '../content/lines';
 import { usesTouchControls } from '../core/device';
 import { buzz } from '../core/haptics';
 import { getAutoAttack } from '../core/settings';
@@ -17,6 +19,7 @@ import { BuffBadges } from '../ui/BuffBadges';
 import { CatMeter } from '../ui/CatMeter';
 import { MuteBadge } from '../ui/MuteBadge';
 import { showBossIntroCard } from '../ui/BossIntroCard';
+import { BossLabPanel } from '../ui/BossLabPanel';
 import { DebugPanel } from '../ui/DebugPanel';
 import { PerfPanel } from '../ui/PerfPanel';
 import { BossBar } from '../ui/BossBar';
@@ -35,6 +38,7 @@ import {
   type HeartbeatPayload,
   type JokePayload,
   type PickupPayload,
+  type CutsceneStartPayload,
   type PlayerHealthPayload,
   type ScorePayload,
   type TouchPressPayload,
@@ -97,9 +101,21 @@ export class UIScene extends Phaser.Scene {
       new ControlsHint(this);
     }
     if (touch) new PerfPanel(this); // fps and walking numbers, only visible when the pause-menu switch "Date debug" is on
-    if (import.meta.env.DEV) new DebugPanel(this, HUD.debugPanel.left, GAME.height - HUD.debugPanel.bottom);
+    if (import.meta.env.DEV) new DebugPanel(this, HUD.debugPanel.left, GAME.height - HUD.debugPanel.bottom)
+    if (import.meta.env.DEV) new BossLabPanel(this);
+
+    // A cutscene hides the whole HUD (this scene's camera fades) and brings it back when it ends.
+    this.cameras.main.setAlpha(1);
+    const fadeHud = (alpha: number): void => {
+      this.tweens.killTweensOf(this.cameras.main);
+      this.tweens.add({ targets: this.cameras.main, alpha, duration: CUTSCENE.hud.fadeMs });
+    };
 
     const off = [
+      listen<CutsceneStartPayload>(Events.CutsceneStart, (p) => {
+        if (p.hideHud) fadeHud(0);
+      }),
+      listen(Events.CutsceneEnd, () => fadeHud(1)),
       listen<PlayerHealthPayload>(Events.PlayerHealth, ({ hp, maxHp }) => {
         this.catMeter.setHealth(hp, maxHp);
         lowHp.setHealth(hp, maxHp);
@@ -156,6 +172,7 @@ export class UIScene extends Phaser.Scene {
         const endless = this.run.mode === 'endless';
         this.waveText.setText(endless ? `Valul ${wave} · ${ENDLESS_TEXT.hud}` : `Valul ${wave}`);
         this.banner(`VALUL ${wave}`, HUD.banner.color);
+        if (wave === MARTI_13.wave) this.banner(MARTI_13_TEXT.banner, HUD.banner.marti13Color, GAME.height / 2 + HUD.banner.marti13YOffset, HUD.banner.marti13Size);
         if (endless && wave === ENDLESS.startWave) this.banner(ENDLESS_TEXT.banner, HUD.banner.endlessColor, GAME.height / 2 + HUD.banner.endlessYOffset, HUD.banner.endlessSize);
       }),
     ];

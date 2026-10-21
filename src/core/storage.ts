@@ -10,6 +10,7 @@ const MUTED_KEY = `${KEY_PREFIX}muted`;
 const HELP_HIDDEN_KEY = `${KEY_PREFIX}help-hidden`;
 const ENDLESS_UNLOCKED_KEY = `${KEY_PREFIX}endless-unlocked`;
 const AUTO_ATTACK_KEY = `${KEY_PREFIX}auto-attack`;
+const SEEN_CUTSCENES_KEY = `${KEY_PREFIX}cutscenes-seen`;
 const DEBUG_INFO_KEY = `${KEY_PREFIX}debug-info`;
 const volumeKey = (kind: string): string => `${KEY_PREFIX}volume-${kind}`;
 
@@ -91,4 +92,21 @@ export function loadDebugInfo(): boolean {
 
 export function saveDebugInfo(on: boolean): void {
   write(DEBUG_INFO_KEY, on ? '1' : '0');
+}
+
+/** Ids of the cutscenes this device has already seen (only those with `repeat: 'save'`). */
+export function loadSeenCutscenes(): string[] {
+  const raw = read(SEEN_CUTSCENES_KEY);
+  if (!raw) return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSeenCutscene(id: string): void {
+  const seen = loadSeenCutscenes();
+  if (!seen.includes(id)) write(SEEN_CUTSCENES_KEY, JSON.stringify([...seen, id]));
 }

@@ -31,3 +31,26 @@ export function sampleKeys(u: number, times: readonly number[], values: readonly
   const eased = k * k * (3 - 2 * k);
   return values[i]! + (values[i + 1]! - values[i]!) * eased;
 }
+
+/** Names of the easings the cutscenes (and other scripts written as data) can ask for. */
+export type EaseName = 'linear' | 'smooth' | 'in' | 'out' | 'back';
+
+/** One easing by name: 0..1 in, 0..1 out ('back' overshoots 1 a little before it settles). */
+export function applyEase(name: EaseName, t: number): number {
+  const x = clamp01(t);
+  switch (name) {
+    case 'in':
+      return x * x;
+    case 'out':
+      return 1 - (1 - x) * (1 - x);
+    case 'smooth':
+      return x * x * (3 - 2 * x);
+    case 'back': {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    }
+    default:
+      return x;
+  }
+}

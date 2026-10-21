@@ -3,20 +3,24 @@ import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { WORLD } from '../../config/arena';
 import { BARREL } from '../../config/barrels';
+import { MYSTERY, type BadKind } from '../../config/balance';
+import { CURSE } from '../../config/curses';
 import { PROP_TUNING, SMASH } from '../../config/props';
 import { FONT_SFX } from '../../config/style';
-import { SLIP_WORDS, pick } from '../../content/lines';
+import { CURSED_BARREL_LINES, CURSED_BARREL_WORDS, SLIP_WORDS, pick } from '../../content/lines';
 import type { ArenaQuery, Point } from '../../core/arena';
 import { gameClock } from '../../core/clock';
+import { weightedPick } from '../../core/random';
 import {
   bus, Events, listen,
   type BallLandedPayload, type BeltFlightPayload, type BeltSweepPayload, type CrowImpactPayload, type ExplosionPayload,
-  type PropDestroyedPayload, type PropHitPayload,
+  type CurseZonePayload, type PropDestroyedPayload, type PropHitPayload, type WavePayload,
 } from '../../core/events';
 import { segmentTouchesBox, sweepTouchesBox, type Box } from '../../core/reach';
 import type { Enemy, SlipOptions } from '../../entities/Enemy';
 import type { Player } from '../../entities/Player';
 import type { Effects } from '../Effects';
+import type { Obstacle, Obstacles } from './Obstacles';
 
 /** One barrel standing in the arena. */
 interface Barrel {
@@ -27,10 +31,16 @@ interface Barrel {
   readonly box: Box;
   readonly sprite: Phaser.GameObjects.Image;
   readonly shadow: Phaser.GameObjects.Image;
+  /** What makes it solid (Varu and walking cats bump into it). */
+  readonly obstacle: Obstacle;
   /** The belt sweep (and lap) that hit it last, so one swing hits it once. */
   hitKey: number;
   /** The thrown belt waits for this (game ms). */
   readyAt: number;
+  /** Cursed barrel (bad luck): purple glow, and a purple cloud when it breaks. `rolled`: the chance was already rolled (only possible once curses exist in the run). */
+  cursed: boolean;
+  rolled: boolean;
+  glow: Phaser.GameObjects.Arc | null;
 }
 
 /** A mustard puddle on the floor. */
@@ -47,7 +57,7 @@ interface Puddle {
 
 /**
  * Mustard barrels. A run starts with a few on random open floor (never in a wall, not on top of Varu, spread apart) and a new
- * one pops up now and then. They are decorations you can walk through; the belt (swing, spin, throw), blasts (kamikaze cats,
+ * one pops up now and then. They are solid (Varu and walking cats bump into them, see Obstacles) and you can break them: the belt (swing, spin, throw), blasts (kamikaze cats,
  * crows, tennis balls) and boss attacks break them. Two hits from the belt, or one blast. A broken barrel bursts and leaves a
  * puddle that dries up after a while (BARREL.puddle.lifeMs): Varu and every walking cat that stands in it moves slower (`terrainSlow`, applied in
  * Player.tick and Enemy.tick). A cat that is flung while it stands in a puddle slips (spins and slides on, see Enemy.startSlip). The look of hits and the burst (particles, words, sound) comes from the event bus: PropFx and AudioSystem.
@@ -68,6 +78,9 @@ export class BarrelSystem {
     private readonly player: Player,
     private readonly enemies: Phaser.Physics.Arcade.Group,
     private readonly effects: Pick<Effects, 'floatText'>,
+    private readonly obstacles: Obstacles,
+    /** True once curses exist in this run (`CurseSystem.waveOpen`): only then can a barrel be cursed. */
+    private readonly canCurse: () => boolean = () => false,
   ) {
     const g = BARREL.puddle.goo;
     this.goo = scene.add
@@ -87,6 +100,7 @@ export class BarrelSystem {
     for (let i = 0; i < count; i++) this.spawn(false);
 
     this.off.push(
+      listen<WavePayload>(Events.WaveStarted, () => this.barrels.forEach((barrel) => this.rollCurse(barrel))), // barrels from before the first cursed wave roll now
       listen(Events.BeltSwing, () => (this.sweepSerial += 1)),
       listen(Events.BeltSpin, () => (this.sweepSerial += 1)),
       listen<BeltSweepPayload>(Events.BeltSweep, (p) => this.onSweep(p)),
@@ -136,7 +150,7 @@ export class BarrelSystem {
         const b = barrel.box;
         const nx = Phaser.Math.Clamp(cat.x, b.x, b.x + b.w);
         const ny = Phaser.Math.Clamp(cat.y, b.y, b.y + b.h);
-        if (Phaser.Math.Distance.Between(cat.x, cat.y, nx, ny) > cat.hitRadius) continue;
+        if (Phaser.Math.Distance.Between(cat.x, cat.y, nx, ny) > cat.hitRadius + BARREL.catBreakSlackPx) continue;
         this.hit(barrel, cat.x, cat.y, barrel.hp, 1, false);
       }
     }
@@ -200,7 +214,7 @@ export class BarrelSystem {
   private spawn(pop: boolean): void {
     const spot = this.findSpot();
     if (!spot) return;
-    const { scale, originY, depth, shadow, hitbox } = BARREL;
+    const { scale, originY, depth, shadow, hitbox, solid } = BARREL;
     const shade = this.scene.add
       .image(spot.x, spot.y + shadow.offsetY, Tex.Shadow)
       .setDisplaySize(shadow.width, shadow.height)
@@ -213,14 +227,41 @@ export class BarrelSystem {
       box: { x: spot.x - hitbox.halfWidth, y: spot.y - hitbox.height, w: hitbox.halfWidth * 2, h: hitbox.height },
       sprite,
       shadow: shade,
+      obstacle: this.obstacles.add(spot.x, spot.y + solid.offsetY, solid.w, solid.h),
       hitKey: -1,
       readyAt: 0,
+      cursed: false,
+      rolled: false,
+      glow: null,
     });
+    this.rollCurse(this.barrels[this.barrels.length - 1]!);
     if (!pop) return;
     sprite.setScale(0);
     shade.setAlpha(0);
     this.scene.tweens.add({ targets: sprite, scale, duration: BARREL.respawn.popMs, ease: 'Back.easeOut' });
     this.scene.tweens.add({ targets: shade, alpha: 1, duration: BARREL.respawn.popMs });
+  }
+
+  /** Bad luck: once curses exist in the run, a barrel rolls ONCE to be cursed (purple tint and a pulsing glow behind it). */
+  private rollCurse(barrel: Barrel): void {
+    if (barrel.rolled || !this.canCurse()) return;
+    barrel.rolled = true;
+    if (Math.random() >= CURSE.barrel.chance) return;
+    const G = CURSE.barrel.glow;
+    barrel.cursed = true;
+    barrel.sprite.setTint(CURSE.barrel.tint);
+    barrel.glow = this.scene.add.circle(barrel.x, barrel.y + G.offsetY, G.radiusPx, G.color, G.alphaMin).setDepth(BARREL.depth - 0.05);
+    this.scene.tweens.add({ targets: barrel.glow, alpha: { from: G.alphaMin, to: G.alphaMax }, scale: { from: 0.9, to: 1.25 }, duration: G.pulseMs, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** A cursed barrel broke: a purple cloud puffs out; Varu inside it is cursed (`CurseSystem` decides, it applies the cooldown, wave and mercy rules). */
+  private releaseCloud(x: number, y: number): void {
+    const C = CURSE.barrel;
+    const cloud = this.scene.add.circle(x, y - 24, C.cloud.startPx, C.cloud.color, C.cloud.alpha).setDepth(BARREL.depth + 0.2);
+    this.scene.tweens.add({ targets: cloud, scale: C.radius / C.cloud.startPx, alpha: 0, duration: C.cloud.ms, ease: 'Cubic.easeOut', onComplete: () => cloud.destroy() });
+    this.effects.floatText(x, y + C.word.offsetY, pick(CURSED_BARREL_WORDS), C.word.color, C.word.size);
+    const zone: CurseZonePayload = { x, y, radius: C.radius, curse: { kind: weightedPick<BadKind>(MYSTERY.badWeights), line: pick(CURSED_BARREL_LINES) } };
+    bus.emit(Events.CurseZone, zone);
   }
 
   private findSpot(): Point | null {
@@ -300,6 +341,11 @@ export class BarrelSystem {
     this.scene.tweens.killTweensOf(barrel.sprite);
     barrel.sprite.destroy();
     barrel.shadow.destroy();
+    if (barrel.glow) {
+      this.scene.tweens.killTweensOf(barrel.glow);
+      barrel.glow.destroy();
+    }
+    this.obstacles.remove(barrel.obstacle); // Varu and the cats can walk where it stood
 
     const payload: PropDestroyedPayload = { x, y: y - 24, kind: 'barrel', byBoss };
     bus.emit(Events.PropDestroyed, payload);
@@ -310,6 +356,7 @@ export class BarrelSystem {
     this.scene.tweens.add({ targets: burst, scale: BARREL.scale * b.popScale, duration: b.ms, ease: 'Quad.easeOut' });
     this.scene.tweens.add({ targets: burst, alpha: 0, delay: b.fadeDelayMs, duration: b.ms - b.fadeDelayMs, onComplete: () => burst.destroy() });
     this.addPuddle(x, y + BARREL.puddle.offsetY);
+    if (barrel.cursed) this.releaseCloud(x, y);
   }
 
   private addPuddle(x: number, y: number): void {

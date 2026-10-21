@@ -2,6 +2,7 @@
 import type Phaser from 'phaser';
 import { ARENA, OBJECTS, TILES, objectTiles, type ObjectName } from '../config/arena';
 import { COLORS } from '../config/style';
+import { BUSH_VARIANTS } from '../config/props';
 import { Tex } from './keys';
 
 /**
@@ -10,6 +11,8 @@ import { Tex } from './keys';
  * Copying with drawImage (one tile at a time, at its exact spot in the tileset) keeps the 1px extruded border out of the picture.
  */
 export const propKey = (name: ObjectName): string => `prop:${name}`;
+/** The bush picture for a color variant (config BUSH_VARIANTS). Variant 0 or an unknown one is the plain `prop:bush`. */
+export const bushKey = (variant: number): string => (variant > 0 ? `prop:bush:${variant}` : propKey('bush'));
 /** The crack picture for a rock at crack stage 1, 2, 3... (each stage includes the earlier cracks). */
 export const crackKey = (stage: number): string => `prop_crack:${stage}`;
 
@@ -89,6 +92,56 @@ export function bakePropTextures(scene: Phaser.Scene): boolean {
       { id: br, dx: T, dy: T },
     ]) && ok;
   }
+  ok = bakeBushVariants(scene) && ok;
   for (const id of SINGLE_TILES) ok = bake(scene, source, tileKey(id), T, T, [{ id, dx: 0, dy: 0 }]) && ok;
   return bakeCracks(scene) && ok;
+}
+
+/** Rotates the hue of a plain RGB color (all 0..255) by `deg`, scaling its saturation by `sat`. */
+function turnHue(r: number, g: number, b: number, deg: number, sat: number): [number, number, number] {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  const v = max / 255;
+  let h = 0;
+  if (d > 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  const s = Math.min(1, (max === 0 ? 0 : d / max) * sat);
+  h = (((h + deg) % 360) + 360) % 360;
+  const c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+  const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [Math.round((r1 + m) * 255), Math.round((g1 + m) * 255), Math.round((b1 + m) * 255)];
+}
+
+/**
+ * One recolored copy of the bush picture per BUSH_VARIANTS entry with a `hueShift`: only the green foliage (hue 70-175 degrees,
+ * clearly colored) is turned, so the navy outline, the brown stems and the shadow tones stay as they are.
+ */
+function bakeBushVariants(scene: Phaser.Scene): boolean {
+  const plain = scene.textures.get(propKey('bush')).getSourceImage() as unknown as CanvasImageSource;
+  let ok = true;
+  BUSH_VARIANTS.forEach((variant, index) => {
+    if (index === 0 || variant.hueShift === 0) return;
+    const key = bushKey(index);
+    if (scene.textures.exists(key)) return;
+    const canvas = scene.textures.createCanvas(key, T * 2, T * 2);
+    if (!canvas) { ok = false; return; }
+    const ctx = canvas.getContext();
+    ctx.drawImage(plain, 0, 0);
+    const image = ctx.getImageData(0, 0, T * 2, T * 2);
+    const px = image.data;
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i + 3]! < 8) continue;
+      const r = px[i]!, g = px[i + 1]!, b = px[i + 2]!;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      if (max === 0 || (max - min) / max < 0.2 || g < r || g < b) continue; // not foliage green
+      const [nr, ng, nb] = turnHue(r, g, b, variant.hueShift, variant.saturation);
+      px[i] = nr; px[i + 1] = ng; px[i + 2] = nb;
+    }
+    ctx.putImageData(image, 0, 0);
+    canvas.refresh();
+  });
+  return ok;
 }

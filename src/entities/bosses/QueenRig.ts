@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { QUEEN_CROWN_BASE, QUEEN_GEMS, QUEEN_SHOULDER } from '../../assets/art/queen';
 import { Tex, type TexKey } from '../../assets/keys';
 import { QUEEN_RIG as RIG } from '../../config/animation';
+import type { BossLook } from './BossViews';
 
 /** Texture size and center of every Queen layer (they are all drawn on the same 128x128 canvas). */
 const TEX = 128;
@@ -61,6 +62,7 @@ export class QueenRig {
   private readonly glowScepter: Phaser.GameObjects.Arc;
   private readonly aura: Phaser.GameObjects.Arc;
   private readonly ring: Phaser.GameObjects.Arc;
+  private readonly shield: Phaser.GameObjects.Arc;
   private readonly tmp = { x: 0, y: 0 };
 
   private clock = 0;
@@ -68,6 +70,8 @@ export class QueenRig {
   private moveAmt = 0;
   private fury = false;
   private ringOn = false;
+  private shieldOn = false;
+  private scepterHidden = false;
   private dust = false;
   private dustIn = 0;
   private sparkleIn: number = RIG.sparkle.everyMs.min;
@@ -77,6 +81,8 @@ export class QueenRig {
   private glowColor: number | null = null;
   private scepterDeg = 0;
   private destroyed = false;
+  /** Which drawing of her is showing: front = the one the loose layers are drawn for. */
+  private look: BossLook = 'front';
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -99,6 +105,16 @@ export class QueenRig {
       .setStrokeStyle(3, RIG.ring.color, RIG.ring.strokeAlpha)
       .setDepth(RIG.depth.aura + 1)
       .setVisible(false);
+    this.shield = scene.add
+      .circle(owner.x, owner.y, RIG.shield.radius, RIG.shield.color, RIG.shield.alpha)
+      .setStrokeStyle(4, RIG.shield.color, 0.9)
+      .setDepth(RIG.depth.glow + 1)
+      .setVisible(false);
+  }
+
+  /** She turned to show another side (`MafiaCat`-style views, see `BossViews`). From behind the baked drawing has the cape and feet, but crown and scepter are still the loose layers; in profile everything is baked. */
+  setLook(look: BossLook): void {
+    this.look = look;
   }
 
   // ---- posing ---------------------------------------------------------------
@@ -150,6 +166,17 @@ export class QueenRig {
   setFury(on: boolean): void {
     this.fury = on;
     this.aura.setVisible(on);
+  }
+
+  /** The shield bubble (her elite guards are alive). */
+  setShield(on: boolean): void {
+    this.shieldOn = on;
+    if (!on) this.shield.setVisible(false);
+  }
+
+  /** Hide her scepter arm while the scepter is flying through the arena. */
+  setScepterHidden(on: boolean): void {
+    this.scepterHidden = on;
   }
 
   /** Dust puffs behind her (the charge and the spin). */
@@ -303,6 +330,14 @@ export class QueenRig {
     const shoulder = this.world(QUEEN_SHOULDER.x - HALF, QUEEN_SHOULDER.y - HALF, this.tmp);
     place(this.scepter, shoulder.x, shoulder.y, r + toRad(this.scepterDeg), sx * this.pose.scepterScale, sy * this.pose.scepterScale);
 
+    if (this.look !== 'front') for (const img of [this.cape, this.footL, this.footR]) img.setVisible(false);
+    if (this.look === 'side') for (const img of [this.crown, this.scepter]) img.setVisible(false);
+    if (this.scepterHidden) this.scepter.setVisible(false);
+    if (this.shieldOn) {
+      const pulse = RIG.shield.alpha + Math.sin(this.clock * RIG.shield.pulseRate) * RIG.shield.pulseAlpha;
+      this.shield.setPosition(o.x, o.y).setFillStyle(RIG.shield.color, pulse).setVisible(o.visible);
+    }
+
     this.updateGlow(o);
     this.updateAura(o);
     if (this.ringOn) this.ring.setPosition(o.x, o.y).setVisible(o.visible);
@@ -315,11 +350,11 @@ export class QueenRig {
     const level = Math.max(this.pose.glow, this.fury ? RIG.glow.furyMin : 0);
     const color = this.glowColor ?? (this.fury ? RIG.glow.red : RIG.glow.gold);
     const alpha = level * RIG.glow.maxAlpha * (0.8 + 0.2 * Math.sin(this.clock * RIG.glow.pulseRate));
-    const visible = o.visible && level > 0.01;
+    const visible = o.visible && level > 0.01 && this.look !== 'side'; // the jewels are not where the loose layers think in profile
     const gem = this.crownGem(this.tmp);
     this.glowCrown.setPosition(gem.x, gem.y).setFillStyle(color, alpha).setVisible(visible);
     const gem2 = this.scepterGem(this.tmp);
-    this.glowScepter.setPosition(gem2.x, gem2.y).setFillStyle(color, alpha).setVisible(visible);
+    this.glowScepter.setPosition(gem2.x, gem2.y).setFillStyle(color, alpha).setVisible(visible && !this.scepterHidden);
   }
 
   private updateAura(o: Phaser.Physics.Arcade.Sprite): void {
@@ -343,7 +378,7 @@ export class QueenRig {
   /** A twinkle on the crown or the scepter jewel every now and then. */
   private updateSparkles(dt: number): void {
     this.sparkleIn -= dt;
-    if (this.sparkleIn > 0 || !this.owner.visible) return;
+    if (this.sparkleIn > 0 || !this.owner.visible || this.look === 'side') return;
     const { min, max } = RIG.sparkle.everyMs;
     this.sparkleIn = min + Math.random() * (max - min);
     const at = this.sparkleOnCrown ? this.crownGem(this.tmp) : this.scepterGem(this.tmp);
@@ -392,5 +427,6 @@ export class QueenRig {
     this.glowScepter.destroy();
     this.aura.destroy();
     this.ring.destroy();
+    this.shield.destroy();
   }
 }

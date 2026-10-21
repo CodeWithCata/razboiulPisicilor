@@ -57,7 +57,7 @@ export class AutoAim {
 
     for (const child of this.sources.projectiles.getChildren()) {
       const ball = child as Projectile;
-      if (!ball.active || ball.friendly) continue;
+      if (!ball.active || ball.friendly || ball.indestructible) continue; // nothing to swat at
       const dist = Math.hypot(ball.x - fromX, ball.y - fromY);
       if (dist > A.projectileRange) continue;
       const gap = dist - PROJECTILES[ball.kind].hitRadius;

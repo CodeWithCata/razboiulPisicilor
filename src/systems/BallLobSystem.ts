@@ -136,7 +136,7 @@ export class BallLobSystem {
     const pop = scene.add.circle(p.toX, p.toY, 10, L.pop.color, 0.2).setStrokeStyle(4, L.pop.color, 1).setDepth(L.depth.dust + 1);
     scene.tweens.add({ targets: pop, scale: p.radius / 10, alpha: 0, duration: L.pop.ringMs, ease: 'Cubic.easeOut', onComplete: () => pop.destroy() });
 
-    const landed: BallLandedPayload = { x: p.toX, y: p.toY, radius: p.radius, damage: p.damage };
+    const landed: BallLandedPayload = { x: p.toX, y: p.toY, radius: p.radius, damage: p.damage, curse: p.curse };
     bus.emit(Events.BallLanded, landed);
 
     // The thud: squash flat, then two hops that get smaller (the shadow follows), then it fades.

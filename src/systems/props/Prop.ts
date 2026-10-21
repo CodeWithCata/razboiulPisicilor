@@ -1,8 +1,8 @@
 /** @file One 2x2 arena object as a sprite on springs: lean, squash, shove, hop, idle sway, damage, break away. */
 import Phaser from 'phaser';
-import { crackKey, propKey } from '../../assets/propTextures';
+import { bushKey, crackKey, propKey } from '../../assets/propTextures';
 import { ARENA, type ObjectName } from '../../config/arena';
-import { BUSH_VARIANTS, PROP_FEEL, PROP_HP, PROP_TUNING, ROCK_CRACKS, SMASH, bushVariantFor, type PropFeel } from '../../config/props';
+import { BUSH_STATES, BUSH_VARIANTS, PROP_FEEL, PROP_HP, PROP_TUNING, ROCK_CRACKS, SMASH, bushVariantFor, type PropFeel } from '../../config/props';
 import type { Box } from '../../core/reach';
 import { Spring } from './Spring';
 
@@ -44,6 +44,10 @@ export class Prop {
   private hits = 0;
   private stage = 0;
   private crack: Phaser.GameObjects.Image | null = null;
+  /** Bushes: how many sizes smaller it is (0 = full), the size it is drawn at now and the size it is heading for (see BUSH_STATES). */
+  private bushStep = 0;
+  private bushSize = 1;
+  private bushTarget = 1;
   private readonly baseX: number;
   private readonly baseY: number;
   /** Every prop idles out of step with the others. */
@@ -65,8 +69,9 @@ export class Prop {
     this.cy = this.box.y + size / 2;
     this.baseX = this.cx;
     this.baseY = this.box.y + size * feel.pivot;
-    this.sprite = scene.add.image(this.baseX, this.baseY, propKey(kind)).setOrigin(0.5, feel.pivot).setDepth(ARENA.depth.walls);
     this.variant = kind === 'bush' ? bushVariantFor(col, row) : 0;
+    const textureKey = kind === 'bush' && scene.textures.exists(bushKey(this.variant)) ? bushKey(this.variant) : propKey(kind);
+    this.sprite = scene.add.image(this.baseX, this.baseY, textureKey).setOrigin(0.5, feel.pivot).setDepth(ARENA.depth.walls);
     const bodyTint = kind === 'bush' ? BUSH_VARIANTS[this.variant]?.bodyTint : null;
     if (bodyTint != null) this.sprite.setTint(bodyTint);
   }
@@ -98,7 +103,7 @@ export class Prop {
     if (this.dead) return;
     const f = this.feel;
     const idles = visible && (f.sway !== undefined || f.breathe !== undefined);
-    const moving = !this.tilt.resting || !this.squash.resting || !this.shiftX.resting || !this.shiftY.resting || this.z > 0 || this.vz !== 0 || this.grow < 1;
+    const moving = !this.tilt.resting || !this.squash.resting || !this.shiftX.resting || !this.shiftY.resting || this.z > 0 || this.vz !== 0 || this.grow < 1 || this.bushSize !== this.bushTarget;
     if (!moving && !idles) return;
 
     this.tilt.step(dt, f.hz, f.damping);
@@ -110,9 +115,14 @@ export class Prop {
     const t = now / 1000;
     const sway = f.sway && visible ? Math.sin(t * TAU * f.sway.hz + this.phase) * Phaser.Math.DegToRad(f.sway.deg) : 0;
     const breath = f.breathe && visible ? 1 + Math.sin(t * TAU * f.breathe.hz + this.phase) * f.breathe.amount : 1;
+    if (this.bushSize !== this.bushTarget) {
+      this.bushSize += (this.bushTarget - this.bushSize) * Math.min(1, dt * BUSH_STATES.ease);
+      if (Math.abs(this.bushTarget - this.bushSize) < 0.002) this.bushSize = this.bushTarget;
+    }
     const s = this.squash.value;
     this.sprite.setRotation(this.tilt.value + sway);
-    const hurt = (1 - SMASH.shrink * (1 - Math.max(0, this.hp) / PROP_HP[this.kind].hp)) * this.grow; // a hurt prop is a bit smaller; a sapling smaller still
+    const hurtSize = this.kind === 'bush' && BUSH_STATES.enabled ? this.bushSize : 1 - SMASH.shrink * (1 - Math.max(0, this.hp) / PROP_HP[this.kind].hp);
+    const hurt = hurtSize * this.grow; // a hurt prop is smaller (a bush in steps); a sapling smaller still
     this.sprite.setScale((1 + s * 0.6) * hurt, (1 - s) * breath * hurt); // flatter = a bit wider
     this.sprite.setPosition(this.baseX + this.shiftX.value, this.baseY + this.shiftY.value - this.z);
     this.syncCrack();
@@ -128,7 +138,19 @@ export class Prop {
   /** Take damage. Returns true when it is used up (the caller then destroys it). */
   damage(amount: number): boolean {
     this.hp -= amount;
+    this.thin();
     return this.hp <= 0;
+  }
+
+  /** A bush that lost hp shrinks to the next size in BUSH_STATES.sizeSteps (smoothly, see `update`); the callback tells the show. */
+  private thin(): void {
+    if (this.kind !== 'bush' || !BUSH_STATES.enabled || this.hp <= 0) return;
+    const steps = BUSH_STATES.sizeSteps;
+    const step = Phaser.Math.Clamp(PROP_HP.bush.hp - Math.ceil(this.hp), 0, steps.length - 1);
+    if (step <= this.bushStep) return;
+    this.bushStep = step;
+    this.bushTarget = steps[step] ?? 1;
+    this.onCrack(this, step);
   }
 
   /** It breaks: a quick burst outward (squashed flat, spun, faded), then the sprite is gone. */

@@ -1,19 +1,18 @@
-/** @file Brings the stand fans to life: idle sway and fidgets, moods (calm / cheer / roar / gloom), La Ola, arms-up frames, confetti and shouts. Visual only, real time. */
+/** @file Brings the stand fans to life: idle sway and fidgets, moods (calm / cheer / roar / gloom / boo), La Ola, arms-up frames, confetti, shouts and the fan that throws something. Visual only, real time. */
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
-import { CROWD, MOOD_KEYS, type CrowdMood, type MoodLook, type ShoutKind } from '../config/crowd';
+import { CROWD, MOOD_KEYS, type CrowdMood, type MoodLook, type ShoutKind, type ThrowPick, type ThrowSpot } from '../config/crowd';
 import { CROWD_LINES, pick } from '../content/lines';
 import { usesTouchControls } from '../core/device';
 import { Events, listen } from '../core/events';
-import type { WavePayload } from '../core/events';
+import type { BossStunnedPayload, WavePayload } from '../core/events';
 import type { StandsBuild, StandsFan } from './Stands';
 import { RING_LENGTH, ringPosition } from './standsRing';
 
 const TAU = Math.PI * 2;
 /** Which mood wins when two want the crowd at once. */
-const RANK: Record<CrowdMood, number> = { calm: 0, cheer: 1, roar: 2, gloom: 3 };
+const RANK: Record<CrowdMood, number> = { calm: 0, cheer: 1, boo: 1.5, roar: 2, gloom: 3 };
 /** The order the dev key walks through the moods. */
-const DEBUG_ORDER: readonly CrowdMood[] = ['cheer', 'roar', 'gloom', 'calm'];
 
 /** What the scene hands the crowd once the rest of the game exists. */
 export interface CrowdHooks {
@@ -72,7 +71,12 @@ export class StandsCrowd {
   private streak = 0;
   private lastCatDone = false;
   private lastCatTimer = 0;
-  private debugIndex = 0;
+
+  /** The fan that is throwing something (index into `fans`), -1 = nobody. Crowd time (ms) it started winding up, when it let go (-1 = not yet) and how long the wind-up is. */
+  private throwIndex = -1;
+  private throwStart = 0;
+  private throwReleasedAt = -1;
+  private throwWindMs = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -102,10 +106,21 @@ export class StandsCrowd {
         this.shout('boss');
       }),
       listen(Events.BossDefeated, () => this.roar(CROWD.roar.bossDefeatedMs, false)),
+      // v147: the stands boo when Federer is stunned (a word always shouts, even inside the usual quiet gap).
+      listen<BossStunnedPayload>(Events.BossStunned, ({ boss }) => {
+        if (boss !== 'federer') return;
+        this.hold('boo', CROWD.boo.stunMs);
+        this.shout('boo');
+      }),
       listen(Events.CatSurrender, () => {
         this.hold('cheer', CROWD.cheer.surrenderMs);
         this.pulseAmt = 1;
         this.shout('surrender');
+      }),
+      // A fan let go of something (systems/FanThrowSystem.ts): everybody cheers and hops a little. The thrower's own motion is `beginThrow` / `releaseThrow`.
+      listen(Events.FanThrow, () => {
+        this.hold('cheer', CROWD.cheer.throwMs);
+        this.pulseAmt = Math.max(this.pulseAmt, CROWD.thrower.pulse);
       }),
       listen(Events.Victory, () => this.roar(CROWD.roar.victoryMs, true)),
       listen(Events.GameOver, () => {
@@ -121,15 +136,13 @@ export class StandsCrowd {
     this.hooks = hooks;
   }
 
-  /** Dev key Z: forces the next mood (cheer, roar, gloom, calm). A forced roar also starts La Ola and the confetti. */
-  debugCycle(): CrowdMood {
-    const mood = DEBUG_ORDER[this.debugIndex % DEBUG_ORDER.length]!;
-    this.debugIndex += 1;
+  /** Dev (debug card): forces this mood right now. */
+  debugSet(mood: CrowdMood): CrowdMood {
     this.mood = mood;
     this.until = mood === 'calm' || mood === 'gloom' ? Infinity : this.t + CROWD.debugHoldMs;
     if (mood === 'roar') this.startOla();
     if (mood === 'roar') this.startConfetti();
-    this.shout(mood === 'roar' ? 'roar' : mood === 'gloom' ? 'gloom' : 'cheer');
+    this.shout(mood === 'roar' ? 'roar' : mood === 'gloom' ? 'gloom' : mood === 'boo' ? 'boo' : 'cheer');
     return mood;
   }
 
@@ -146,7 +159,50 @@ export class StandsCrowd {
     this.tickOla(dt);
     this.tickConfetti();
     this.tickLastCat(dt);
+    this.tickThrower();
     this.animate(dt);
+  }
+
+  /**
+   * A fan for a throw (systems/FanThrowSystem.ts): one of the first terrace rows, `minDist`..`maxDist` px from the given point (on screen or not).
+   * It starts to wind up right away (arms up, leaning back) and keeps going until `releaseThrow`. Returns where it stands,
+   * or null when no fan fits (or another fan is still throwing).
+   */
+  beginThrow(pick: ThrowPick): ThrowSpot | null {
+    if (!CROWD.enabled || this.throwIndex >= 0) return null;
+    const min2 = pick.minDist * pick.minDist;
+    const max2 = pick.maxDist * pick.maxDist;
+    const pool: number[] = [];
+    for (let i = 0; i < this.fans.length; i++) {
+      const fan = this.fans[i]!;
+      if (fan.tier < 0 || fan.tier > pick.maxTier) continue; // no VIP boxes, and only the rows near the fence
+      const dx = fan.baseX - pick.x;
+      const dy = fan.baseY - pick.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < min2 || d2 > max2) continue;
+      pool.push(i); // on screen or not: the item flies into view either way
+    }
+    if (pool.length === 0) return null;
+    const i = pool[Math.floor(Math.random() * pool.length)]!;
+    this.throwIndex = i;
+    this.throwStart = this.t;
+    this.throwReleasedAt = -1;
+    this.throwWindMs = pick.windUpMs;
+    const fan = this.fans[i]!;
+    return { x: fan.baseX, y: fan.baseY };
+  }
+
+  /** The throwing fan lets go: it lunges at the field, then settles back (`CROWD.thrower`). Does nothing when nobody is winding up. */
+  releaseThrow(): void {
+    if (this.throwIndex >= 0 && this.throwReleasedAt < 0) this.throwReleasedAt = this.t;
+  }
+
+  /** Lets the thrower rest again once its lunge is over (or when the throw was never let go). */
+  private tickThrower(): void {
+    if (this.throwIndex < 0) return;
+    const T = CROWD.thrower;
+    const over = this.throwReleasedAt < 0 ? this.t - this.throwStart > T.maxHoldMs : this.t - this.throwReleasedAt >= T.releaseMs;
+    if (over) this.throwIndex = -1;
   }
 
   /* ------------------------------------------------------------ moods and events */
@@ -263,7 +319,7 @@ export class StandsCrowd {
   private shout(kind: ShoutKind): void {
     const s = CROWD.shout;
     if (!s.enabled || !this.hooks) return;
-    if (this.t - this.lastShoutAt < s.minGapMs || Math.random() >= s.chance[kind]) return;
+    if ((kind !== 'boo' && this.t - this.lastShoutAt < s.minGapMs) || Math.random() >= s.chance[kind]) return;
     const fan = this.randomVisible();
     if (!fan) return;
     this.lastShoutAt = this.t;
@@ -356,6 +412,23 @@ export class StandsCrowd {
       tilt += o.tiltDeg * ola;
     }
 
+    // The fan that throws something: leans back, swells and wobbles while it winds up, lunges at the field when it lets go, then settles.
+    const throwing = i === this.throwIndex;
+    if (throwing) {
+      const T = CROWD.thrower;
+      if (this.throwReleasedAt < 0) {
+        const k = Math.min(1, (this.t - this.throwStart) / Math.max(1, this.throwWindMs));
+        hop = T.windGrow * k;
+        lean = -T.windLeanPx * k;
+        tilt = T.windTiltDeg * k * Math.sin(tSec * T.wobbleHz * TAU);
+      } else {
+        const out = 1 - Math.min(1, (this.t - this.throwReleasedAt) / T.releaseMs);
+        hop = T.releaseGrow * out;
+        lean = T.releaseLeanPx * out * out;
+        tilt = 0;
+      }
+    }
+
     // The VIPs in the balcony boxes lean on the railing: they rock forward and back, and hop a bit less.
     if (box) {
       const b = CROWD.box;
@@ -364,7 +437,7 @@ export class StandsCrowd {
     }
 
     // Arms: the mood gives a share of the crowd its arms up; a pulse or La Ola lifts everybody it touches.
-    const armsUp = live > 0.5 && (this.armsRoll[i]! < look.arms || this.pulseAmt > p.armsAbove || ola > CROWD.ola.armsAbove);
+    const armsUp = live > 0.5 && (throwing || this.armsRoll[i]! < look.arms || this.pulseAmt > p.armsAbove || ola > CROWD.ola.armsAbove);
     const picture = armsUp ? 1 + (Math.floor((this.t + fan.phase * CROWD.armSwapMs) / CROWD.armSwapMs) & 1) : 0;
     if (this.shown[i] !== picture) {
       const frame = this.looks[fan.look]![picture]!;

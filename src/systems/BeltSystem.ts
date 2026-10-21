@@ -78,6 +78,7 @@ export class BeltSystem {
   /** Pick the next attack if nothing is running. Priority: throw / spin presses, then the held swing. */
   private startNext(time: number, input: InputSource): void {
     if (this.sweep.running || this.thrown) return;
+    if (this.player.frozen) return; // the smoke break: no new swing, spin or throw until the drag is over
 
     if (this.queued && time > this.queued.until) this.queued = null;
     const wanted = this.queued?.id;
@@ -91,9 +92,10 @@ export class BeltSystem {
   }
 
   private startSweep(def: SweepDef, time: number, aimAngle: number): void {
-    this.readyAt[def.id] = time + def.cooldownMs;
+    const cooldown = def.cooldownMs * (def.id === 'swing' ? this.player.swingCooldownMultiplier : this.player.specialCooldownMultiplier); // emo / rusty belt make it longer
+    this.readyAt[def.id] = time + cooldown;
     this.sweep.begin(def, time, aimAngle);
-    this.emitCooldown(def.id, def.cooldownMs);
+    this.emitCooldown(def.id, cooldown);
   }
 
   private startThrow(aimAngle: number): void {
@@ -104,9 +106,10 @@ export class BeltSystem {
 
   private onCaught(time: number): void {
     this.thrown = null;
-    this.readyAt.throw = time + BELT_THROW.cooldownMs;
+    const cooldown = BELT_THROW.cooldownMs * this.player.specialCooldownMultiplier;
+    this.readyAt.throw = time + cooldown;
     bus.emit(Events.BeltCaught, { x: this.player.x, y: this.player.y });
-    this.emitCooldown('throw', BELT_THROW.cooldownMs);
+    this.emitCooldown('throw', cooldown);
   }
 
   private cancelAll(): void {

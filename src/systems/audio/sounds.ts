@@ -150,6 +150,11 @@ export const SYNTH: Record<SoundId, Generator> = {
     tone(ctx, out, { type: 'sine', freq: 70 * p, freqEnd: 40 * p, start: t + 0.17, dur: 0.14, gain: 0.65 });
   },
 
+  // A tiny square-wave chirp for one typed letter in a cutscene; the speaker's pitch makes each voice different.
+  blip: (ctx, out, t, p) => {
+    tone(ctx, out, { type: 'square', freq: 520 * p, freqEnd: 450 * p, start: t, dur: 0.05, gain: 0.5 });
+  },
+
   // Sad trombone: "wah wah wah wahhh".
   gameOver: (ctx, out, t, p) => {
     const notes = [62, 61, 60, 59];

@@ -1,7 +1,8 @@
 /** @file A collectible on the floor: item sprite on a glowing ring, bobs, then expires. */
 import Phaser from 'phaser';
 import { PICKUPS, type PickupKind } from '../config/balance';
-import { PICKUP_VISUALS } from '../config/pickups';
+import type { TexKey } from '../assets/keys';
+import { PICKUP_VISUALS, pickLook } from '../config/pickups';
 import { fitToSize, setCircleHitbox } from '../core/sprite';
 import { gameClock } from '../core/clock';
 
@@ -15,9 +16,10 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
   private readonly baseScale: number;
   private readonly glow: Phaser.GameObjects.Arc;
 
-  constructor(scene: Phaser.Scene, kind: PickupKind, x: number, y: number) {
+  /** `tex`: which look to show (a gift keeps the look it had in the air); without it one is picked at random (`pickLook`). */
+  constructor(scene: Phaser.Scene, kind: PickupKind, x: number, y: number, tex?: TexKey) {
     const visual = PICKUP_VISUALS[kind];
-    super(scene, x, y, visual.tex);
+    super(scene, x, y, tex ?? pickLook(kind));
     scene.add.existing(this);
     scene.physics.add.existing(this);
 

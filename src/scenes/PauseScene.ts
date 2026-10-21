@@ -232,12 +232,14 @@ export class PauseScene extends Phaser.Scene {
     this.leaving = true;
     this.scene.resume('GameScene');
     this.scene.resume('UIScene');
+    if (this.scene.isPaused('CutsceneScene')) this.scene.resume('CutsceneScene'); // paused with the game if a cutscene was playing
     this.scene.stop();
   }
 
   private restart(): void {
     this.leaving = true;
     this.scene.stop('UIScene');
+    this.scene.stop('CutsceneScene');
     this.scene.stop('GameScene');
     this.scene.start('GameScene', this.run); // also stops this scene
   }
@@ -245,6 +247,7 @@ export class PauseScene extends Phaser.Scene {
   private toMenu(): void {
     this.leaving = true;
     this.scene.stop('UIScene');
+    this.scene.stop('CutsceneScene');
     this.scene.stop('GameScene');
     this.scene.start('MenuScene'); // also stops this scene
   }

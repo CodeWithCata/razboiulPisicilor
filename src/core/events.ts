@@ -1,8 +1,9 @@
 /** @file The event bus (`bus`), every event name (`Events`) and the payload type of each. Gameplay emits, UI / FX / audio listen. */
 import Phaser from 'phaser';
-import type { MusicId } from '../assets/audioKeys';
-import type { BeltAttackId, BossType, BuffKind, CrowVariant, EnemyType, PickupKind, ProjectileKind } from '../config/balance';
+import type { MusicId, SoundId } from '../assets/audioKeys';
+import type { BadKind, BeltAttackId, BossType, BuffKind, CrowVariant, EnemyType, PickupKind, ProjectileKind } from '../config/balance';
 import type { DebugId } from '../config/debug';
+import type { FightReport } from './bossVerdict';
 import type { JokeCategory, JokeChannel } from '../config/jokes';
 import type { AmbientAction, PropKind } from '../config/props';
 
@@ -15,17 +16,21 @@ export const bus = new Phaser.Events.EventEmitter();
 
 export const Events = {
   PlayerHealth: 'player:health', // PlayerHealthPayload
-  PlayerHurt: 'player:hurt', // PointPayload
+  PlayerHurt: 'player:hurt', // PlayerHurtPayload
   PlayerDied: 'player:died',
-  SmokeBreak: 'player:smoke', // PointPayload (Varu takes a drag of his cigarette)
+  SmokeBreak: 'player:smoke', // SmokeBreakPayload (Varu takes a drag of his cigarette)
+  BadPickup: 'pickup:bad', // PickupPayload (the question mark gave a BAD pickup: red sparks, shake, word, sad sound; replaces PickupCollected for it)
   BackflipLand: 'player:backflip-land', // PointPayload (the energy drink back flip touched down: ring, dust, shake, word, thud)
   IdleHabit: 'player:habit', // IdleHabitPayload (Varu checks his belt or cracks his neck while standing still)
   EnemyHit: 'enemy:hit', // PointPayload
   EnemyKilled: 'enemy:killed', // EnemyKilledPayload (only when Varu kills it)
   CatBump: 'enemy:bump', // CatBumpPayload (a flung cat slammed into another cat)
+  CatPopped: 'enemy:popped', // CatPoppedPayload (a cat that jumped out of a bush or box just landed: it says something cheeky)
   CatSurrender: 'enemy:surrender', // CatSurrenderPayload (a cat gave up and raised the white flag: its line, the sound, and the HUD's fanfare word)
   LuckySpawn: 'lucky:spawn', // PointPayload (the lucky cat just appeared: gold sparks, a word, the banner, a sound)
   LuckyGone: 'lucky:gone', // PointPayload (she got away: a line and a sound; catching her is a normal EnemyKilled with type 'lucky')
+  FanThrow: 'fan:throw', // FanThrowPayload (a fan in the stands let go of something: the whoosh, the crowd cheers)
+  FanLanded: 'fan:landed', // FanLandedPayload (it hit the floor: a gift pops out, or a petard starts to hiss)
   Heartbeat: 'player:heartbeat', // HeartbeatPayload (Varu is low on health: one beat, for the sound and the red edge)
   Explosion: 'fx:explosion', // ExplosionPayload
   Teleport: 'fx:teleport', // TeleportPayload
@@ -33,18 +38,23 @@ export const Events = {
   ProjectileBlocked: 'projectile:blocked', // PointPayload
   WaveStarted: 'wave:started', // WavePayload
   WaveCleared: 'wave:cleared', // WavePayload
+  WeatherChanged: 'weather:changed', // WeatherPayload (every wave start says what the weather is for that wave, 'clear' too: fog, rain and the weather curses listen)
   ScoreChanged: 'score:changed', // ScorePayload
   PickupCollected: 'pickup:collected', // PickupPayload
   BuffsChanged: 'buffs:changed', // BuffsPayload
+  BuffEnded: 'buff:ended', // BuffEndedPayload (a buff ran out by itself; NOT when it is cleared by the debug card or replaced)
   CrowImpact: 'crow:impact', // CrowImpactPayload
   LobBall: 'boss:lob', // LobBallPayload (the tennis cat smashes a ball into the sky; BallLobSystem flies it)
+  CurseZone: 'boss:curse', // CurseZonePayload (a boss attack fired a ring that curses Varu if he stands in it)
   BallLanded: 'boss:ball-landed', // BallLandedPayload (a lobbed ball hit the ground: damage, juice, sound)
   SpawnEnemy: 'enemy:spawn', // SpawnEnemyPayload (bosses summoning cats)
   ProjectileDeflected: 'projectile:deflected', // PointPayload
+  TennisReturn: 'projectile:returned', // PointPayload (the tennis cat smashed Varu's ball back at him)
+  RallyHit: 'projectile:rally', // RallyHitPayload (a tennis ball was hit back again: Varu's swat or a return by a cat; `hits` counts them for this ball)
   BossSpawned: 'boss:spawned', // BossSpawnedPayload
   BossHealth: 'boss:health', // BossHealthPayload
   BossPhase: 'boss:phase', // BossPhasePayload
-  BossStunned: 'boss:stunned', // PointPayload
+  BossStunned: 'boss:stunned', // BossStunnedPayload
   BossShout: 'boss:shout', // ShoutPayload
   BossDefeated: 'boss:defeated', // BossDefeatedPayload
   BeltSwing: 'belt:swing', // BeltAttackPayload
@@ -56,6 +66,7 @@ export const Events = {
   BeltFlight: 'belt:flight', // BeltFlightPayload (every frame the thrown belt flies)
   PropHit: 'prop:hit', // PropHitPayload (a bush, rock, fence... was hit: particles, words, sound)
   PropCracked: 'prop:cracked', // PropCrackedPayload (a rock got a new crack)
+  PropThinned: 'prop:thinned', // PropThinnedPayload (a bush got a size smaller: a few leaves fly)
   PropDestroyed: 'prop:destroyed', // PropDestroyedPayload (a bush, rock, box... was smashed for good)
   ArenaChanged: 'arena:changed', // the solid tiles changed (a prop was destroyed): path finding must rebuild
   PropAmbient: 'prop:ambient', // PropAmbientPayload (a prop does something by itself)
@@ -69,6 +80,17 @@ export const Events = {
   VolumeChanged: 'audio:volume', // VolumePayload (pause menu sliders)
   DebugAction: 'debug:action', // DebugActionPayload (dev only: a cheat just ran, the debug card flashes it)
   DebugStats: 'debug:stats', // DebugStatsPayload (dev only: live numbers for the debug card)
+  DebugRun: 'debug:run', // DebugRunPayload (dev only: the card was clicked, GameScene runs that cheat)
+  DebugStep: 'debug:step', // DebugStepPayload (dev only: a picker on the card moved to another option)
+  BossLab: 'debug:bosslab', // BossLabPayload (dev only: the live duel numbers, and the last verdict)
+  CutsceneStart: 'cutscene:start', // CutsceneStartPayload (a cutscene begins: the HUD hides, the overlay scene opens)
+  CutsceneEnd: 'cutscene:end', // CutsceneEndPayload (it is over, played or skipped: the HUD comes back, the bars leave)
+  CutsceneLine: 'cutscene:line', // CutsceneLinePayload (the director says a line: the overlay types it)
+  CutsceneLineEnd: 'cutscene:line-end', // the line is over: the box closes
+  CutsceneAdvance: 'cutscene:advance', // the player tapped on a finished line (overlay -> director)
+  CutsceneSkip: 'cutscene:skip', // the player held long enough to skip (overlay -> director)
+  CutsceneBlip: 'cutscene:blip', // CutsceneBlipPayload (one typed letter: a tiny voice sound)
+  CutsceneSfx: 'cutscene:sfx', // CutsceneSfxPayload (a script asks for a sound)
   PerfStats: 'perf:stats', // PerfStatsPayload (phones, "Date debug" switch on: fps and walking numbers for ui/PerfPanel.ts)
 } as const;
 
@@ -80,9 +102,27 @@ export interface JokePayload extends PointPayload {
   size: number;
 }
 
+export interface FanThrowPayload extends PointPayload {
+  /** Where it lands. `x` / `y` (the base payload) is the fan's hand. */
+  toX: number;
+  toY: number;
+  /** True for the bad item (a petard), false for a gift (a pickup). */
+  bad: boolean;
+}
+
+export interface FanLandedPayload extends PointPayload {
+  bad: boolean;
+}
+
 export interface CatBumpPayload extends PointPayload {
   /** The cat that got hit. */
   victimType: EnemyType;
+}
+
+/** A hide-and-seek cat landed after jumping out of a bush, box or bed. x/y is just above its head. */
+export interface CatPoppedPayload extends PointPayload {
+  /** The cat came out of a bed: it yawns and says a sleepy line instead of a taunt. */
+  sleepy: boolean;
 }
 
 export interface CatSurrenderPayload extends PointPayload {
@@ -121,11 +161,35 @@ export interface DebugActionPayload {
   id: DebugId;
   /** Only for toggles: the new state. */
   on?: boolean;
+  /** Only for pickers: the option now chosen (shown on the card and in its footer). */
+  detail?: string;
+}
+
+/** The boss lab's numbers for its panel: the duel running now (null = none) and the last finished one. */
+export interface BossLabPayload {
+  live: FightReport | null;
+  last: FightReport | null;
+}
+
+export interface DebugRunPayload {
+  id: DebugId;
+}
+
+export interface DebugStepPayload {
+  id: DebugId;
+  /** +1 next option, -1 previous. */
+  step: number;
 }
 
 export interface DebugStatsPayload {
   cats: number;
   wave: number;
+  hp: number;
+  maxHp: number;
+  x: number;
+  y: number;
+  /** The bad-luck line of the card's strip (weather, cooldown, ramp, greed), already worded. */
+  luck: string;
 }
 
 export interface TouchPressPayload {
@@ -196,6 +260,13 @@ export interface PropCrackedPayload extends PointPayload {
   stage: number;
 }
 
+export interface PropThinnedPayload extends PointPayload {
+  /** How many sizes smaller it is now (1 = first). */
+  stage: number;
+  /** Which BUSH_VARIANTS look the bush has (the leaves take its color). */
+  variant: number;
+}
+
 export interface PropDestroyedPayload extends PointPayload {
   kind: PropKind;
   /** Smashed by a boss (charge or blast) instead of by Varu. */
@@ -227,6 +298,8 @@ export interface TeleportPayload extends PointPayload {
 }
 
 export interface ExplosionPayload extends PointPayload {
+  /** Who made the blast (`'kamikaze'`), so a hit from it can curse Varu (config/curses.ts `CAT_HIT_CURSES`). */
+  source?: string;
   radius: number;
   damage: number;
   /** Defaults to true. Friendly blasts (crows) only look cool. */
@@ -235,15 +308,27 @@ export interface ExplosionPayload extends PointPayload {
   fromBoss?: boolean;
   /** A kamikaze cat's blast: extra shockwave rings, a scorch mark and a "BOOM!" (KAMIKAZE_BLAST). */
   shockwave?: boolean;
+  /** Defaults to true: the blast throws a burst of cat fur. False for blasts that are not a cat's (the fans' petard). */
+  fur?: boolean;
 }
 
 export interface SpawnProjectilePayload extends PointPayload {
   kind: ProjectileKind;
   angle: number; // radians
   speed: number;
+  /** A homing heart (see `PROJECTILES.heart.homing`): it follows Varu for a while. */
+  homing?: boolean;
 }
 
 export interface WavePayload {
+  wave: number;
+}
+
+/** The weather of a wave: exclusive, one per wave. */
+export type WeatherKind = 'clear' | 'fog' | 'rain';
+
+export interface WeatherPayload {
+  weather: WeatherKind;
   wave: number;
 }
 
@@ -251,6 +336,18 @@ export interface ScorePayload {
   score: number;
   best: number;
   kills: number;
+}
+
+export interface PlayerHurtPayload extends PointPayload {
+  /** How much health it took. */
+  amount: number;
+  /** What hurt him: a cat type (touch), a projectile kind or a blast source. Undefined = something that never curses. */
+  source?: string;
+}
+
+export interface SmokeBreakPayload extends PointPayload {
+  /** True when the pickup's own label already says it (the bad smoke break): no extra line over his head. */
+  quiet?: boolean;
 }
 
 export interface PickupPayload extends PointPayload {
@@ -263,6 +360,10 @@ export interface BuffInfo {
   durationMs: number;
 }
 
+export interface BuffEndedPayload {
+  kind: BuffKind;
+}
+
 export interface BuffsPayload {
   buffs: BuffInfo[];
 }
@@ -272,7 +373,20 @@ export interface CrowImpactPayload extends PointPayload {
   radius: number;
 }
 
+/** A curse a boss attack carries: which bad pickup and the funny line said when it catches Varu. */
+export interface CurseSpec {
+  kind: BadKind;
+  line: string;
+}
+
+export interface CurseZonePayload extends PointPayload {
+  radius: number;
+  curse: CurseSpec;
+}
+
 export interface LobBallPayload extends PointPayload {
+  /** Set on the ball that curses Varu if he stands in its ring when it lands (Federer's first ball). */
+  curse?: CurseSpec;
   /** Where it lands. `x` / `y` (the base payload) is where the racket sends it up. */
   toX: number;
   toY: number;
@@ -282,12 +396,23 @@ export interface LobBallPayload extends PointPayload {
 }
 
 export interface BallLandedPayload extends PointPayload {
+  /** Copied from the lobbed ball: the curse it carries (`CurseSystem` reads it). */
+  curse?: CurseSpec;
   radius: number;
   damage: number;
 }
 
 export interface SpawnEnemyPayload extends PointPayload {
   type: EnemyType;
+}
+
+export interface BossStunnedPayload extends PointPayload {
+  boss: BossType;
+}
+
+/** A tennis ball was hit back again. `hits` = how many times it has been hit back so far (Varu's swats plus returns by a cat or Federer). */
+export interface RallyHitPayload extends PointPayload {
+  hits: number;
 }
 
 export interface BossSpawnedPayload {
@@ -314,6 +439,39 @@ export interface ShoutPayload extends PointPayload {
 export interface BossDefeatedPayload extends PointPayload {
   boss: BossType;
   final: boolean;
+}
+
+export interface CutsceneStartPayload {
+  id: string;
+  /** Black cinema bars slide in. */
+  bars: boolean;
+  /** Holding skips it. */
+  skippable: boolean;
+  /** The HUD fades out while it plays. */
+  hideHud: boolean;
+}
+
+export interface CutsceneEndPayload {
+  id: string;
+  skipped: boolean;
+}
+
+export interface CutsceneLinePayload {
+  /** Counts up per line, so a late tap for an old line is never mistaken for the new one. */
+  lineId: number;
+  /** A key of SPEAKERS (content/cutscenes.ts). */
+  speaker: string;
+  text: string;
+  /** The line closes by itself (no tap needed). */
+  auto: boolean;
+}
+
+export interface CutsceneBlipPayload {
+  pitch: number;
+}
+
+export interface CutsceneSfxPayload {
+  id: SoundId;
 }
 
 /** Subscribe and get back a function that unsubscribes (call it on scene shutdown). */

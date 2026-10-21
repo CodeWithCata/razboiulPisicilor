@@ -1,5 +1,6 @@
 /** @file Desktop controls: WASD / arrows, mouse aim, click / Space swing, Shift / right click spin, E throw. */
 import Phaser from 'phaser';
+import { debugState } from '../core/debugState';
 import type { InputSource } from './InputSource';
 
 /** Bit for the right mouse button in `pointer.buttons`. */
@@ -51,8 +52,9 @@ export class KeyboardMouseInput implements InputSource {
 
     // Right click is the spin, so it must not count as a swing too.
     const rightDown = (pointer.buttons & RIGHT_BUTTON) !== 0;
-    this.attackHeld = (pointer.isDown && !rightDown) || k.space.isDown;
-    this.spinPressed = Phaser.Input.Keyboard.JustDown(k.shift) || (rightDown && !this.rightWasDown);
+    const onCard = debugState.overPanel; // dev debug card: clicking it is not a swing
+    this.attackHeld = (pointer.isDown && !rightDown && !onCard) || k.space.isDown;
+    this.spinPressed = Phaser.Input.Keyboard.JustDown(k.shift) || (rightDown && !this.rightWasDown && !onCard);
     this.throwPressed = Phaser.Input.Keyboard.JustDown(k.e);
     this.rightWasDown = rightDown;
   }

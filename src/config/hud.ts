@@ -36,12 +36,12 @@ export const HUD = {
    * because the game is drawn at about half size on a phone. The help line is wrapped to this width so it fits between the thumbs.
    */
   touch: { mute: { get x() { return shiftRight(1128); }, y: 132 }, bestSize: 24, helpSize: 26, helpWidth: 600 },
-  /** Dev-only cheat sheet card (ui/DebugPanel.ts): bottom-left, above the controls reminder. Two columns of blocks. */
+  /** Dev-only cheat sheet card (ui/DebugPanel.ts): bottom-left, above the controls reminder. Three columns of blocks. */
   debugPanel: {
     left: 20,
     bottom: 62,
-    colW: 276,
-    colGap: 18,
+    colW: 336,
+    colGap: 16,
     padX: 16,
     padY: 12,
     titleH: 38,
@@ -70,7 +70,16 @@ export const HUD = {
     footerFadeMs: 1400,
     onColor: 0x6fd36f,
     offColor: 0x5b6590,
+    /** Width of the picker (< value >) and of its arrow hit areas, and the look of a hovered / last-used row. */
+    pickerW: 156,
+    arrowW: 24,
+    pickerSize: 14,
+    hoverAlpha: 0.1,
+    activeAlpha: 0.9,
   },
+
+  /** Dev-only boss lab report (ui/BossLabPanel.ts): top right, monospace, over the debug card (hide the card with I to see it all). */
+  bossLab: { right: 12, y: 96, width: 430, pad: 10, size: 13, titleSize: 15, verdictSize: 15, lineGap: 3, backAlpha: 0.86, radius: 12, depth: 91 },
 
   /** The power-up timers (round badges under the cat meter) are in config/buffBadges.ts. */
 
@@ -149,6 +158,10 @@ export const HUD = {
     endlessSize: 56,
     color: '#fff3d6',
     endlessColor: '#f5c518',
+    /** The Marți 13 banner (red, under the wave banner). */
+    marti13Color: '#ff6a5a',
+    marti13YOffset: -30,
+    marti13Size: 60,
     /** The lucky cat's banner (Pisica Norocoasă): gold, smaller than the wave banner. */
     luckyColor: '#f5c518',
     luckyYOffset: 40,

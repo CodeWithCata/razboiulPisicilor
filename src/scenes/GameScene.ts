@@ -2,20 +2,16 @@
 import Phaser from 'phaser';
 import { ARENA_RULES, CAMERA, WORLD } from '../config/arena';
 import { PAUSE, PAUSE_KEYS } from '../config/pause';
-import { BELT, BOSS_TYPES, BUFFS, ENEMIES, WAVE_TIMING, isBossType, type BuffKind, type EnemyType } from '../config/balance';
-import type { DebugId } from '../config/debug';
-import { DEBUG } from '../config/debug';
+import { BELT, ENEMIES, WAVE_TIMING, isBossType, type EnemyType, type PickupKind } from '../config/balance';
 import { TOUCH } from '../config/touch';
-import { PICKUP_KINDS } from '../config/pickups';
+import type { PropKind } from '../config/props';
 import { SLOW_MO } from '../config/slowMo';
-import { Tex } from '../assets/keys';
-import { FOG_LINES, VARU_LINES, WAVE_CLEARED_LINES, pick } from '../content/lines';
+import { FOG_LINES, RAIN_LINES, VARU_LINES, WAVE_CLEARED_LINES, pick } from '../content/lines';
 import { usesTouchControls } from '../core/device';
 import { readRun, type RunOptions } from '../core/run';
 import { gameClock } from '../core/clock';
 import { saveEndlessUnlocked } from '../core/storage';
-import { downloadTexture } from '../core/downloadTexture';
-import { bus, Events, listen, type BallLandedPayload, type BossDefeatedPayload, type DebugActionPayload, type DebugStatsPayload, type ExplosionPayload, type MusicPayload, type PerfStatsPayload, type SpawnEnemyPayload } from '../core/events';
+import { bus, Events, listen, type BallLandedPayload, type BossDefeatedPayload, type ExplosionPayload, type MusicPayload, type PerfStatsPayload, type SpawnEnemyPayload } from '../core/events';
 import { FlowField } from '../core/flowField';
 import { Enemy, type EnemyContext } from '../entities/Enemy';
 import { createEnemy } from '../entities/enemies';
@@ -34,8 +30,16 @@ import { BallLobSystem } from '../systems/BallLobSystem';
 import { CatChatter } from '../systems/CatChatter';
 import { CrowRainSystem } from '../systems/CrowRainSystem';
 import { DayNight } from '../systems/DayNight';
+import { DebugCheats } from '../systems/DebugCheats';
+import { FanThrowSystem } from '../systems/FanThrowSystem';
 import { Fog } from '../systems/Fog';
+import { Rain } from '../systems/Rain';
+import { CostlyRewards } from '../systems/CostlyRewards';
+import { COSTLY } from '../config/curses';
+import { Weather } from '../systems/Weather';
+import { WeatherCurses } from '../systems/WeatherCurses';
 import { Effects } from '../systems/Effects';
+import { CutsceneSystem } from '../systems/cutscene/CutsceneSystem';
 import { HitStop } from '../systems/HitStop';
 import { JokeSystem } from '../systems/JokeSystem';
 import { LuckyCatSystem } from '../systems/LuckyCatSystem';
@@ -44,9 +48,12 @@ import { PinballSystem } from '../systems/PinballSystem';
 import { PickupSystem } from '../systems/PickupSystem';
 import { SlowMoSystem } from '../systems/SlowMoSystem';
 import { SurrenderSystem } from '../systems/SurrenderSystem';
-import { applyPickup } from '../systems/pickupEffects';
+import { announcePickup, applyPickup } from '../systems/pickupEffects';
+import { CurseSystem } from '../systems/CurseSystem';
 import { PowerUpSystem } from '../systems/PowerUpSystem';
 import { BarrelSystem } from '../systems/props/BarrelSystem';
+import { Obstacles } from '../systems/props/Obstacles';
+import { LampSystem } from '../systems/LampSystem';
 import { PropFx } from '../systems/props/PropFx';
 import { GoldLeafSystem } from '../systems/props/GoldLeaf';
 import { PropSystem } from '../systems/props/PropSystem';
@@ -72,6 +79,8 @@ export class GameScene extends Phaser.Scene {
   private waves!: WaveSystem;
   private score!: ScoreSystem;
   private powerUps!: PowerUpSystem;
+  /** Bad luck gate. Null until it is built in `create` (the barrels are built before it and ask `canCurse`). */
+  private curses: CurseSystem | null = null;
   private crowRain!: CrowRainSystem;
   private props!: PropSystem;
   private pinball!: PinballSystem;
@@ -79,19 +88,24 @@ export class GameScene extends Phaser.Scene {
   private chatter!: CatChatter;
   private dayNight!: DayNight;
   private fog!: Fog;
+  private rain!: Rain;
+  private weatherCurses!: WeatherCurses;
   private slowMo!: SlowMoSystem;
+  private cutscene!: CutsceneSystem;
   private surrender!: SurrenderSystem;
   private lucky!: LuckyCatSystem;
+  private fanThrow!: FanThrowSystem;
   private goldLeaf!: GoldLeafSystem;
   private barrels!: BarrelSystem;
+  private obstacles!: Obstacles;
   /** Cats that are hiding in a bush or box and will jump out in a moment: waves must still count them. */
   private pendingHides = 0;
   private pickups!: PickupSystem;
   private enemyContext!: EnemyContext;
   /** Walking distances to whatever the cats chase (Varu or the laser dot). */
   private flow!: FlowField;
-  private debugPickupIndex = 0;
-  private debugBossIndex = 0;
+  /** Dev only (`pnpm dev`): the cheats behind the debug card. */
+  private debug: DebugCheats | null = null;
   private hitStop!: HitStop;
   private run: RunOptions = readRun(undefined);
   private gameOver = false;
@@ -108,6 +122,7 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.gameOver = false;
     this.pendingHides = 0;
+    this.curses = null;
     gameClock.reset(this.time.now); // game time starts here; it stops while the pause menu is open
     this.physics.world.setBounds(0, 0, WORLD.width, WORLD.height);
     this.arena = new ArenaMap(this); // the Tiled map (or a plain grass field if it can't load)
@@ -131,6 +146,7 @@ export class GameScene extends Phaser.Scene {
     this.enemies = this.physics.add.group();
     this.arena.collidePlayer(this.player);
     this.arena.collideEnemies(this.enemies, (enemy) => !(enemy as Enemy).flies); // flying cats pass over walls
+    this.obstacles = new Obstacles(this, this.arena.grid, this.player, this.enemies); // barrels and lamps are solid too (not map tiles)
     this.projectiles = new ProjectileSystem(this, this.player, this.enemies, this.arena.grid);
     this.belt = new BeltSystem(this, this.player, this.enemies, this.projectiles.group, this.arena.grid);
     // On a phone Varu turns to the nearest cat and swings by himself (and swats balls that fly at him): only the walking is up to the thumb.
@@ -145,7 +161,7 @@ export class GameScene extends Phaser.Scene {
     new PropFx(this, this.effects); // leaves, chips, fluff and words when the arena is hit
     this.goldLeaf = new GoldLeafSystem(this, this.player, this.arena.grid, this.effects); // a rare gold leaf from a bush: tiny heal
     this.props = new PropSystem(this, this.arena, this.player, this.enemies); // bushes, fences, cans... react to the belt, blasts and walking
-    this.barrels = new BarrelSystem(this, this.arena.grid, this.player, this.enemies, this.effects); // mustard barrels: break them, the puddle slows Varu and cats
+    this.barrels = new BarrelSystem(this, this.arena.grid, this.player, this.enemies, this.effects, this.obstacles, () => this.curses?.waveOpen ?? false); // mustard barrels: solid, break them, the puddle slows Varu and cats
     this.score = new ScoreSystem(this, this.run.mode);
     this.hitStop = new HitStop(this);
     this.powerUps = new PowerUpSystem(this, this.player);
@@ -153,19 +169,26 @@ export class GameScene extends Phaser.Scene {
     this.lowHp = new LowHpSystem(this); // heartbeat while Varu is low on health
     this.pinball = new PinballSystem(); // a flung cat hurts the cat it slams into
     this.chatter = new CatChatter(this, this.enemies); // cats say things now and then
-    this.dayNight = new DayNight(this, this.run.mode); // afternoon to night over the waves, lamps at night
+    this.dayNight = new DayNight(this, this.run.mode, this.obstacles); // afternoon to night over the waves, lamps at night (solid)
+    new LampSystem(this, this.player, this.dayNight.lamps); // the lamps can be broken
+    const weather = new Weather(this); // rolls fog / rain / clear once per wave BEFORE Fog and Rain are built (they only listen)
     this.fog = new Fog(this, this.enemies, this.player, (foggy) => {
       if (foggy) this.effects.floatText(this.player.x, this.player.y - 60, pick(FOG_LINES), '#dfeaf0', 26);
     }); // some waves start in a mist: cats far from Varu fade out until they come close
+    this.rain = new Rain(this, () => this.effects.floatText(this.player.x, this.player.y - 60, pick(RAIN_LINES), '#bcd6ee', 26)); // some waves start in rain: streaks over the screen, the belt gets wet
     this.slowMo = new SlowMoSystem(this, this.effects, this.player); // the last cat of a wave dies in slow motion
     this.crowRain = new CrowRainSystem(this, this.enemies, this.arena.grid);
     new BallLobSystem(this); // the tennis cat's ball rain: flies the balls, then tells us where they landed
-    this.pickups = new PickupSystem(this, this.player, this.arena.grid, (kind) =>
-      applyPickup(kind, { scene: this, player: this.player, powerUps: this.powerUps, crowRain: this.crowRain }),
-    );
-    this.enemyContext = { player: this.player, lure: null };
+    this.pickups = new PickupSystem(this, this.player, this.arena.grid, (kind) => this.applyToVaru(kind));
+    this.enemyContext = { player: this.player, lure: null, projectiles: this.projectiles.group, enemies: this.enemies };
     this.flow = new FlowField(this.arena.grid);
     this.waves = new WaveSystem((type) => this.spawnWaveCat(type), () => this.waveCatCount(), this.run.mode);
+    // Bad luck: the gate for every random curse (cooldown, wave ramp, mercy). Cats that curse him on hit listen to `PlayerHurt` inside it.
+    const curses = new CurseSystem(this, this.player, this.waves, (kind, ms) => this.givePickup(kind, ms), () => this.powerUps.goodCount, (x, y, text, color, size) => this.effects.floatText(x, y, text, color, size));
+    this.curses = curses;
+    // Wave-state curses: rain = Rusty, fog = Emo, Marți 13 = a mild one; re-applied every ~25 s until the wave ends.
+    new CostlyRewards(this, curses, (kind) => this.powerUps.has(kind), (text) => this.effects.floatText(this.player.x, this.player.y - COSTLY.lineLiftPx, text, COSTLY.lineColor, COSTLY.lineSize)); // rewards that cost something
+    this.weatherCurses = new WeatherCurses(this, curses, (text, lift, color, size) => this.effects.floatText(this.player.x, this.player.y - lift, text, color, size));
     this.lucky = new LuckyCatSystem(this, { waves: this.waves, spawn: () => this.spawn('lucky') }); // a rare golden cat that runs from Varu
     // The last few cats of a wave may give up (rare). The system only decides when; the cats leave and the wave ends the normal way.
     this.surrender = new SurrenderSystem(this, {
@@ -180,6 +203,23 @@ export class GameScene extends Phaser.Scene {
     this.arena.crowd.connect({
       say: (x, y, text, color, size) => this.effects.floatText(x, y, text, color, size),
       isLastCat: () => this.waves.inWave && this.waves.allSpawned && this.waveCatCount() === 1,
+    });
+
+    // The fans in the stands throw a gift (a pickup) or a petard into the arena now and then.
+    this.fanThrow = new FanThrowSystem(this, {
+      waves: this.waves,
+      enemies: this.enemies,
+      player: this.player,
+      arena: this.arena.grid,
+      beginThrow: (request) => this.arena.crowd.beginThrow(request),
+      releaseThrow: () => this.arena.crowd.releaseThrow(),
+      rollKind: () => this.pickups.pickKind(),
+      spawnPickup: (kind, x, y, tex) => {
+        this.pickups.spawnAt(kind, x, y, tex);
+      },
+      curseAllowed: () => curses.allowed,
+      curse: (kind) => curses.force(kind),
+      say: (x, y, text, color, size) => this.effects.floatText(x, y, text, color, size),
     });
 
     // Phones, "Date debug" switch on: every half second send the measured fps and walking numbers to the card (ui/PerfPanel.ts).
@@ -197,14 +237,27 @@ export class GameScene extends Phaser.Scene {
     // Cats push each other apart (flying cats pass over); touching a cat hurts Varu.
     this.physics.add.collider(this.enemies, this.enemies, undefined, (a, b) => {
       const [first, second] = [a as Enemy, b as Enemy];
-      if (first.flies || second.flies) return false;
+      if (first.flies || second.flies || first.ignoresCats || second.ignoresCats) return false;
       this.pinball.check(first, second); // runs before the physics pushes them apart, so a flung cat still has its speed
       return true;
     });
     this.physics.add.overlap(this.player, this.enemies, (_p, e) => {
+      if (this.cutscene.active) return; // a held-still cat must not bite during a scene
       const enemy = e as Enemy;
-      if (enemy.contactDamage > 0) this.player.takeDamage(enemy.contactDamage, enemy.x, enemy.y);
+      if (enemy.contactDamage > 0) this.player.takeDamage(enemy.contactDamage, enemy.x, enemy.y, enemy.enemyType);
     });
+
+    this.cutscene = new CutsceneSystem(
+      {
+        scene: this,
+        player: this.player,
+        enemies: this.enemies,
+        say: (x, y, text, color, size) => this.effects.floatText(x, y, text, color, size),
+        prepare: () => this.prepareCutscene(),
+        finish: () => this.finishCutscene(),
+      },
+      this.run.mode,
+    );
 
     const off = [
       listen(Events.PlayerDied, () => this.onPlayerDied()),
@@ -237,10 +290,39 @@ export class GameScene extends Phaser.Scene {
     this.setupPause();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       off.forEach((f) => f());
+      this.cutscene.destroy();
       this.scene.stop('UIScene');
+      this.scene.stop('CutsceneScene');
     });
 
-    if (import.meta.env.DEV) this.setupDebugKeys();
+    if (import.meta.env.DEV) {
+      this.debug = new DebugCheats(this, {
+        arena: this.arena,
+        player: this.player,
+        enemies: this.enemies,
+        waves: this.waves,
+        score: this.score,
+        belt: this.belt,
+        powerUps: this.powerUps,
+        pickups: this.pickups,
+        give: (kind) => this.givePickup(kind),
+        weather,
+        curses,
+        fanThrow: this.fanThrow,
+        surrender: this.surrender,
+        slowMo: this.slowMo,
+        clearShots: () => this.projectiles.clearAll(),
+        spawn: (type) => this.spawn(type),
+        spawnAt: (type, x, y) => this.addEnemy(type, x, y),
+        hide: (type) => {
+          if (!this.props.hideCat(ENEMIES[type].hitRadius, (x, y, dirX, dirY, kind) => this.revealCat(type, x, y, dirX, dirY, kind), true)) return false;
+          this.pendingHides += 1; // same bookkeeping as a wave cat that hides (revealCat takes it back)
+          return true;
+        },
+      });
+    }
+
+    this.cutscene.fire({ on: 'runStart' }); // the opening scene, if the content has one
   }
 
   update(time: number, delta: number): void {
@@ -249,6 +331,13 @@ export class GameScene extends Phaser.Scene {
     const dt = gameClock.scaled(delta);
     this.arena.crowd.update(SLOW_MO.slowCrowd ? dt : delta); // before the game over return: the crowd roars or sulks on the end screens too
     if (this.gameOver) return;
+    // A cutscene holds the game still: only the director runs (in real time) and Varu walks on its scripted input.
+    if (this.cutscene.active) {
+      this.cutscene.update(delta);
+      this.player.tick(this.cutscene.input);
+      gameClock.skipNextStep(); // scene time is not game time: no timer may catch up afterwards
+      return;
+    }
     // Camera snappiness per frame, from the real frame time: the same speed at any refresh rate (and when it wanders).
     const frames = Math.min(delta, CAMERA.maxStepMs) / (1000 / CAMERA.referenceFps);
     const lerp = 1 - (1 - CAMERA.lerp) ** frames;
@@ -262,13 +351,17 @@ export class GameScene extends Phaser.Scene {
     this.pinball.update();
     this.powerUps.update(now, this.input_);
     this.enemyContext.lure = this.openLure(this.powerUps.lure);
+    this.enemyContext.wave = this.waves.wave;
     const chased = this.enemyContext.lure ?? this.player;
     this.flow.setTarget(chased.x ?? 0, chased.y ?? 0);
+    this.rain.update(dt);
     this.fog.update(dt); // sets each cat's fogAlpha, before the cats draw themselves this frame
     // A copy, because cats can add or remove cats while they think (summons, explosions).
     for (const child of this.enemies.getChildren().slice()) {
       const enemy = child as Enemy;
-      if (enemy.active) enemy.tick(now, dt, this.enemyContext);
+      if (!enemy.active) continue;
+      if (this.debug?.frozen) enemy.setVelocity(0, 0); // dev: "Pisici înghețate"
+      else enemy.tick(now, dt, this.enemyContext);
     }
     this.keepOutOfWalls();
     this.props.update(now, dt);
@@ -277,8 +370,10 @@ export class GameScene extends Phaser.Scene {
     this.crowRain.update(now);
     this.pickups.update(now);
     this.waves.update(now);
+    this.weatherCurses.update(now);
     this.surrender.update(now);
     this.lucky.update(now);
+    this.fanThrow.update(now);
     this.lowHp.update(now);
     this.chatter.update(now);
     this.dayNight.update(dt);
@@ -297,18 +392,18 @@ export class GameScene extends Phaser.Scene {
 
   /** Wave cats sometimes hide in a bush or box first (hide and seek, systems/props/PropSystem.ts); otherwise they spawn the normal way. */
   private spawnWaveCat(type: EnemyType): void {
-    if (!isBossType(type) && this.props.hideCat(ENEMIES[type].hitRadius, (x, y) => this.revealCat(type, x, y))) {
+    if (!isBossType(type) && this.props.hideCat(ENEMIES[type].hitRadius, (x, y, dirX, dirY, kind) => this.revealCat(type, x, y, dirX, dirY, kind))) {
       this.pendingHides += 1;
       return;
     }
     this.spawn(type);
   }
 
-  private revealCat(type: EnemyType, x: number, y: number): void {
+  private revealCat(type: EnemyType, x: number, y: number, dirX: number, dirY: number, kind: PropKind): void {
     this.pendingHides = Math.max(0, this.pendingHides - 1);
     if (this.gameOver) return;
     const spot = this.arena.grid.nearestOpen(x, y, ENEMIES[type].hitRadius); // never inside a wall
-    this.addEnemy(type, spot.x, spot.y);
+    this.addEnemy(type, spot.x, spot.y).popOut(dirX, dirY, kind === 'bed');
   }
 
   /**
@@ -376,14 +471,26 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private onExplosion({ x, y, radius, damage, harmsPlayer }: ExplosionPayload): void {
+  private onExplosion({ x, y, radius, damage, harmsPlayer, source }: ExplosionPayload): void {
+    if (this.cutscene.active) return;
     const dist = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
-    if (harmsPlayer !== false && dist <= radius + this.player.hitRadius) this.player.takeDamage(damage, x, y);
+    if (harmsPlayer !== false && dist <= radius + this.player.hitRadius) this.player.takeDamage(damage, x, y, source);
+  }
+
+  /** What a pickup does to Varu (the same for the floor, the question mark, the debug card and bad luck). */
+  private applyToVaru(kind: PickupKind, durationMs?: number): void {
+    applyPickup(kind, { scene: this, player: this.player, powerUps: this.powerUps, crowRain: this.crowRain, curses: this.curses }, durationMs);
+  }
+
+  /** Announces a pickup (a bad one gets the GHINION! show) and then applies it: bad luck curses and the debug card use this, like the question mark's prize. */
+  private givePickup(kind: PickupKind, durationMs?: number): void {
+    announcePickup({ kind, x: this.player.x, y: this.player.y });
+    this.applyToVaru(kind, durationMs);
   }
 
   /** A ball of the tennis cat's rain landed: it hurts Varu if he stands inside its ring. */
   private onBallLanded({ x, y, radius, damage }: BallLandedPayload): void {
-    if (this.gameOver) return;
+    if (this.gameOver || this.cutscene.active) return;
     const dist = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
     if (dist <= radius + this.player.hitRadius) this.player.takeDamage(damage, x, y);
   }
@@ -411,7 +518,14 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(950, () => this.scene.start('GameOverScene', data));
   }
 
+  /** The last boss fell: a 'victory' cutscene (if the content has one) plays first, then the victory screen. */
   private onVictory(): void {
+    if (this.gameOver) return;
+    if (this.cutscene.fire({ on: 'victory' }, () => this.finishVictory())) return;
+    this.finishVictory();
+  }
+
+  private finishVictory(): void {
     if (this.gameOver) return;
     this.gameOver = true;
     this.slowMo.stop();
@@ -462,112 +576,28 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** A cutscene starts: nothing may keep moving or swinging while it plays. */
+  private prepareCutscene(): void {
+    this.slowMo.stop();
+    this.hitStop.cancel();
+    this.projectiles.clearAll();
+    this.player.setVelocity(0, 0);
+    this.touchOverlay?.setHidden(true);
+  }
+
+  /** A cutscene is over: the thumb controls come back and no key stays "held" from tapping through the scene. */
+  private finishCutscene(): void {
+    this.touchOverlay?.setHidden(false);
+    this.input.keyboard?.resetKeys();
+    gameClock.skipNextStep();
+  }
+
   private openPause(): void {
     if (this.gameOver || this.scene.isPaused() || !this.scene.isActive()) return;
     this.hitStop.cancel();
     this.scene.pause();
     this.scene.pause('UIScene');
+    if (this.scene.isActive('CutsceneScene')) this.scene.pause('CutsceneScene');
     this.scene.launch('PauseScene', this.run);
-  }
-
-  /** Tells the debug card that a cheat ran (it flashes the key and says so in its footer). `on` is only for toggles. */
-  private debugDone(id: DebugId, on?: boolean): void {
-    const payload: DebugActionPayload = { id, on };
-    bus.emit(Events.DebugAction, payload);
-  }
-
-  /**
-   * Dev-only helpers (the card in ui/DebugPanel.ts lists them): 1-7 spawn a cat type, X horde, K kill all, B cycle bosses,
-   * O every cat surrenders, L next wave, V victory screen, J +score, G god mode, F full heal, C reset belt cooldowns, U all power-ups,
-   * P cycle pickups, Z next crowd mood (cheer, roar, gloom, calm), Y toggle hitboxes, T download the tileset PNG.
-   */
-  private setupDebugKeys(): void {
-    const kb = this.input.keyboard;
-    if (!kb) return;
-    const cats = (Object.keys(ENEMIES) as EnemyType[]).filter((t) => !isBossType(t));
-    const digitKeys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN'];
-    cats.forEach((type, i) => {
-      kb.on(`keydown-${digitKeys[i]}`, () => {
-        this.spawn(type);
-        this.debugDone('spawnCat');
-      });
-    });
-    kb.on('keydown-X', () => {
-      for (let i = 0; i < DEBUG.hordeSize; i++) this.spawn(Phaser.Utils.Array.GetRandom(cats));
-      this.debugDone('horde');
-    });
-    kb.on('keydown-K', () => {
-      this.enemies.getChildren().slice().forEach((e) => (e as Enemy).takeDamage(999, this.player.x, this.player.y, 0));
-      this.debugDone('killAll');
-    });
-    kb.on('keydown-O', () => {
-      if (this.enemies.countActive(true) === 0) this.spawn('normal'); // nothing on the field: bring one cat so there is something to see
-      this.surrender.force();
-      this.debugDone('surrender');
-    });
-    kb.on('keydown-B', () => {
-      this.spawn(BOSS_TYPES[this.debugBossIndex % BOSS_TYPES.length]!);
-      this.debugBossIndex += 1;
-      this.debugDone('boss');
-    });
-    kb.on('keydown-L', () => {
-      this.waves.skipToNextWave(gameClock.now);
-      this.debugDone('nextWave');
-    });
-    kb.on('keydown-V', () => {
-      this.debugDone('victory');
-      bus.emit(Events.Victory); // jump to the ending
-    });
-    kb.on('keydown-J', () => {
-      this.score.add(DEBUG.scoreBonus);
-      this.debugDone('score');
-    });
-    kb.on('keydown-G', () => {
-      this.player.godMode = !this.player.godMode;
-      this.debugDone('god', this.player.godMode);
-    });
-    kb.on('keydown-F', () => {
-      this.player.heal(this.player.maxHp);
-      this.debugDone('heal');
-    });
-    kb.on('keydown-C', () => {
-      this.belt.resetCooldowns();
-      this.debugDone('cooldowns');
-    });
-    kb.on('keydown-U', () => {
-      (Object.keys(BUFFS) as BuffKind[]).forEach((kind) => this.powerUps.addBuff(kind));
-      this.debugDone('allBuffs');
-    });
-    kb.on('keydown-P', () => {
-      this.pickups.spawnNearPlayer(PICKUP_KINDS[this.debugPickupIndex % PICKUP_KINDS.length]!);
-      this.debugPickupIndex += 1;
-      this.debugDone('pickup');
-    });
-    kb.on('keydown-Z', () => {
-      this.arena.crowd.debugCycle();
-      this.debugDone('crowd');
-    });
-    kb.on('keydown-Y', () => {
-      const world = this.physics.world;
-      const show = !world.drawDebug;
-      if (!world.debugGraphic) world.createDebugGraphic(); // this also switches drawing on, so `show` was read first
-      world.drawDebug = show;
-      if (!show) world.debugGraphic.clear();
-      this.debugDone('hitboxes', show);
-    });
-    kb.on('keydown-T', () => {
-      downloadTexture(this.textures, Tex.Tileset, 'arena_tiles.png');
-      this.debugDone('tileset');
-    });
-
-    // Live numbers for the card's title bar.
-    this.time.addEvent({
-      delay: DEBUG.statsEveryMs,
-      loop: true,
-      callback: () => {
-        const payload: DebugStatsPayload = { cats: this.enemies.countActive(true), wave: this.waves.wave };
-        bus.emit(Events.DebugStats, payload);
-      },
-    });
   }
 }

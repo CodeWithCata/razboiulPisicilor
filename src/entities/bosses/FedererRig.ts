@@ -3,6 +3,8 @@ import Phaser from 'phaser';
 import { FEDERER_BALL_HAND, FEDERER_PAW, FEDERER_RACKET_HEAD, FEDERER_SHOULDER, FEDERER_TAIL_ROOT } from '../../assets/art/federer';
 import { Tex, type TexKey } from '../../assets/keys';
 import { FEDERER_RIG as RIG } from '../../config/animation';
+import { COLORS } from '../../config/style';
+import type { BossLook } from './BossViews';
 
 /** Texture size and center of every Federer layer (they are all drawn on the same 128x128 canvas). */
 const TEX = 128;
@@ -61,6 +63,8 @@ export class FedererRig {
   private readonly ball: Phaser.GameObjects.Image;
   private readonly parts: Phaser.GameObjects.Image[];
   private readonly aura: Phaser.GameObjects.Arc;
+  /** The towel of her towel break (v147), hung over her shoulders. */
+  private readonly towel: Phaser.GameObjects.Rectangle;
   private readonly tmp = { x: 0, y: 0 };
   private readonly head = { x: 0, y: 0 };
   private readonly prevHead = { x: 0, y: 0 };
@@ -69,6 +73,8 @@ export class FedererRig {
   private phase = 0;
   private moveAmt = 0;
   private fury = false;
+  private rage = false;
+  private towelOn = false;
   private flick = 0;
   private kick = 0;
   private twirlMs = 0;
@@ -76,6 +82,8 @@ export class FedererRig {
   private trailAlive = 0;
   private haveHead = false;
   private destroyed = false;
+  /** Which drawing of her is showing: back = the one the loose layers are drawn for (the others have everything baked in). */
+  private look: BossLook = 'back';
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -90,6 +98,7 @@ export class FedererRig {
     this.ball = make(Tex.Tennis, RIG.depth.ball);
     this.parts = [this.tail, this.footL, this.footR, this.racket, this.arm, this.ball];
     this.aura = scene.add.circle(owner.x, owner.y, RIG.aura.sizePx / 2, RIG.aura.color, 0).setDepth(RIG.depth.aura).setVisible(false);
+    this.towel = scene.add.rectangle(owner.x, owner.y, RIG.towel.widthPx, RIG.towel.heightPx, 0xffffff).setStrokeStyle(3, COLORS.navy).setDepth(RIG.depth.arm + 0.5).setVisible(false);
   }
 
   // ---- what the body reads ----------------------------------------------------
@@ -156,6 +165,40 @@ export class FedererRig {
     this.aura.setVisible(on);
   }
 
+  /** Tie-break rage: the loose parts turn red (and the aura, see `sync`). `PisicaFederer` tints her body the same way. */
+  setRage(on: boolean): void {
+    this.rage = on;
+    if (on) this.aura.setVisible(true);
+    this.tintRage();
+  }
+
+  /** The towel of the towel break: on her shoulders, or gone. */
+  setTowel(on: boolean): void {
+    this.towelOn = on;
+    if (!on) this.towel.setVisible(false);
+  }
+
+  /** Red multiply tint on the loose parts that belong to her (not the ball: a red ball would look like a fireball). */
+  private tintRage(): void {
+    if (this.destroyed || !this.rage) return;
+    for (const part of [this.tail, this.footL, this.footR, this.racket, this.arm]) part.setTint(RIG.rage.tint).setTintMode(Phaser.TintModes.MULTIPLY);
+  }
+
+  /** She smashes the racket: a copy of it flies off spinning and fades (the one in her paw is the spare), with a big pop at the strings. */
+  breakRacket(): void {
+    if (this.destroyed) return;
+    const B = RIG.broken;
+    const at = this.head;
+    const broken = this.scene.add.image(at.x, at.y, Tex.BossFedererRacket).setDepth(50).setRotation(this.racket.rotation).setScale(this.racket.scaleX, this.racket.scaleY);
+    const a = Math.random() * Math.PI * 2;
+    this.scene.tweens.add({
+      targets: broken, x: at.x + Math.cos(a) * B.flyPx, y: at.y + Math.sin(a) * B.flyPx - 40, angle: broken.angle + B.spinDeg, alpha: 0,
+      duration: B.ms, ease: 'Cubic.easeOut', onComplete: () => broken.destroy(),
+    });
+    this.pop();
+    this.pop();
+  }
+
   /** The racket spins a full turn around her wrist (the phase 2 roar). */
   twirl(): void {
     this.twirlMs = RIG.twirl.ms;
@@ -208,6 +251,7 @@ export class FedererRig {
         part.clearTint();
         part.setTintMode(Phaser.TintModes.MULTIPLY);
       }
+      this.tintRage(); // the flash undid the red
     });
   }
 
@@ -251,6 +295,11 @@ export class FedererRig {
     this.world(FEDERER_BALL_HAND.x - HALF, FEDERER_BALL_HAND.y - HALF, out);
     out.y -= this.pose.ballLift + dribble;
     return out;
+  }
+
+  /** She turned to show her front or her side: the loose layers hide (the drawing has the arm, racket, tail and feet), the trail stops. */
+  setLook(look: BossLook): void {
+    this.look = look;
   }
 
   /** Call every frame after she has moved (from `preUpdate`). `delta` is in ms. */
@@ -312,7 +361,8 @@ export class FedererRig {
     const headVx = FEDERER_RACKET_HEAD.x - FEDERER_PAW.x;
     const headVy = FEDERER_RACKET_HEAD.y - FEDERER_PAW.y;
     this.world(pawX + headVx * Math.cos(w) - headVy * Math.sin(w), pawY + headVx * Math.sin(w) + headVy * Math.cos(w), this.head);
-    this.updateTrail(dt);
+    if (this.look === 'back') this.updateTrail(dt);
+    else this.haveHead = false;
 
     // The ball: dribbled in her paw, higher and bigger while it is tossed, spinning when it is up.
     const show = this.pose.ballShow;
@@ -325,9 +375,16 @@ export class FedererRig {
       .setAlpha(o.alpha * Math.min(1, show * 3))
       .setVisible(o.visible && show > 0.02);
 
-    if (this.fury) {
-      const alpha = RIG.aura.alpha + Math.sin(this.clock * RIG.aura.pulseRate) * RIG.aura.pulseAlpha;
-      this.aura.setPosition(o.x, o.y).setFillStyle(RIG.aura.color, alpha).setVisible(o.visible);
+    if (this.look !== 'back') for (const part of this.parts) part.setVisible(false);
+
+    if (this.fury || this.rage) {
+      const base = this.rage ? RIG.rage.auraAlpha : RIG.aura.alpha;
+      const alpha = base + Math.sin(this.clock * RIG.aura.pulseRate) * RIG.aura.pulseAlpha;
+      this.aura.setPosition(o.x, o.y).setFillStyle(this.rage ? RIG.rage.auraColor : RIG.aura.color, alpha).setVisible(o.visible);
+    }
+    if (this.towelOn) {
+      const spot = this.world(0, RIG.towel.offsetY, this.tmp);
+      this.towel.setPosition(spot.x, spot.y).setRotation(r).setScale(sx, sy).setVisible(o.visible);
     }
   }
 
@@ -379,5 +436,6 @@ export class FedererRig {
     }
     for (const part of [this.tail, this.footL, this.footR, this.arm]) part.destroy();
     this.aura.destroy();
+    this.towel.destroy();
   }
 }

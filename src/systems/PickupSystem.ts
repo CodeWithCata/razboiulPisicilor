@@ -2,16 +2,18 @@
 import Phaser from 'phaser';
 import { ARENA_RULES, PLAY_AREA } from '../config/arena';
 import { LUCKY, PICKUPS, PICKUP_SPAWN, type PickupKind } from '../config/balance';
+import type { TexKey } from '../assets/keys';
 import type { ArenaQuery } from '../core/arena';
-import { bus, Events, listen, type BossDefeatedPayload, type EnemyKilledPayload, type PickupPayload } from '../core/events';
+import { Events, listen, type BossDefeatedPayload, type EnemyKilledPayload, type PickupPayload } from '../core/events';
 import { weightedPick } from '../core/random';
 import { Pickup } from '../entities/Pickup';
 import type { Player } from '../entities/Player';
 import { gameClock } from '../core/clock';
+import { announcePickup } from './pickupEffects';
 
 /**
  * Spawns pickups (on a timer, and sometimes when a cat dies) and detects when Varu grabs one.
- * What a pickup DOES is not decided here: it emits PickupCollected and calls `onCollect`.
+ * What a pickup DOES is not decided here: it announces the pickup (`announcePickup`) and calls `onCollect`.
  */
 export class PickupSystem {
   readonly group: Phaser.Physics.Arcade.Group;
@@ -34,7 +36,7 @@ export class PickupSystem {
       if (!pickup.active) return;
       const payload: PickupPayload = { kind: pickup.kind, x: pickup.x, y: pickup.y };
       pickup.destroy();
-      bus.emit(Events.PickupCollected, payload);
+      announcePickup(payload);
       onCollect(payload.kind);
     });
 
@@ -75,9 +77,9 @@ export class PickupSystem {
   }
 
   /** Always lands on open floor: if (x, y) is in or against a wall it moves to the nearest free spot. */
-  spawnAt(kind: PickupKind, x: number, y: number): Pickup {
+  spawnAt(kind: PickupKind, x: number, y: number, tex?: TexKey): Pickup {
     const spot = this.arena.nearestOpen(x, y, PICKUPS.hitRadius);
-    const pickup = new Pickup(this.scene, kind, spot.x, spot.y);
+    const pickup = new Pickup(this.scene, kind, spot.x, spot.y, tex);
     this.group.add(pickup);
     return pickup;
   }
@@ -110,8 +112,8 @@ export class PickupSystem {
     return others < PICKUP_SPAWN.maxOnField;
   }
 
-  /** Weighted random, but crochete is much more likely when Varu is hurt. */
-  private pickKind(): PickupKind {
+  /** Weighted random, but crochete is much more likely when Varu is hurt. Also asked by the fans' gifts (systems/FanThrowSystem.ts). */
+  pickKind(): PickupKind {
     const weights = { ...PICKUP_SPAWN.weights };
     if (this.player.hp / this.player.maxHp < PICKUP_SPAWN.lowHpThreshold) {
       weights.crochete *= PICKUP_SPAWN.lowHpHealBoost;
