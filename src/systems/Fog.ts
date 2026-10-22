@@ -20,6 +20,8 @@ export class Fog {
   private current = 0;
   /** True once every cat has been set back to full visibility while the fog is gone: until the fog returns there is nothing to redo each frame (new cats start at 1). */
   private clearApplied = true;
+  /** Whether the haze and edge images are drawn at all (hidden while the fog is gone). */
+  private hazeShown = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -34,8 +36,10 @@ export class Fog {
       .setOrigin(0)
       .setScrollFactor(0)
       .setAlpha(0)
+      .setVisible(false)
       .setDepth(this.cfg.haze.depth);
     this.edges = this.makeEdges(scene);
+    this.edges?.setVisible(false);
 
     const off = listen<WeatherPayload>(Events.WeatherChanged, ({ weather }) => this.setFog(weather === 'fog'));
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
@@ -80,8 +84,17 @@ export class Fog {
   /** Call every frame before the cats think, so each cat has this frame's fog value. `delta` is in ms. */
   update(delta: number): void {
     this.current += (this.target - this.current) * (1 - Math.exp(-delta / (this.cfg.transitionMs / 3)));
-    this.haze.setAlpha(this.current);
-    this.edges?.setAlpha(this.current);
+    // Off = hidden (not drawn at zero alpha). The check runs only when the state changes.
+    const shown = this.current >= 0.01;
+    if (shown !== this.hazeShown) {
+      this.hazeShown = shown;
+      this.haze.setVisible(shown);
+      this.edges?.setVisible(shown);
+    }
+    if (shown) {
+      this.haze.setAlpha(this.current);
+      this.edges?.setAlpha(this.current);
+    }
     const clear = this.current < 0.001; // the same test `visibleAlpha` uses to give every cat 1
     if (clear && this.clearApplied) return; // clear weather: every cat is already at 1
     const cats = this.enemies.getChildren();

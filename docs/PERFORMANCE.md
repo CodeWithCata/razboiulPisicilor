@@ -28,3 +28,13 @@ Behaviour and look are unchanged on purpose.
 - Graphics redrawn every frame (milk trail in `Player`, `Rain` streaks, surrender flag): drawing once and moving would be cheaper, but it changes how they are built: measure first.
 - Vite: split Phaser into its own chunk for caching (Vite 8 / Rolldown chunk option names changed, test with `npm run build` first).
 - Phaser `render.powerPreference: 'high-performance'` (not added: could not check the Phaser 4 typings without `npm ci`).
+
+## Done in v194 (nothing run in a browser: owner tests; look unchanged on purpose except where noted)
+- Touch overlay: stick, knob, attack and pause pictures baked once per state (`input/touch/touchPictures.ts`); a frame moves them and switches the picture of the new state. The attack arm is baked at 1:1 (128 px) and scaled (the one exception to "no scaling"; it may look slightly soft). Laser zone: three pictures, remade when the screen size changes.
+- Fog: the haze and the edge image are hidden while the fog is gone (not drawn at alpha 0). Rain: the sheet and the streaks are hidden while the rain is gone.
+- Rain: 110 `lineBetween` per frame replaced by pooled images, one baked streak picture per length (14..30 px); a frame only moves them and sets their alpha.
+- Day-night: `mixColor` is a plain function (no closure per frame); the sheet is only re-set when its color or alpha changes; a sheet at alpha 0 is hidden. Not changed: wave 1 keeps its alpha 0.06 (setting `sky[0].alpha` to 0 would hide it, but changes the look).
+- Blackout: one baked soft-light mask (`lights_out_mask`, made once per game) stamped with `drawImage` per light instead of a new radial gradient per light per frame. The canvas upload every frame stays (the holes move).
+- Milk trail: `entities/MilkTrail.ts`. Path points and splotches live in fixed typed arrays (`MILK_TRAIL.maxPoints` / `maxBlobs`; when full the oldest goes); the ribbon's edge points are in a scratch array; no object, tuple or closure is made per frame.
+- Perf card: shows the canvas backing size (`canvas.width` x `canvas.height`) and whether the WebGL context has antialias on.
+Still open: Vite chunk split, `powerPreference`, the surrender flag Graphics.

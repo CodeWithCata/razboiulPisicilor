@@ -6,6 +6,7 @@ import { sampleKeys } from '../core/ease';
 import { bus, Events, type IdleHabitPayload, type PlayerHealthPayload, type PlayerHurtPayload } from '../core/events';
 import type { InputSource } from '../input/InputSource';
 import { Actor } from './Actor';
+import { MilkTrail } from './MilkTrail';
 import { gameClock } from '../core/clock';
 import { CIG_SMOKE, ENERGY_FLIP, ENERGY_TRAIL, EMO_FX, GOLD_BELT, IDLE_HABITS, MILK_FX, MILK_TRAIL, RUST_FX, SMOKE_BREAK, VARU_ANIM, type ZLook } from '../config/animation';
 import { setCircleHitbox } from '../core/sprite';
@@ -77,10 +78,7 @@ export class Player extends Actor {
   private readonly gooBurst: Phaser.GameObjects.Particles.ParticleEmitter;
   private gooTimer = 0;
   /** The milk trail: a smeared white ribbon on the ground (drawn from his recent path) plus splotches beside it. */
-  private readonly milkGfx: Phaser.GameObjects.Graphics;
-  private readonly milkPath: Array<{ x: number; y: number; t: number }> = [];
-  private readonly milkBlobs: Array<{ x: number; y: number; r: number; t: number; life: number }> = [];
-  private milkTimer = 0;
+  private readonly milkLine: MilkTrail;
   /** The Z z z trail: where the last letter dropped, how many have dropped (picks the size), idle timer. */
   private zLast: { x: number; y: number } | null = null;
   private zCount = 0;
@@ -146,7 +144,7 @@ export class Player extends Actor {
       alpha: GOLD_BELT.flourish.alpha,
       tint: [...GOLD_BELT.goo],
     }).setDepth(22);
-    this.milkGfx = scene.add.graphics().setDepth(3);
+    this.milkLine = new MilkTrail(scene, 3);
     this.setCollideWorldBounds(true);
     this.setDepth(20);
     this.baseScale = this.scaleX;
@@ -473,117 +471,13 @@ export class Player extends Actor {
   /** He just drank the milk: a big white splat of splotches around him. */
   milkSplash(): void {
     if (!MILK_TRAIL.enabled || !this.alive) return;
-    const sp = MILK_TRAIL.splash;
-    const now = gameClock.now;
-    for (let i = 0; i < sp.blobs; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const d = Math.sqrt(Math.random()) * sp.spread;
-      this.milkBlobs.push({
-        x: this.x + Math.cos(a) * d,
-        y: this.y + Math.sin(a) * d,
-        r: Phaser.Math.FloatBetween(sp.radius.min, sp.radius.max),
-        t: now,
-        life: Phaser.Math.Between(sp.lifeMs.min, sp.lifeMs.max),
-      });
-    }
+    this.milkLine.splash(this.x, this.y, gameClock.now);
   }
 
-  /**
-   * While the milk buff lasts he smears a white ribbon behind him: a line of overlapping circles along his path
-   * (thick, with a soft outline), with splotches beside it. It thins out and disappears with age. Not drops.
-   */
+  /** While the milk buff lasts he smears a white ribbon behind him (MilkTrail does the drawing and keeps the buffers). */
   private updateMilkTrail(delta: number): void {
-    const cfg = MILK_TRAIL;
-    const g = this.milkGfx;
-    if (!cfg.enabled) return;
-    const now = gameClock.now;
-    const active = this.milkTrail && this.alive;
-
-    if (active) {
-      const last = this.milkPath[this.milkPath.length - 1];
-      const moved = !last || hyp(this.x - last.x, this.y - last.y) >= cfg.sampleDist;
-      if (moved) {
-        this.milkPath.push({ x: this.x, y: this.y, t: now });
-        // Splotches along the edges of the ribbon.
-        if (Math.random() < cfg.blobChance) {
-          const side = Math.random() < 0.5 ? -1 : 1;
-          const off = side * Phaser.Math.FloatBetween(cfg.width * 0.35, cfg.blobSpread);
-          const dir = this.rotation - Math.PI / 2; // facing; sideways is good enough for a smear
-          this.milkBlobs.push({
-            x: this.x + Math.cos(dir + Math.PI / 2) * off,
-            y: this.y + Math.sin(dir + Math.PI / 2) * off,
-            r: Phaser.Math.FloatBetween(cfg.blobRadius.min, cfg.blobRadius.max),
-            t: now,
-            life: cfg.lifeMs * Phaser.Math.FloatBetween(0.7, 1.1),
-          });
-        }
-      } else {
-        // Standing still: a puddle slowly spreads under him.
-        this.milkTimer += delta;
-        if (this.milkTimer >= cfg.idleEveryMs) {
-          this.milkTimer = 0;
-          this.milkBlobs.push({
-            x: this.x + Phaser.Math.Between(-8, 8),
-            y: this.y + Phaser.Math.Between(-8, 8),
-            r: Phaser.Math.FloatBetween(cfg.blobRadius.min, cfg.blobRadius.max),
-            t: now,
-            life: cfg.lifeMs,
-          });
-        }
-      }
-    }
-
-    // Forget what has faded.
-    while (this.milkPath.length > 0 && now - this.milkPath[0]!.t > cfg.lifeMs) this.milkPath.shift();
-    for (let i = this.milkBlobs.length - 1; i >= 0; i--) {
-      if (now - this.milkBlobs[i]!.t > this.milkBlobs[i]!.life) this.milkBlobs.splice(i, 1);
-    }
-
-    g.clear();
-    if (this.milkPath.length === 0 && this.milkBlobs.length === 0) return;
-
-    // Half-width of the ribbon at its age: it thins out to nothing.
-    const halfW = (t: number): number => (cfg.width / 2) * Math.pow(Math.max(0, 1 - (now - t) / cfg.lifeMs), 0.6);
-
-    // The ribbon is ONE strip of quads (no overlapping circles), so the see-through look stays even.
-    const pts = this.milkPath;
-    const n = pts.length;
-    if (n >= 2) {
-      const left: Array<[number, number, number, number]> = []; // inner edge x, y and outer edge x, y
-      const right: Array<[number, number, number, number]> = [];
-      for (let i = 0; i < n; i++) {
-        const prev = pts[Math.max(0, i - 1)]!;
-        const next = pts[Math.min(n - 1, i + 1)]!;
-        const len = hyp(next.x - prev.x, next.y - prev.y) || 1;
-        const nx = -(next.y - prev.y) / len;
-        const ny = (next.x - prev.x) / len;
-        const hw = halfW(pts[i]!.t);
-        const o = cfg.outline * Math.min(1, hw / 3); // the outline thins out with the ribbon
-        const p = pts[i]!;
-        left.push([p.x + nx * hw, p.y + ny * hw, p.x + nx * (hw + o), p.y + ny * (hw + o)]);
-        right.push([p.x - nx * hw, p.y - ny * hw, p.x - nx * (hw + o), p.y - ny * (hw + o)]);
-      }
-      const quad = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number, dx: number, dy: number): void => {
-        g.fillTriangle(ax, ay, bx, by, cx, cy);
-        g.fillTriangle(ax, ay, cx, cy, dx, dy);
-      };
-      for (let i = 0; i < n - 1; i++) {
-        const l0 = left[i]!, l1 = left[i + 1]!, r0 = right[i]!, r1 = right[i + 1]!;
-        g.fillStyle(cfg.color, cfg.alpha);
-        quad(l0[0], l0[1], l1[0], l1[1], r1[0], r1[1], r0[0], r0[1]);
-        g.fillStyle(cfg.edgeColor, cfg.alpha);
-        quad(l0[0], l0[1], l1[0], l1[1], l1[2], l1[3], l0[2], l0[3]); // left outline
-        quad(r0[0], r0[1], r1[0], r1[1], r1[2], r1[3], r0[2], r0[3]); // right outline
-      }
-    }
-
-    // Splotches: the body, with the outline as a ring around it (so the two never overlap).
-    for (const b of this.milkBlobs) {
-      const r = b.r * Math.pow(Math.max(0, 1 - (now - b.t) / b.life), 0.5);
-      if (r < 0.3) continue;
-      g.fillStyle(cfg.color, cfg.alpha).fillCircle(b.x, b.y, r);
-      g.lineStyle(cfg.outline, cfg.edgeColor, cfg.alpha).strokeCircle(b.x, b.y, r + cfg.outline / 2);
-    }
+    if (!MILK_TRAIL.enabled) return;
+    this.milkLine.update(delta, gameClock.now, this.milkTrail && this.alive, this.x, this.y, this.rotation);
   }
 
   /** While the energy drink lasts he leaves little green "Z z z" letters behind him. They float up, sway and fade. */
@@ -826,7 +720,7 @@ export class Player extends Actor {
     this.ember.destroy();
     this.goo.destroy();
     this.gooBurst.destroy();
-    this.milkGfx.destroy();
+    this.milkLine.destroy();
     super.destroy(fromScene);
   }
 

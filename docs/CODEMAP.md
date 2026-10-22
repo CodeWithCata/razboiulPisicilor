@@ -26,8 +26,9 @@ Things in the arena: Varu (Player), the Enemy base, Pickup. `enemies/` = one fil
 
 - Actor.ts - Shared base for Varu and every cat: hp, shadow, hit flash, knockback. Exports: ActorOptions, Actor
 - Enemy.ts (~600 lines) - Base class of every cat and boss: chase / steer / knockback / death. Subclasses override `think()`. Exports: EnemyContext, SlipOptions, Enemy
+- MilkTrail.ts (~250 lines) - The milk trail: a white smeared ribbon on the ground behind Varu (from his recent path) plus splotches beside it, in fixed-size buffers. Exports: MilkTrail
 - Pickup.ts - A collectible on the floor: item sprite on a glowing ring, bobs, then expires. Exports: Pickup
-- Player.ts (~850 lines) - Varu: movement, aim, damage, belt visuals, walk / smoke-break / energy back flip animation, power-up multipliers. Exports: Player
+- Player.ts (~750 lines) - Varu: movement, aim, damage, belt visuals, walk / smoke-break / energy back flip animation, power-up multipliers. Exports: Player
 
 ## systems/
 Game rules, one system per concern (belt, waves, score, projectiles, pickups, effects, audio, jokes). They talk through the event bus.
@@ -114,6 +115,7 @@ Touch controls for phones and tablets.
 - AutoAim.ts - Nearest-cat aim + auto-swing helper for touch (only used when the pause-menu switch is on). Exports: AimTarget, AutoAimSources, AutoAim
 - TouchInput.ts (~250 lines) - Touch controls: floating move stick + big attack button; implements InputSource. Exports: StickView, TouchInput
 - TouchOverlay.ts - Draws the touch stick, attack button and pause button. Visuals only; logic is in TouchInput. Exports: TouchOverlay
+- touchPictures.ts - Pictures of the touch controls (stick, knob, attack and pause buttons, the attack arm, the laser zone), baked once into textures. Exports: TOUCH_TEX, bakeTouchButtons, LaserZoneLayout, bakeLaserZone
 
 ## world/
 The Tiled arena map, the solid grid gameplay queries, spawn points, prop layout.

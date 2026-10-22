@@ -10,6 +10,12 @@ import type { Obstacles } from './props/Obstacles';
 
 const channel = (color: number, shift: number): number => (color >> shift) & 0xff;
 
+/** The sky color between two keyframe colors (k = 0 first, 1 second). A plain function: no closure per frame. */
+function mixColor(from: number, to: number, k: number): number {
+  const mix = (shift: number): number => Math.round(channel(from, shift) + (channel(to, shift) - channel(from, shift)) * k);
+  return (mix(16) << 16) | (mix(8) << 8) | mix(0);
+}
+
 /** 0 = afternoon, 1 = night, for a wave number. The campaign runs once from the first wave to the last; endless swings back and forth. */
 export function nightProgress(wave: number, mode: RunMode): number {
   if (mode === 'endless') {
@@ -35,6 +41,9 @@ export class DayNight {
   private forcedUp = false;
   /** The game ms of the frame being applied (the lamps' rise runs on it). */
   private step = 0;
+  /** The sheet's last color and alpha (the fill is only set when they change). */
+  private sheetColor = -1;
+  private sheetAlpha = -1;
 
   constructor(scene: Phaser.Scene, private readonly mode: RunMode, private readonly obstacles: Obstacles) {
     this.current = this.target = nightProgress(mode === 'endless' ? ENDLESS.startWave : 1, mode);
@@ -96,8 +105,14 @@ export class DayNight {
     const a = sky[i]!;
     const b = sky[i + 1]!;
     const k = Phaser.Math.Clamp((p - a.at) / Math.max(0.0001, b.at - a.at), 0, 1);
-    const mix = (shift: number): number => Math.round(channel(a.color, shift) + (channel(b.color, shift) - channel(a.color, shift)) * k);
-    this.sheet.setFillStyle((mix(16) << 16) | (mix(8) << 8) | mix(0), a.alpha + (b.alpha - a.alpha) * k);
+    const color = mixColor(a.color, b.color, k);
+    const alpha = a.alpha + (b.alpha - a.alpha) * k;
+    // Only touch the sheet when the look really changed; a sheet at alpha 0 is hidden, not drawn invisible.
+    if (color !== this.sheetColor || alpha !== this.sheetAlpha) {
+      this.sheetColor = color;
+      this.sheetAlpha = alpha;
+      this.sheet.setFillStyle(color, alpha).setVisible(alpha > 0.001);
+    }
 
     // Lamps: underground in the afternoon, out from `onAt` on, brighter the darker it gets.
     const L = DAY_NIGHT.lamp;

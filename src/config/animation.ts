@@ -127,8 +127,13 @@ export const MILK_TRAIL = {
   /** How long the ribbon lasts (ms) and how thick it is at its freshest (px). */
   lifeMs: 1900,
   width: 15,
+  /** Depth of the ribbon (under Varu). */
+  depth: 3,
   /** A new ribbon point every this many px of travel (smaller = smoother). */
   sampleDist: 5,
+  /** Most ribbon points and splotches alive at once (fixed buffers: no allocation per frame). Varu at 260 px/s needs about 100 points for 1.9 s. */
+  maxPoints: 160,
+  maxBlobs: 160,
   /** Splotches beside the ribbon: how often per point, how big, how far out (px). */
   blobChance: 0.55,
   blobRadius: { min: 3, max: 7.5 },

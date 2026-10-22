@@ -1,35 +1,57 @@
 /** @file Draws the touch stick, attack button and pause button. Visuals only; logic is in TouchInput. */
 import type Phaser from 'phaser';
 import { GAME } from '../../config/balance';
-import { drawBeltArm } from '../../assets/art/beltArm';
 import { TOUCH } from '../../config/touch';
-import { COLORS, FONT } from '../../config/style';
+import { FONT } from '../../config/style';
 import { TOUCH_TEXT } from '../../content/lines';
 import type { StickView, TouchInput } from './TouchInput';
+import { bakeLaserZone, bakeTouchButtons, TOUCH_TEX, type LaserZoneLayout } from './touchPictures';
 
 /**
- * Draws the touch move stick, the attack button and the pause button on top of the game (the spin and throw buttons are the
+ * Shows the touch move stick, the attack button and the pause button on top of the game (the spin and throw buttons are the
  * cooldown badges of ui/BeltBadges.ts). Same look as the badges: a soft disc, a cream ring, a navy outline, gold.
- * The attack button's picture (Varu's arm holding the belt) is drawn once on its own Graphics, which is then moved and scaled each frame.
- * Pure visuals: all the logic is in TouchInput.
+ * Every picture is baked once (input/touch/touchPictures.ts), one per state. A frame only moves each picture, switches it to the
+ * picture of its new state (idle / active, held / not held) and sets the laser zone's pulse alpha. Pure visuals: all the logic is in TouchInput.
  */
+/** Switches a picture to another texture, only when it is not showing that one already. */
+function switchTo(img: Phaser.GameObjects.Image, key: string): void {
+  if (img.texture.key !== key) img.setTexture(key);
+}
+
 export class TouchOverlay {
-  private readonly gfx: Phaser.GameObjects.Graphics;
-  private readonly attackIcon: Phaser.GameObjects.Graphics;
+  private readonly laserFill: Phaser.GameObjects.Image;
+  private readonly laserEdge: Phaser.GameObjects.Image;
+  private readonly laserBorder: Phaser.GameObjects.Image;
+  private readonly stick: Phaser.GameObjects.Image;
+  private readonly knob: Phaser.GameObjects.Image;
+  private readonly attack: Phaser.GameObjects.Image;
+  private readonly attackIcon: Phaser.GameObjects.Image;
+  private readonly pause: Phaser.GameObjects.Image;
   private readonly caption: Phaser.GameObjects.Text;
   private readonly attackTag: Phaser.GameObjects.Text;
   private readonly laserHint: Phaser.GameObjects.Text;
+  /** Where the laser zone pictures were made (they are made again when the screen size changes). */
+  private laser: LaserZoneLayout;
+  /** Set by `setHidden`: a cutscene hides every picture of the thumb controls. */
+  private hidden = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly input: TouchInput,
   ) {
-    this.gfx = scene.add.graphics().setScrollFactor(0).setDepth(TOUCH.depth);
+    bakeTouchButtons(this.scene);
+    this.laser = bakeLaserZone(this.scene);
 
-    // The attack button's picture: drawn once around (0, 0), then placed and scaled in drawAttack. Created after `gfx` at the same depth, so it sits on top of the disc.
-    const c = TOUCH.attackIcon.center;
-    this.attackIcon = scene.add.graphics().setScrollFactor(0).setDepth(TOUCH.depth);
-    drawBeltArm(this.attackIcon, c.x, c.y);
+    const d = TOUCH.depth;
+    // Drawing order (same as before): laser zone, stick, knob, attack disc, attack arm, pause.
+    this.laserFill = scene.add.image(this.laser.x, this.laser.y, TOUCH_TEX.laserFill).setOrigin(0).setScrollFactor(0).setDepth(d);
+    this.laserEdge = scene.add.image(this.laser.x, this.laser.y, TOUCH_TEX.laserEdge).setOrigin(0).setScrollFactor(0).setDepth(d);
+    this.laserBorder = scene.add.image(this.laser.x, this.laser.y, TOUCH_TEX.laserBorder).setOrigin(0).setScrollFactor(0).setDepth(d);
+    this.stick = scene.add.image(0, 0, TOUCH_TEX.stickIdle).setScrollFactor(0).setDepth(d);
+    this.knob = scene.add.image(0, 0, TOUCH_TEX.knobIdle).setScrollFactor(0).setDepth(d);
+    this.attack = scene.add.image(0, 0, TOUCH_TEX.attackIdle).setScrollFactor(0).setDepth(d);
+    this.attackIcon = scene.add.image(0, 0, TOUCH_TEX.attackIcon).setScrollFactor(0).setDepth(d);
+    this.pause = scene.add.image(0, 0, TOUCH_TEX.pauseIdle).setScrollFactor(0).setDepth(d);
 
     // A caption under the idle stick says where the thumb goes. It fades after a few seconds and never comes back once the stick was used.
     const spot = TOUCH.idleStickSpot;
@@ -77,102 +99,96 @@ export class TouchOverlay {
       .setScrollFactor(0)
       .setDepth(TOUCH.depth + 1)
       .setVisible(false);
+    this.applyVisibility();
   }
 
   /** A cutscene hides the thumb controls (it never calls `update` meanwhile); false brings them back. */
   setHidden(hidden: boolean): void {
-    this.gfx.clear();
-    this.gfx.setVisible(!hidden);
-    this.attackIcon.setVisible(!hidden);
-    this.caption.setVisible(!hidden && !this.input.usedStick);
-    this.attackTag.setVisible(!hidden);
-    this.laserHint.setVisible(!hidden);
+    this.hidden = hidden;
+    this.applyVisibility();
   }
 
   update(): void {
-    const g = this.gfx;
-    g.clear();
+    // The laser zone is made for the screen size it is drawn on; a size change (rotation, fullscreen) remakes it.
+    if (GAME.width !== this.laser.screenW || GAME.height !== this.laser.screenH) this.remakeLaserZone();
     this.drawLaserZone();
     this.drawStick(this.input.moveStick);
     this.drawAttack();
     this.drawPause();
     if (this.input.usedStick) this.caption.setVisible(false);
     this.laserHint.setVisible(this.input.laserAiming && !this.input.laserPlaced);
+    this.applyVisibility();
+  }
+
+  /** Makes the laser zone pictures for the new screen size and puts them in place. */
+  private remakeLaserZone(): void {
+    this.laser = bakeLaserZone(this.scene);
+    for (const [img, key] of [
+      [this.laserFill, TOUCH_TEX.laserFill],
+      [this.laserEdge, TOUCH_TEX.laserEdge],
+      [this.laserBorder, TOUCH_TEX.laserBorder],
+    ] as const) {
+      img.setTexture(key).setPosition(this.laser.x, this.laser.y);
+    }
+  }
+
+  /** The pictures that show on screen: all of them unless a cutscene hides them; the laser zone only while the laser is aiming. */
+  private applyVisibility(): void {
+    const on = !this.hidden;
+    const zone = on && this.input.laserAiming;
+    this.laserFill.setVisible(zone);
+    this.laserEdge.setVisible(zone);
+    this.laserBorder.setVisible(zone);
+    this.stick.setVisible(on);
+    this.knob.setVisible(on);
+    this.attack.setVisible(on);
+    this.attackIcon.setVisible(on);
+    this.pause.setVisible(on);
+    this.caption.setVisible(on && !this.input.usedStick);
+    this.attackTag.setVisible(on);
+    this.laserHint.setVisible(on && this.input.laserAiming && !this.input.laserPlaced);
   }
 
   /** The laser's tap zone: the right half of the screen in a soft red, with a navy-and-red border, pulsing a little. Drawn under the buttons. */
   private drawLaserZone(): void {
     if (!this.input.laserAiming) return;
-    const g = this.gfx;
     const L = TOUCH.laser;
-    const x = GAME.width * TOUCH.leftZone + L.inset;
-    const y = L.inset;
-    const w = GAME.width - x - L.inset;
-    const h = GAME.height - L.inset * 2;
     const pulse = 0.5 + 0.5 * Math.sin(this.scene.time.now / L.zonePulseMs);
-    g.fillStyle(L.zoneColor, L.zoneAlpha + L.zonePulseAlpha * pulse).fillRoundedRect(x, y, w, h, L.cornerRadius);
-    g.lineStyle(L.borderWidth + 4, TOUCH.outlineColor, 0.5).strokeRoundedRect(x, y, w, h, L.cornerRadius);
-    g.lineStyle(L.borderWidth, L.zoneColor, 0.55 + 0.3 * pulse).strokeRoundedRect(x, y, w, h, L.cornerRadius);
+    this.laserFill.setAlpha(L.zoneAlpha + L.zonePulseAlpha * pulse);
+    this.laserBorder.setAlpha(0.55 + 0.3 * pulse);
   }
 
   /** An active stick is drawn where the thumb started (and slides along); an idle one is a faint hint at its resting spot. */
   private drawStick(stick: StickView): void {
-    const g = this.gfx;
     const spot = TOUCH.idleStickSpot;
     const x = stick.active ? stick.originX : spot.x;
     const y = stick.active ? stick.originY : spot.y;
     const kx = stick.active ? stick.knobX : x;
     const ky = stick.active ? stick.knobY : y;
-    const alpha = stick.active ? TOUCH.activeAlpha : TOUCH.idleAlpha;
-    const R = TOUCH.stickRadius;
-    const r = TOUCH.knobRadius;
-    const w = TOUCH.ringWidth;
-
-    // Soft disc, then the ring (navy outline first, cream on top).
-    g.fillStyle(TOUCH.ringColor, alpha * 0.3).fillCircle(x, y, R);
-    g.lineStyle(w + 4, TOUCH.outlineColor, alpha).strokeCircle(x, y, R - w / 2);
-    g.lineStyle(w, TOUCH.ringColor, alpha).strokeCircle(x, y, R - w / 2);
-
-    // The knob: gold with a navy rim and a little shine.
-    const knobAlpha = stick.active ? 0.95 : alpha;
-    g.fillStyle(TOUCH.outlineColor, knobAlpha).fillCircle(kx, ky, r + 3);
-    g.fillStyle(TOUCH.knobColor, knobAlpha).fillCircle(kx, ky, r);
-    g.fillStyle(COLORS.white, knobAlpha * 0.4).fillCircle(kx - r * 0.32, ky - r * 0.32, r * 0.28);
+    switchTo(this.stick, stick.active ? TOUCH_TEX.stickActive : TOUCH_TEX.stickIdle);
+    this.stick.setPosition(x, y);
+    switchTo(this.knob, stick.active ? TOUCH_TEX.knobActive : TOUCH_TEX.knobIdle);
+    this.knob.setPosition(kx, ky);
   }
 
   /**
    * The attack button: a soft disc and a ring with Varu's arm holding the belt in it, all with a navy outline like the other buttons.
-   * It squashes and glows while a thumb holds it.
+   * It squashes and glows while a thumb holds it (the held picture is the squashed one; the arm is scaled to match).
    */
   private drawAttack(): void {
-    const g = this.gfx;
     const b = TOUCH.buttons.attack;
     const held = this.input.heldButtons.has('attack');
     const r = b.r * (held ? 1 - TOUCH.attackHeldSquash : 1);
-    const tone = held ? COLORS.gold : COLORS.cream;
-    g.fillStyle(tone, held ? 0.5 : 0.26).fillCircle(b.x, b.y, r);
-    g.lineStyle(TOUCH.ringWidth + 4, TOUCH.outlineColor, held ? 0.9 : 0.55).strokeCircle(b.x, b.y, r - 2);
-    g.lineStyle(TOUCH.ringWidth, tone, held ? 1 : 0.8).strokeCircle(b.x, b.y, r - 2);
-
+    switchTo(this.attack, held ? TOUCH_TEX.attackHeld : TOUCH_TEX.attackIdle);
+    this.attack.setPosition(b.x, b.y);
     this.attackIcon.setPosition(b.x, b.y).setScale(TOUCH.attackIcon.size * r);
   }
 
   /** The pause button: a soft disc, a thin ring and two bars with a navy outline (like the speaker badge). */
   private drawPause(): void {
-    const g = this.gfx;
     const b = TOUCH.buttons.pause;
     const held = this.input.heldButtons.has('pause');
-    const tone = held ? COLORS.gold : COLORS.cream;
-    g.fillStyle(tone, held ? 0.45 : 0.22).fillCircle(b.x, b.y, b.r);
-    g.lineStyle(4, tone, 0.75).strokeCircle(b.x, b.y, b.r - 2);
-
-    const barW = b.r * 0.22;
-    const barH = b.r * 0.72;
-    const gap = b.r * 0.26;
-    for (const side of [-1, 1]) {
-      const left = b.x + side * (gap / 2 + barW / 2) - barW / 2;
-      g.fillStyle(COLORS.navy, 1).fillRoundedRect(left - 2.5, b.y - barH / 2 - 2.5, barW + 5, barH + 5, (barW + 5) / 2);
-      g.fillStyle(COLORS.cream, 1).fillRoundedRect(left, b.y - barH / 2, barW, barH, barW / 2);
-    }
+    switchTo(this.pause, held ? TOUCH_TEX.pauseHeld : TOUCH_TEX.pauseIdle);
+    this.pause.setPosition(b.x, b.y);
   }
 }

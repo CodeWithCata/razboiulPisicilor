@@ -78,6 +78,8 @@ export const TOUCH = {
   depth: 300,
   idleAlpha: 0.3,
   activeAlpha: 0.62,
+  /** The knob's alpha while the thumb is on the stick (idle: `idleAlpha`). */
+  knobActiveAlpha: 0.95,
   /** Where the faint stick hint rests until the thumb lands somewhere else. */
   idleStickSpot: { x: 200, get y() { return shiftDown(540); } },
   ringWidth: 5,

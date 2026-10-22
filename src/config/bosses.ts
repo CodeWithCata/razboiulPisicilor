@@ -162,6 +162,8 @@ export const QUEEN = {
 export const LIGHTS_OUT = {
   atHp: { mafia: 0.35, queen: 0.3, federer: 0.25 } as const satisfies Record<BossType, number>,
   fadeMs: 1800, darkness: 0.86, rgb: [6, 4, 15] as const, depth: 24.6, telegraphDepth: 26, varuRadius: 190, bossRadius: 95, lampRadius: 190, soft: 0.4, divisor: 4, marginPx: 40,
+  /** Size (px) of the soft light picture baked once and stamped for every light (no gradient made per light per frame). */
+  maskPx: 256,
 } as const;
 
 export const MAFIA = {

@@ -14,11 +14,16 @@ export const PERF = {
 
   /**
    * Automatic relief for slow phones (the crowd is the biggest per-frame cost that is only decoration): when the average frame
-   * stays slower than `slowMs` for `slowSamples` measurements in a row, the number of animated fans shrinks one `step`
-   * (never below `minScale`); when it stays faster than `fastMs` for `fastSamples` in a row it grows back. A phone that keeps
-   * 50+ fps never feels it (fans just rest where they stand when over the limit, the same look as the existing limit).
+   * stays slower than `slowMs` (15 ms = under ~66 fps) for `slowSamples` measurements in a row, the number of animated fans
+   * shrinks one `step` (never below `minScale`); when it stays faster than `fastMs` (12.5 ms = over 80 fps) for `fastSamples`
+   * in a row it grows back. Fans just rest where they stand when over the limit (the same look as the existing limit).
+   * Caveat: a phone locked at 60 Hz averages about 16.7 ms, so it counts as slow and sheds fans too. If that is too eager,
+   * raise `slowMs` to about 18.
    */
-  adapt: { slowMs: 24, fastMs: 19, slowSamples: 2, fastSamples: 8, step: 0.25, minScale: 0.25 },
+  adapt: { slowMs: 15, fastMs: 12.5, slowSamples: 1, fastSamples: 6, step: 0.25, minScale: 0.25 },
+
+  /** The WebGL canvas settings passed to Phaser (main.ts). `antialias` is the MSAA of the canvas: it costs fill rate on phones. */
+  render: { antialias: true },
 
   /** The little card: top left, under the health meter. */
   panel: { x: 12, y: 96, size: 18, padX: 8, padY: 6, lineSpacing: 2, radius: 8, backAlpha: 0.62, depth: 400, color: '#b6f5a8' },

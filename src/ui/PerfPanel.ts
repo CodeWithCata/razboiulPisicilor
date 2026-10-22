@@ -37,6 +37,22 @@ export class PerfPanel {
     this.text.setVisible(on);
   }
 
+  /** The canvas backing size in device pixels (not the CSS size on screen). */
+  private canvasWidth(): number {
+    return this.scene.game.canvas.width;
+  }
+
+  private canvasHeight(): number {
+    return this.scene.game.canvas.height;
+  }
+
+  /** Whether the WebGL context really has MSAA on (the canvas keeps its context, so asking again returns the same one). */
+  private antialias(): boolean {
+    const canvas = this.scene.game.canvas;
+    const gl = (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) as WebGLRenderingContext | null;
+    return gl?.getContextAttributes()?.antialias ?? false;
+  }
+
   private show(s: PerfStatsPayload): void {
     if (!getDebugInfo()) return;
     const fill = (template: string, values: Record<string, string | number>): string =>
@@ -57,6 +73,7 @@ export class PerfPanel {
         dpr: f1(window.devicePixelRatio || 1),
         fullscreen: this.scene.scale.isFullscreen ? PERF_TEXT.fullscreenOn : PERF_TEXT.fullscreenOff,
       }),
+      fill(PERF_TEXT.canvas, { cw: this.canvasWidth(), ch: this.canvasHeight(), aa: this.antialias() ? PERF_TEXT.aaOn : PERF_TEXT.aaOff }),
     ];
     this.text.setText(lines.join('\n'));
     const P = PERF.panel;

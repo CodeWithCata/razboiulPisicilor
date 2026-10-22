@@ -533,6 +533,9 @@ export const PERF_TEXT = {
   step: 'pas {avg} px  (max {max})',
   world: 'pisici {cats}  •  mingi {balls}',
   screen: '{renderer}  {w}x{h}  dpr {dpr}  {fullscreen}',
+  canvas: 'canvas {cw}x{ch}  antialias {aa}',
+  aaOn: 'on',
+  aaOff: 'off',
   fullscreenOn: 'fullscreen',
   fullscreenOff: 'în pagină',
 } as const;
