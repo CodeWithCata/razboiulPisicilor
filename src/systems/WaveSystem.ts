@@ -22,6 +22,8 @@ export class WaveSystem {
   private bossWave = false;
   /** Dev only: no new wave starts, nothing more spawns and the wave never ends (debug card). */
   debugHold = false;
+  /** The first-run tutorial is on: the first wave waits (nothing spawns) until `endTutorialHold`. */
+  tutorialHold = false;
 
   constructor(
     private readonly spawn: (type: EnemyType) => void,
@@ -30,6 +32,13 @@ export class WaveSystem {
   ) {
     this.wave = mode === 'endless' ? ENDLESS.startWave - 1 : 0;
     this.nextWaveAt = gameClock.now + WAVE_TIMING.firstWaveDelayMs;
+  }
+
+  /** The tutorial is over: the first wave starts after its usual short wait. */
+  endTutorialHold(time: number): void {
+    if (!this.tutorialHold) return;
+    this.tutorialHold = false;
+    this.nextWaveAt = time + WAVE_TIMING.firstWaveDelayMs;
   }
 
   stop(): void {
@@ -80,7 +89,7 @@ export class WaveSystem {
   }
 
   update(time: number): void {
-    if (!this.running || this.debugHold) return;
+    if (!this.running || this.debugHold || this.tutorialHold) return;
 
     if (this.waitingForNextWave) {
       if (time >= this.nextWaveAt) this.startWave(time);

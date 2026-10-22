@@ -1,19 +1,23 @@
 /** @file Mid boss Regina Pisicilor: royal guard + shield, charges (with rush follow-ups), scepter spin, scepter throw, red carpet. Three tiers: phase 1, phase 2, RAGE. Her loose parts are animated by QueenRig. */
 import Phaser from 'phaser';
+import { FX_PAD_R, FX_RING_R } from '../../assets/art/fx';
 import { QUEEN_GEMS } from '../../assets/art/queen';
 import { Tex } from '../../assets/keys';
-import { QUEEN_POSE_MS as MS, QUEEN_POSES as POSE } from '../../config/animation';
+import { QUEEN_POSE_MS as MS, QUEEN_POSES as POSE, QUEEN_RIG } from '../../config/animation';
 import { PLAY_AREA } from '../../config/arena';
 import { BOSS_CURSE, byTier, QUEEN } from '../../config/bosses';
 import { BOSS_CURSE_LINES, BOSS_TEXT } from '../../content/bosses';
 import { clampToArena } from '../../core/arena';
 import { gameClock } from '../../core/clock';
 import { bus, Events, type CurseZonePayload, type ExplosionPayload, type SpawnProjectilePayload } from '../../core/events';
+import { carpetStrike, rollCarpet } from '../../systems/CarpetRoll';
 import { type AimedTelegraph, telegraphCircle, telegraphLineAimed, telegraphRect } from '../../systems/Telegraph';
 import type { Enemy, EnemyContext } from '../Enemy';
 import { Boss, type BossAttack } from './Boss';
 import { QueenRig } from './QueenRig';
+import { RingDiamonds } from './RingDiamonds';
 import type { BossLook } from './BossViews';
+import { hyp } from '../../core/hyp';
 
 /** The scepter texture is drawn on the same 128 px canvas as her body; this is the middle of the staff (it spins around it). */
 const TEX = 128;
@@ -54,7 +58,7 @@ interface TrailPiece {
   x: number;
   y: number;
   until: number;
-  gfx: Phaser.GameObjects.Arc;
+  gfx: Phaser.GameObjects.Image;
 }
 
 /**
@@ -67,6 +71,8 @@ interface TrailPiece {
  * - Red carpet (phase 2+): bands of floor strike one after the other, one band is safe (green).
  * - RAGE (last quarter of her health): faster everything, and attacks flow straight into rushes.
  */
+const RING = QUEEN_RIG.ring;
+
 export class QueenCat extends Boss {
   private readonly rig: QueenRig;
   private rage = false;
@@ -95,7 +101,8 @@ export class QueenCat extends Boss {
   // scepter throw
   private flight: ScepterFlight | null = null;
   private scepterImg: Phaser.GameObjects.Image | null = null;
-  private scepterRing: Phaser.GameObjects.Arc | null = null;
+  private scepterRing: Phaser.GameObjects.Image | null = null;
+  private scepterDiamonds: RingDiamonds | null = null;
 
   // red carpet bands
   private carpetWaves: CarpetWave[] = [];
@@ -143,7 +150,7 @@ export class QueenCat extends Boss {
     const now = gameClock.now;
     const speed = this.stats.speed * this.pick(QUEEN.speedFactor);
     const want = this.pick(QUEEN.preferredDistance);
-    const dist = Math.hypot(ctx.player.x - this.x, ctx.player.y - this.y);
+    const dist = hyp(ctx.player.x - this.x, ctx.player.y - this.y);
     if (dist > want + 60) {
       this.steerTo(ctx.player, speed);
       this.faceTarget();
@@ -277,8 +284,7 @@ export class QueenCat extends Boss {
     this.trail = [];
     this.scepterImg?.destroy();
     this.scepterImg = null;
-    this.scepterRing?.destroy();
-    this.scepterRing = null;
+    this.clearScepterRing();
     this.flight = null;
   }
 
@@ -491,7 +497,7 @@ export class QueenCat extends Boss {
     for (const child of group.getChildren()) {
       const cat = child as Enemy;
       if (cat === this || cat.isBoss || !cat.alive || cat.isKnockedBack) continue;
-      if (Math.hypot(cat.x - this.x, cat.y - this.y) > this.stats.hitRadius + cat.hitRadius + 8) continue;
+      if (hyp(cat.x - this.x, cat.y - this.y) > this.stats.hitRadius + cat.hitRadius + 8) continue;
       cat.applyKnockback(this.x, this.y, QUEEN.plow.force, QUEEN.plow.ms);
     }
   }
@@ -564,7 +570,7 @@ export class QueenCat extends Boss {
     const blast: ExplosionPayload = { x: this.x, y: this.y, radius, damage: 0, harmsPlayer: false, fromBoss: true };
     bus.emit(Events.Explosion, blast);
     const player = this.ctx.player;
-    if (Math.hypot(player.x - this.x, player.y - this.y) <= radius + player.hitRadius) player.takeDamage(damage, this.x, this.y);
+    if (hyp(player.x - this.x, player.y - this.y) <= radius + player.hitRadius) player.takeDamage(damage, this.x, this.y);
   }
 
   /** How many rushes follow a charge: none in phase 1, maybe one in phase 2, one or two in RAGE. */
@@ -597,10 +603,10 @@ export class QueenCat extends Boss {
   private dropTrail(time: number): void {
     if (time < this.trailNextAt) return;
     this.trailNextAt = time + QUEEN.trail.everyMs;
-    const gfx = this.scene.add
-      .circle(this.x, this.y, QUEEN.trail.radius, QUEEN.trail.color, 0.4)
-      .setStrokeStyle(3, QUEEN.trail.edge, 0.8)
-      .setDepth(6);
+    const T = QUEEN.trail;
+    const fit = T.radius / FX_PAD_R;
+    const gfx = this.scene.add.image(this.x, this.y, Tex.FxCarpetPad).setDepth(6).setAngle(Math.random() * 360).setScale(fit * 0.4).setAlpha(T.alpha);
+    this.scene.tweens.add({ targets: gfx, scale: fit, duration: T.popMs, ease: 'Back.easeOut' });
     this.trail.push({ x: this.x, y: this.y, until: time + this.pick(QUEEN.trail.lifeMs), gfx });
   }
 
@@ -617,8 +623,8 @@ export class QueenCat extends Boss {
         this.trail.splice(i, 1);
         continue;
       }
-      piece.gfx.setAlpha(Math.min(1, left / 600));
-      if (Math.hypot(player.x - piece.x, player.y - piece.y) <= QUEEN.trail.radius + player.hitRadius) burned = true;
+      piece.gfx.setAlpha(Math.min(1, left / QUEEN.trail.fadeMs) * QUEEN.trail.alpha);
+      if (hyp(player.x - piece.x, player.y - piece.y) <= QUEEN.trail.radius + player.hitRadius) burned = true;
     }
     if (burned) player.takeDamage(QUEEN.trail.damage, player.x, player.y + 1);
   }
@@ -642,7 +648,7 @@ export class QueenCat extends Boss {
     if (time < this.spinNextTickAt) return;
     this.spinNextTickAt = time + QUEEN.spinTickMs;
     const player = this.ctx.player;
-    if (Math.hypot(player.x - this.x, player.y - this.y) <= this.pick(QUEEN.spinRadius) + player.hitRadius) {
+    if (hyp(player.x - this.x, player.y - this.y) <= this.pick(QUEEN.spinRadius) + player.hitRadius) {
       player.takeDamage(QUEEN.spinDamage, this.x, this.y);
     }
   }
@@ -688,8 +694,7 @@ export class QueenCat extends Boss {
   private finishScepter(): void {
     this.scepterImg?.destroy();
     this.scepterImg = null;
-    this.scepterRing?.destroy();
-    this.scepterRing = null;
+    this.clearScepterRing();
     this.flight = null;
     this.rig.setScepterHidden(false);
   }
@@ -712,7 +717,7 @@ export class QueenCat extends Boss {
       // Back to her (wherever she stands now), along a curve: it bends most in the middle.
       const dx = this.x - f.tx;
       const dy = this.y - f.ty;
-      const len = Math.hypot(dx, dy) || 1;
+      const len = hyp(dx, dy) || 1;
       const bow = Math.sin(Math.PI * k) * this.pick(S.bow) * f.side;
       f.x = Phaser.Math.Linear(f.tx, this.x, k) + (-dy / len) * bow;
       f.y = Phaser.Math.Linear(f.ty, this.y, k) + (dx / len) * bow;
@@ -724,11 +729,20 @@ export class QueenCat extends Boss {
 
     img.setPosition(f.x, f.y);
     img.rotation += (SCEPTER_SPIN * delta) / 1000;
-    this.scepterRing?.setPosition(f.x, f.y);
+    const ring = this.scepterRing;
+    if (ring) ring.setPosition(f.x, f.y).setRotation(ring.rotation + S.ringSpin * delta);
+    this.scepterDiamonds?.update(f.x, f.y, S.hoverRadius, this.scene.time.now, true);
 
     const player = this.ctx.player;
     const reach = (f.leg === 'hover' ? S.hoverRadius : S.hitRadius) + player.hitRadius;
-    if (Math.hypot(player.x - f.x, player.y - f.y) <= reach) player.takeDamage(S.damage, f.x, f.y);
+    if (hyp(player.x - f.x, player.y - f.y) <= reach) player.takeDamage(S.damage, f.x, f.y);
+  }
+
+  private clearScepterRing(): void {
+    this.scepterRing?.destroy();
+    this.scepterRing = null;
+    this.scepterDiamonds?.destroy();
+    this.scepterDiamonds = null;
   }
 
   private nextLeg(f: ScepterFlight, leg: 'hover' | 'back', ms: number): void {
@@ -736,16 +750,16 @@ export class QueenCat extends Boss {
     f.legMs = Math.max(1, ms);
     f.elapsed = 0;
     if (leg === 'hover') {
-      this.scepterRing = this.scene.add
-        .circle(f.x, f.y, QUEEN.scepter.hoverRadius, QUEEN.scepter.edge, 0.14)
-        .setStrokeStyle(3, QUEEN.scepter.edge, 0.9)
-        .setDepth(7);
+      const fit = QUEEN.scepter.hoverRadius / FX_RING_R;
+      const ring = this.scene.add.image(f.x, f.y, Tex.FxRing).setDepth(7).setAlpha(QUEEN.scepter.ringAlpha).setScale(fit * 0.3);
+      this.scene.tweens.add({ targets: ring, scale: fit, duration: 200, ease: 'Back.easeOut' });
+      this.scepterRing = ring;
+      this.scepterDiamonds = new RingDiamonds(this.scene, RING.diamonds.hoverCount, RING.diamonds.hoverH, 8);
       const shots = this.pick(QUEEN.scepter.hoverShots);
       const offset = Math.random() * Math.PI * 2;
       for (let i = 0; i < shots; i++) this.fireSparkle(f.x, f.y, offset + (i / shots) * Math.PI * 2);
     } else {
-      this.scepterRing?.destroy();
-      this.scepterRing = null;
+      this.clearScepterRing();
     }
   }
 
@@ -809,7 +823,7 @@ export class QueenCat extends Boss {
   /** Show where the next strike lands (red) and which band is safe (green). */
   private warnWave(wave: CarpetWave | undefined, ms: number): void {
     if (!wave) return;
-    for (const r of wave.lanes) this.track(telegraphRect(this.scene, r.x1, r.y1, r.x2, r.y2, ms, QUEEN.carpet.color));
+    for (const r of wave.lanes) this.track(rollCarpet(this.scene, r.x1, r.y1, r.x2, r.y2, ms));
     const s = wave.safe;
     if (s) this.track(telegraphRect(this.scene, s.x1, s.y1, s.x2, s.y2, ms, QUEEN.carpet.safeColor, false));
   }
@@ -820,14 +834,10 @@ export class QueenCat extends Boss {
     const player = this.ctx.player;
     let hit: Rect | null = null;
     for (const r of wave.lanes) {
-      const flash = this.scene.add
-        .rectangle((r.x1 + r.x2) / 2, (r.y1 + r.y2) / 2, r.x2 - r.x1, r.y2 - r.y1, QUEEN.carpet.color, 0.55)
-        .setStrokeStyle(4, QUEEN.carpet.edge, 1)
-        .setDepth(8);
-      this.scene.tweens.add({ targets: flash, alpha: 0, duration: QUEEN.carpet.strikeFadeMs, onComplete: () => flash.destroy() });
+      carpetStrike(this.scene, r.x1, r.y1, r.x2, r.y2, QUEEN.carpet.strikeFadeMs);
       const dx = Math.max(r.x1 - player.x, 0, player.x - r.x2);
       const dy = Math.max(r.y1 - player.y, 0, player.y - r.y2);
-      if (Math.hypot(dx, dy) <= player.hitRadius) hit = r;
+      if (hyp(dx, dy) <= player.hitRadius) hit = r;
     }
     this.rig.burst(5);
     if (hit) player.takeDamage(QUEEN.carpet.damage, (hit.x1 + hit.x2) / 2, (hit.y1 + hit.y2) / 2);

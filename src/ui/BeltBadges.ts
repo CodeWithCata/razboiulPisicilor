@@ -8,6 +8,7 @@ import { TOUCH } from '../config/touch';
 import { BELT_LABELS, TOUCH_TEXT } from '../content/lines';
 import { usesTouchControls } from '../core/device';
 import type { Pt } from '../core/polyClip';
+import { hyp } from '../core/hyp';
 
 export type BeltSpecial = Exclude<BeltAttackId, 'swing'>;
 
@@ -329,7 +330,7 @@ export class BeltBadges {
     const [bx, by] = t.buckle.at;
     const h = t.buckle.half;
     // The wings: one on each side of the strap, near its middle, swept back (dx, dy = along the strap).
-    const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+    const len = hyp(p1[0] - p0[0], p1[1] - p0[1]);
     const dx = (p1[0] - p0[0]) / len;
     const dy = (p1[1] - p0[1]) / len;
     const wx = p0[0] + (p1[0] - p0[0]) * t.wings.at;

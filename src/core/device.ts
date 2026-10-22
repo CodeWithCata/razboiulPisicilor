@@ -10,3 +10,12 @@ export function usesTouchControls(): boolean {
     return false;
   }
 }
+
+/** Adding ?tutorial=1 to the address shows the first-run tutorial again (handy for testing). */
+export function forcesTutorial(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get('tutorial') === '1';
+  } catch {
+    return false;
+  }
+}

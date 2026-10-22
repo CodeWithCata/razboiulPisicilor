@@ -2,8 +2,8 @@
 import { COLORS, css } from './style';
 
 /**
- * The look of the cream cloud (`ui/CatBubble.ts`): a puffy outline made of overlapping bumps, with two small dots trailing down
- * to the speaker (like a thought bubble). Same family as the pause-menu bubble and the photo frames: cream, navy outline.
+ * The look of the cream cloud (`ui/CatBubble.ts`): a puffy outline made of overlapping bumps, with two separate circles trailing down at an angle
+ * to the speaker (like a comic thought bubble). Same family as the pause-menu bubble and the photo frames: cream, navy outline.
  * `talk` = a cat chatting; `shout` = a boss yelling an attack (bigger, thicker, red letters).
  */
 export const BUBBLE = {
@@ -59,13 +59,21 @@ export const BUBBLE = {
     length: 6,
     width: 2.2,
   },
-  /** The trailing dots, from the cloud down to the speaker. `up` = how far above the tail tip the dot's center is (px). */
+  /** The trailing puffs (big to small, overlapping so their outlines merge with the cloud's), from the cloud down to the speaker. `up` = how far above the tail tip the dot's center is (px). */
   tail: {
-    length: 22,
+    /** Height from the tail tip up to the bottom of the cloud (px). */
+    length: 24,
+    /** The cloud sits this far to one side of the speaker (px), so the dots slant down toward the cat like the thought bubbles in comics. It flips to the left on the right half of the screen. */
+    sideways: 34,
+    /** The slant of the dots never goes past this share of the cloud's half width (px per px). */
+    leanMax: 0.6,
+    /** Two separate circles, big near the cloud and small near the cat, with only a small gap between them and the cloud. */
     dots: [
-      { r: 5.5, up: 14 },
-      { r: 3.2, up: 4.5 },
+      { r: 5, up: 14 },
+      { r: 3, up: 2.3 },
     ],
+    /** The dots' outline is this share of the cloud's outline thickness. */
+    borderShare: 0.85,
     /** The dots get the same shading, scaled down by this share of the cloud's shade inset. */
     shadeShare: 0.5,
     /** Glint on the big dot (share of its radius, up-left of its center). */

@@ -1,5 +1,6 @@
-/** @file The emo cat's sadness: slump and sob poses, tears from his eyes, sighs, and a little rain cloud that follows him and drizzles on his head. Visual only. */
+/** @file The emo cat's sadness: slump and sob poses, teardrops from his eyes, sighs, a little rain cloud that follows him and drizzles on his head, and the soap bubble he hides in. Visual only. */
 import Phaser from 'phaser';
+import { FX_BUBBLE_R } from '../../assets/art/fx';
 import { Tex } from '../../assets/keys';
 import { EMO_RIG as RIG } from '../../config/animation';
 import type { BossLook } from './BossViews';
@@ -41,7 +42,7 @@ interface Move {
 
 /** A tear or a raindrop that is flying or falling. Moved by hand each frame (no tween per drop). */
 interface Drop {
-  obj: Phaser.GameObjects.Ellipse;
+  obj: Phaser.GameObjects.Image;
   vx: number;
   vy: number;
   gravity: number;
@@ -68,6 +69,12 @@ export class EmoRig {
   private jolt = 0;
   private joltTilt = 0;
   private storm = false;
+  /** v172: 0..1, how much of his health he has lost: a bigger, darker, wetter cloud. */
+  private gloom = 0;
+  private cloudScale = 1;
+  /** v172: the bubble round him while he hides. */
+  private bubble: Phaser.GameObjects.Image | null = null;
+  private bubbleBornAt = 0;
   private tearIn = 0;
   private fringeTearIn = 0;
   private tearCount = 0;
@@ -164,8 +171,36 @@ export class EmoRig {
   /** Phase 2: the cloud turns dark and rains harder, and now and then it flashes pink. */
   setStorm(on: boolean): void {
     this.storm = on;
-    const color = on ? RIG.cloud.darkColor : RIG.cloud.color;
-    for (const puff of this.puffs) puff.setFillStyle(color);
+    for (const puff of this.puffs) puff.setFillStyle(this.restColor());
+  }
+
+  /** v172 rainy mood: `level` 0..1 = the share of his health he has lost. */
+  setGloom(level: number): void {
+    const next = Math.max(0, Math.min(1, level));
+    if (Math.abs(next - this.gloom) < 0.005) return;
+    this.gloom = next;
+    if (this.flashLeft <= 0) for (const puff of this.puffs) puff.setFillStyle(this.restColor());
+  }
+
+  /** v172 cry for help: a blue bubble round him while he hides. */
+  setHiding(on: boolean): void {
+    if (this.destroyed) return;
+    if (!on) {
+      this.bubble?.destroy();
+      this.bubble = null;
+      return;
+    }
+    if (this.bubble) return;
+    const b = RIG.cloud.hideBubble;
+    const fit = b.radius / FX_BUBBLE_R;
+    this.bubbleBornAt = this.clock;
+    this.bubble = this.scene.add.image(this.owner.x, this.owner.y, Tex.FxBubbleEmo).setAlpha(b.alpha).setDepth(b.depth).setScale(fit * 0.3);
+    this.scene.tweens.add({ targets: this.bubble, scale: fit, duration: 220, ease: 'Back.easeOut' });
+  }
+
+  /** The cloud's resting color: grey, darker with the gloom, dark in the storm. */
+  private restColor(): number {
+    return this.storm ? RIG.cloud.darkColor : mixColor(RIG.cloud.color, RIG.cloud.darkColor, this.gloom * 0.85);
   }
 
   // ---- one-shot effects -----------------------------------------------------
@@ -280,7 +315,7 @@ export class EmoRig {
   private addDrop(x: number, y: number, vx: number, vy: number, lifeMs: number, colorIndex: number, gravity: number): void {
     const t = RIG.tear;
     const g = gravity > 0 ? gravity : t.gravity;
-    const e = this.scene.add.ellipse(x, y, t.w, t.h, t.colors[colorIndex % t.colors.length]).setDepth(t.depth).setStrokeStyle(1.4, t.outline);
+    const e = this.scene.add.image(x, y, Tex.FxDrop).setTint(t.colors[colorIndex % t.colors.length]).setDisplaySize(t.w, t.h).setDepth(t.depth);
     this.drops.push({ obj: e, vx, vy, gravity: g, life: lifeMs, max: lifeMs });
   }
 
@@ -293,12 +328,24 @@ export class EmoRig {
     this.cloudY += (targetY - this.cloudY) * k;
     const shiver = Math.sin(this.clock * RIG.sob.rate) * this.pose.sob * 2;
     this.cloud.setPosition(this.cloudX + shiver, this.cloudY).setVisible(o.visible);
+    // v172: the cloud grows with his gloom, and the bubble (cry for help) follows his body.
+    this.cloudScale += (1 + (c.gloomScale - 1) * this.gloom - this.cloudScale) * Math.min(1, dt / 400);
+    this.cloud.setScale(this.cloudScale);
+    if (this.bubble) {
+      this.bubble.setPosition(o.x, o.y).setVisible(o.visible);
+      if (this.clock - this.bubbleBornAt > 220) {
+        // Once it has popped up it wobbles like a soap bubble: a little taller while narrower, and back.
+        const fit = c.hideBubble.radius / FX_BUBBLE_R;
+        const w = Math.sin(this.clock * c.hideBubble.breatheRate) * c.hideBubble.breathe;
+        this.bubble.setScale(fit * (1 + w), fit * (1 - w));
+      }
+    }
 
     // Rain falls out of the bottom of the cloud (a lot more in the storm).
     this.rainIn -= dt;
     if (this.rainIn <= 0 && o.visible) {
-      this.rainIn = c.rain.everyMs / (this.storm ? c.stormRainMult : 1);
-      const e = this.scene.add.ellipse(this.cloudX + (Math.random() * 2 - 1) * c.rain.jitter, this.cloudY + 16, c.rain.w, c.rain.h, c.rain.color).setDepth(RIG.tear.depth);
+      this.rainIn = c.rain.everyMs / ((this.storm ? c.stormRainMult : 1) * (1 + (c.gloomRainMult - 1) * this.gloom));
+      const e = this.scene.add.image(this.cloudX + (Math.random() * 2 - 1) * c.rain.jitter, this.cloudY + 16, Tex.FxDrop).setTint(c.rain.color).setDisplaySize(c.rain.w, c.rain.h).setDepth(RIG.tear.depth);
       this.drops.push({ obj: e, vx: 0, vy: c.rain.speed, gravity: 0.0001, life: c.rain.lifeMs, max: c.rain.lifeMs });
     }
 
@@ -312,7 +359,7 @@ export class EmoRig {
     }
     if (this.flashLeft > 0) {
       this.flashLeft -= dt;
-      const color = this.flashLeft > 0 ? c.flashColor : this.storm ? c.darkColor : c.color;
+      const color = this.flashLeft > 0 ? c.flashColor : this.restColor();
       for (const puff of this.puffs) puff.setFillStyle(color);
     }
   }
@@ -342,6 +389,8 @@ export class EmoRig {
     if (this.destroyed) return;
     const from = this.world(0, 0, { x: 0, y: 0 });
     this.destroyed = true;
+    this.bubble?.destroy();
+    this.bubble = null;
     this.drops.forEach((d) => d.obj.destroy());
     this.drops.length = 0;
 
@@ -354,7 +403,7 @@ export class EmoRig {
       for (let i = 0; i < RIG.death.tears; i++) {
         const a = (i / RIG.death.tears) * Math.PI * 2 + Math.random() * 0.4;
         const reach = 50 + Math.random() * 70;
-        const e = this.scene.add.ellipse(from.x, from.y, RIG.tear.w + 1, RIG.tear.h + 2, RIG.tear.colors[i % RIG.tear.colors.length]).setDepth(RIG.tear.depth).setStrokeStyle(1.4, RIG.tear.outline);
+        const e = this.scene.add.image(from.x, from.y, Tex.FxDrop).setTint(RIG.tear.colors[i % RIG.tear.colors.length]).setDisplaySize(RIG.tear.w + 2, RIG.tear.h + 3).setDepth(RIG.tear.depth);
         this.scene.tweens.add({
           targets: e, x: from.x + Math.cos(a) * reach, y: from.y + Math.sin(a) * reach + 26, alpha: 0, rotation: toRad(Math.cos(a) * 90),
           duration: 700 + Math.random() * 300, ease: 'Cubic.easeOut', onComplete: () => e.destroy(),
@@ -364,4 +413,10 @@ export class EmoRig {
       this.cloud.destroy();
     }
   }
+}
+
+/** Mixes two 0xRRGGBB colors: `k` 0 = `a`, 1 = `b`. */
+function mixColor(a: number, b: number, k: number): number {
+  const ch = (shift: number): number => Math.round(((a >> shift) & 0xff) + (((b >> shift) & 0xff) - ((a >> shift) & 0xff)) * k);
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
 }

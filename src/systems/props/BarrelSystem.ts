@@ -14,13 +14,14 @@ import { weightedPick } from '../../core/random';
 import {
   bus, Events, listen,
   type BallLandedPayload, type BeltFlightPayload, type BeltSweepPayload, type CrowImpactPayload, type ExplosionPayload,
-  type CurseZonePayload, type PropDestroyedPayload, type PropHitPayload, type WavePayload,
+  type CurseZonePayload, type ProjectileSmashPayload, type PropDestroyedPayload, type PropHitPayload, type WavePayload,
 } from '../../core/events';
 import { segmentTouchesBox, sweepTouchesBox, type Box } from '../../core/reach';
 import type { Enemy, SlipOptions } from '../../entities/Enemy';
 import type { Player } from '../../entities/Player';
 import type { Effects } from '../Effects';
 import type { Obstacle, Obstacles } from './Obstacles';
+import { hyp } from '../../core/hyp';
 
 /** One barrel standing in the arena. */
 interface Barrel {
@@ -105,6 +106,7 @@ export class BarrelSystem {
       listen(Events.BeltSpin, () => (this.sweepSerial += 1)),
       listen<BeltSweepPayload>(Events.BeltSweep, (p) => this.onSweep(p)),
       listen<BeltFlightPayload>(Events.BeltFlight, (p) => this.onFlight(p)),
+      listen<ProjectileSmashPayload>(Events.ProjectileSmash, (p) => this.onProjectileSmash(p)),
       listen<ExplosionPayload>(Events.Explosion, ({ x, y, radius, fromBoss }) => this.blast(x, y, radius, fromBoss === true)),
       listen<BallLandedPayload>(Events.BallLanded, ({ x, y, radius }) => this.blast(x, y, radius, true)),
       listen<CrowImpactPayload>(Events.CrowImpact, ({ x, y, radius, variant }) => {
@@ -301,6 +303,18 @@ export class BarrelSystem {
     }
   }
 
+  /** v171: a smashing ball (Federer's ball machine) flies through barrels: each one on its way takes the ball's damage as a boss hit; one that survives stops the ball. */
+  private onProjectileSmash(p: ProjectileSmashPayload): void {
+    for (const barrel of this.barrels.slice()) {
+      if (!segmentTouchesBox(p.prevX, p.prevY, p.x, p.y, barrel.box, p.radius)) continue;
+      this.hit(barrel, p.prevX, p.prevY, p.damage, PROP_TUNING.flight.power, true);
+      if (this.barrels.includes(barrel)) {
+        p.absorbed = true;
+        return;
+      }
+    }
+  }
+
   /** A blast breaks every barrel in reach at once. */
   private blast(x: number, y: number, radius: number, byBoss: boolean): void {
     const reach = radius + BARREL.blastSlackPx;
@@ -314,7 +328,7 @@ export class BarrelSystem {
   private hit(barrel: Barrel, fromX: number, fromY: number, damage: number, power: number, byBoss = false): void {
     const dx = barrel.x - fromX;
     const dy = barrel.y - fromY;
-    const len = Math.hypot(dx, dy) || 1;
+    const len = hyp(dx, dy) || 1;
     const dirX = dx / len;
     const dirY = dy / len;
     barrel.hp -= damage;

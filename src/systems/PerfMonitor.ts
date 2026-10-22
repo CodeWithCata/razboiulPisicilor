@@ -1,5 +1,6 @@
 /** @file Measures fps and slow frames for the on-phone debug panel. */
 import { PERF } from '../config/perf';
+import { hyp } from '../core/hyp';
 
 /** What the monitor measured since the last `take()`. */
 export interface PerfSample {
@@ -37,7 +38,7 @@ export class PerfMonitor {
   /** Call once per frame with the browser's timestamp, Varu's position and whether the player is pushing the stick / keys. */
   record(time: number, x: number, y: number, walking: boolean): void {
     const dt = time - this.lastTime;
-    const step = Math.hypot(x - this.lastX, y - this.lastY);
+    const step = hyp(x - this.lastX, y - this.lastY);
     const measured = this.lastTime >= 0 && dt > 0 && dt < PERF.ignoreFrameMs;
     this.lastTime = time;
     this.lastX = x;

@@ -4,8 +4,9 @@ import { ARENA_RULES, PLAY_AREA } from '../config/arena';
 import { LUCKY, PICKUPS, PICKUP_SPAWN, type PickupKind } from '../config/balance';
 import type { TexKey } from '../assets/keys';
 import type { ArenaQuery } from '../core/arena';
-import { Events, listen, type BossDefeatedPayload, type EnemyKilledPayload, type PickupPayload } from '../core/events';
+import { Events, listen, type BossDefeatedPayload, type CatJailedPayload, type EnemyKilledPayload, type PickupPayload } from '../core/events';
 import { weightedPick } from '../core/random';
+import { snapshotInto } from '../core/snapshot';
 import { Pickup } from '../entities/Pickup';
 import type { Player } from '../entities/Player';
 import { gameClock } from '../core/clock';
@@ -20,6 +21,8 @@ export class PickupSystem {
   private nextSpawnAt: number;
   private nextGoldenAt: number;
   private readonly off: Array<() => void> = [];
+  /** Reused copy of the pickup list for the per-frame loop (see `snapshotInto`). */
+  private readonly scratch: Phaser.GameObjects.GameObject[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -50,6 +53,10 @@ export class PickupSystem {
           this.spawnAt(this.pickKind(), Phaser.Math.Clamp(x, PLAY_AREA.left + 60, PLAY_AREA.right - 60), Phaser.Math.Clamp(y, PLAY_AREA.top + 60, PLAY_AREA.bottom - 60));
         }
       }),
+      // A jailed cat (the wave ended while it was in a bed cage): the bed gives something, and it ignores the field limit like the boss drop.
+      listen<CatJailedPayload>(Events.CatJailed, ({ x, y, pickup }) => {
+        if (pickup) this.spawnAt(this.pickKind(), Phaser.Math.Clamp(x, PLAY_AREA.left + 60, PLAY_AREA.right - 60), Phaser.Math.Clamp(y + 50, PLAY_AREA.top + 60, PLAY_AREA.bottom - 60));
+      }),
       // Beating a boss always drops a heal and something fun.
       listen<BossDefeatedPayload>(Events.BossDefeated, ({ x, y }) => {
         const cx = Phaser.Math.Clamp(x, PLAY_AREA.left + 120, PLAY_AREA.right - 120);
@@ -62,7 +69,9 @@ export class PickupSystem {
   }
 
   update(time: number): void {
-    for (const child of this.group.getChildren().slice()) (child as Pickup).tick(time);
+    const items = snapshotInto(this.group.getChildren(), this.scratch);
+    for (let i = 0; i < items.length; i++) (items[i] as Pickup).tick(time);
+    items.length = 0;
 
     // Guaranteed golden belt: never skipped, even when the field is full.
     if (time >= this.nextGoldenAt) {
@@ -108,7 +117,8 @@ export class PickupSystem {
   }
 
   private hasRoom(): boolean {
-    const others = this.group.getChildren().filter((c) => c.active && (c as Pickup).kind !== 'goldenBelt').length;
+    let others = 0;
+    for (const c of this.group.getChildren()) if (c.active && (c as Pickup).kind !== 'goldenBelt') others += 1;
     return others < PICKUP_SPAWN.maxOnField;
   }
 

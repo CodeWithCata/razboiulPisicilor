@@ -14,6 +14,7 @@ import { buzz } from '../core/haptics';
 import { getAutoAttack } from '../core/settings';
 import { readRun, type RunOptions } from '../core/run';
 import { loadBest } from '../core/storage';
+import { tutorialWanted } from '../core/tutorial';
 import { BeltBadges } from '../ui/BeltBadges';
 import { BuffBadges } from '../ui/BuffBadges';
 import { CatMeter } from '../ui/CatMeter';
@@ -26,6 +27,7 @@ import { BossBar } from '../ui/BossBar';
 import { ControlsHint } from '../ui/ControlsHint';
 import { LowHpVignette } from '../ui/LowHpVignette';
 import { Toast } from '../ui/Toast';
+import { Tutorial } from '../ui/Tutorial';
 import {
   Events,
   listen,
@@ -104,6 +106,9 @@ export class UIScene extends Phaser.Scene {
     if (import.meta.env.DEV) new DebugPanel(this, HUD.debugPanel.left, GAME.height - HUD.debugPanel.bottom)
     if (import.meta.env.DEV) new BossLabPanel(this);
 
+    // The first-run tutorial: only in the campaign, only the first time on this device (or with ?tutorial=1). GameScene holds the first wave and sends TutorialStart.
+    const tutorial = tutorialWanted(this.run.mode) ? new Tutorial(this, touch) : null;
+
     // A cutscene hides the whole HUD (this scene's camera fades) and brings it back when it ends.
     this.cameras.main.setAlpha(1);
     const fadeHud = (alpha: number): void => {
@@ -116,6 +121,7 @@ export class UIScene extends Phaser.Scene {
         if (p.hideHud) fadeHud(0);
       }),
       listen(Events.CutsceneEnd, () => fadeHud(1)),
+      listen(Events.TutorialStart, () => tutorial?.begin()),
       listen<PlayerHealthPayload>(Events.PlayerHealth, ({ hp, maxHp }) => {
         this.catMeter.setHealth(hp, maxHp);
         lowHp.setHealth(hp, maxHp);

@@ -69,11 +69,6 @@ export abstract class Actor extends Phaser.Physics.Arcade.Sprite {
     this.shadow.setAlpha(alpha);
   }
 
-  /** Hides or shows the ground shadow (a cat locked in a bed has none). */
-  protected setShadowVisible(visible: boolean): void {
-    this.shadow.setVisible(visible);
-  }
-
   /** The shadow while an actor jumps: `size` and `alpha` are shares of the normal ones (1 and 1 = on the ground, call that to put it back). */
   protected setShadowJump(size: number, alpha: number): void {
     this.shadow.setDisplaySize(this.shadowSize * 0.9 * size * this.shadowGrow, this.shadowSize * 0.45 * size * this.shadowGrow).setAlpha(alpha);

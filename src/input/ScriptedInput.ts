@@ -1,6 +1,7 @@
 /** @file Input driven by a cutscene script instead of a thumb or a mouse: Varu walks and turns with his real animation. */
 import Phaser from 'phaser';
 import type { InputSource } from './InputSource';
+import { hyp } from '../core/hyp';
 
 /**
  * The cutscene director writes `move` and `aim`; GameScene feeds this to `Player.tick` while a cutscene plays
@@ -20,7 +21,7 @@ export class ScriptedInput implements InputSource {
 
   /** Walk in this direction (any length; it is normalized) and look the same way. */
   walk(dx: number, dy: number): void {
-    const length = Math.hypot(dx, dy);
+    const length = hyp(dx, dy);
     if (length < 0.0001) {
       this.move.set(0, 0);
       return;
@@ -31,7 +32,7 @@ export class ScriptedInput implements InputSource {
 
   /** Look this way without walking. */
   look(dx: number, dy: number): void {
-    const length = Math.hypot(dx, dy);
+    const length = hyp(dx, dy);
     if (length > 0.0001) this.aim.set(dx / length, dy / length);
   }
 

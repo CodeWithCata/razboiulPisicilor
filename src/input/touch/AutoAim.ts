@@ -4,6 +4,7 @@ import { PROJECTILES } from '../../config/balance';
 import { TOUCH } from '../../config/touch';
 import type { Enemy } from '../../entities/Enemy';
 import type { Projectile } from '../../systems/ProjectileSystem';
+import { hyp } from '../../core/hyp';
 
 /** What the belt should face right now. */
 export interface AimTarget {
@@ -49,7 +50,7 @@ export class AutoAim {
     for (const child of this.sources.enemies.getChildren()) {
       const enemy = child as Enemy;
       if (!enemy.active || !enemy.alive || !enemy.hittable) continue;
-      const dist = Math.hypot(enemy.x - fromX, enemy.y - fromY);
+      const dist = hyp(enemy.x - fromX, enemy.y - fromY);
       if (dist > A.range) continue;
       const gap = dist - enemy.hitRadius;
       found.push({ object: enemy, x: enemy.x, y: enemy.y, gap, score: gap });
@@ -58,7 +59,7 @@ export class AutoAim {
     for (const child of this.sources.projectiles.getChildren()) {
       const ball = child as Projectile;
       if (!ball.active || ball.friendly || ball.indestructible) continue; // nothing to swat at
-      const dist = Math.hypot(ball.x - fromX, ball.y - fromY);
+      const dist = hyp(ball.x - fromX, ball.y - fromY);
       if (dist > A.projectileRange) continue;
       const gap = dist - PROJECTILES[ball.kind].hitRadius;
       found.push({ object: ball, x: ball.x, y: ball.y, gap, score: gap - A.projectileBias });

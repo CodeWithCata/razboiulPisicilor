@@ -13,6 +13,7 @@ import { hasClearLine, steerAround } from '../core/steering';
 import { NO_OBSTACLES } from '../world/SolidGrid';
 import { Actor } from './Actor';
 import type { Player } from './Player';
+import { hyp } from '../core/hyp';
 
 /** What a cat needs to know each frame. `lure` is set while the laser pointer is active. */
 export interface EnemyContext {
@@ -130,6 +131,11 @@ export abstract class Enemy extends Actor {
     return this.giveUp === null && !this.cagedIn;
   }
 
+  /** True while the cat is locked in a bed cage (systems/props/BedCageSystem.ts): hidden, frozen, harmless and untouchable, but still alive for the wave. */
+  get caged(): boolean {
+    return this.cagedIn;
+  }
+
   /** True once the cat has raised the white flag (systems/CatChatter.ts skips it). */
   get surrendering(): boolean {
     return this.giveUp !== null;
@@ -178,11 +184,7 @@ export abstract class Enemy extends Actor {
   protected abstract think(time: number, delta: number, ctx: EnemyContext): void;
 
   tick(time: number, delta: number, ctx: EnemyContext): void {
-    if (!this.alive) return;
-    if (this.cagedIn) {
-      this.setVelocity(0, 0); // locked in a bed: it does not think, move or show (it stays active, so the wave waits for it)
-      return;
-    }
+    if (!this.alive || this.cagedIn) return; // a caged cat does nothing (it stays `active`, so the wave still counts it)
     this.undoTerrainSlow();
     this.rotation -= this.swayApplied; // undo last frame's sway so think() steers from the true heading
     this.swayApplied = 0;
@@ -279,7 +281,7 @@ export abstract class Enemy extends Actor {
    * the cat is really removed, and WaveSystem sees `aliveCount() === 0`. Bosses never give up.
    */
   surrender(exit: Phaser.Types.Math.Vector2Like): void {
-    if (!this.alive || this.giveUp || this.isBoss) return;
+    if (!this.alive || this.giveUp || this.isBoss || this.cagedIn) return;
     this.knockbackUntil = 0; // no longer flying through the air (so pinball ignores it too)
     this.setVelocity(0, 0);
     this.clearTint(); // a lit kamikaze fuse blinks red: stop that
@@ -306,7 +308,7 @@ export abstract class Enemy extends Actor {
       if (now - give.phaseAt >= SURRENDER.flagMs) this.goToPhase(give, 'walk', now);
     }
     if (give.phase === 'walk') {
-      const arrived = Math.hypot(give.exit.x - this.x, give.exit.y - this.y) <= SURRENDER.exitRadius;
+      const arrived = hyp(give.exit.x - this.x, give.exit.y - this.y) <= SURRENDER.exitRadius;
       if (arrived || now - give.phaseAt >= SURRENDER.walkTimeoutMs) this.goToPhase(give, 'fade', now);
       else this.steerTo(give.exit, Math.max(this.stats.speed * SURRENDER.walkSpeedFactor, SURRENDER.minWalkSpeed)); // flying cats just fly off
     }
@@ -366,7 +368,7 @@ export abstract class Enemy extends Actor {
     super.destroy(fromScene);
   }
 
-  /** Locked in a bed (`cage`). */
+  /** Locked in a bed cage (`cage` / `release`). */
   private cagedIn = false;
   /** Hide and seek: when the cat sprang out of a bush or box (`popOut`) and for how long. 0 = not popping. */
   private popAt = 0;
@@ -461,7 +463,7 @@ export abstract class Enemy extends Actor {
   protected steerTo(point: Phaser.Types.Math.Vector2Like, speed: number, stopRadius = 0): void {
     const dx = (point.x ?? 0) - this.x;
     const dy = (point.y ?? 0) - this.y;
-    const dist = Math.hypot(dx, dy);
+    const dist = hyp(dx, dy);
     if (dist <= stopRadius || dist === 0) {
       this.setVelocity(0, 0);
       return;
@@ -521,49 +523,6 @@ export abstract class Enemy extends Actor {
     return (this.body as Phaser.Physics.Arcade.Body).speed;
   }
 
-  /** True while the cat is locked in a bed (see `cage` / `release`, systems/props/BedCageSystem.ts). */
-  get caged(): boolean {
-    return this.cagedIn;
-  }
-
-  /**
-   * A bed locks the cat in: hidden, frozen, harmless and out of every collision, but still alive and `active`, so the wave waits for it.
-   * Bosses are too heavy to be caged. `x/y` is where it is kept (the bed's center).
-   */
-  cage(x: number, y: number): void {
-    if (this.isBoss || this.cagedIn || !this.body) return;
-    this.cagedIn = true;
-    this.knockbackUntil = 0;
-    this.popAt = 0;
-    this.fadeAlpha = 1;
-    this.clearTint();
-    this.setTintMode(Phaser.TintModes.MULTIPLY);
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setVelocity(0, 0);
-    body.enable = false;
-    this.setPosition(x, y);
-    this.setVisible(false);
-    this.setShadowVisible(false);
-  }
-
-  /**
-   * The cat gets out of the bed: it appears at (x, y) and leaves toward `dirX/dirY` at `speed`. With `flingMs` above 0 the exit
-   * counts as a fling (pinball sees it); otherwise it is only a short hop out where it does not think.
-   */
-  release(x: number, y: number, dirX: number, dirY: number, speed: number, flingMs: number): void {
-    if (!this.cagedIn) return;
-    this.cagedIn = false;
-    const body = this.body as Phaser.Physics.Arcade.Body | null;
-    if (!body) return;
-    body.enable = true;
-    body.reset(x, y);
-    this.setVisible(true);
-    this.setShadowVisible(true);
-    this.syncShadow();
-    this.setVelocity(dirX * speed, dirY * speed);
-    this.knockbackUntil = gameClock.now + (flingMs > 0 ? flingMs : 200);
-  }
-
   /** True while the cat is still springing out of its hideout (that hop is not a fling). */
   get popping(): boolean {
     return this.popAt !== 0;
@@ -584,6 +543,30 @@ export abstract class Enemy extends Actor {
     this.bumpReadyAt = now + gapMs;
     this.applyHit(damage, fromX, fromY, knockback);
     return true;
+  }
+
+  /** Locked in a bed cage at (x, y): the body is switched off, the cat and its shadow are hidden. It stays `active` so the wave keeps waiting for it. */
+  cage(x: number, y: number): void {
+    this.cagedIn = true;
+    this.knockbackUntil = 0;
+    this.popAt = 0;
+    this.setVelocity(0, 0);
+    this.setPosition(x, y);
+    this.disableBody(false, false);
+    this.setVisible(false);
+    this.setShadowAlpha(0);
+  }
+
+  /**
+   * Out of the cage at (x, y): it pops out toward dirX/dirY and gets a small fling (`speed` px/s).
+   * `flingMs` > 0 makes it count as flung for that long (pinball sees it); 0 = just a hop.
+   */
+  release(x: number, y: number, dirX: number, dirY: number, speed: number, flingMs: number): void {
+    this.cagedIn = false;
+    this.enableBody(true, x, y, true, true);
+    this.popOut(dirX, dirY);
+    this.setVelocity(dirX * speed, dirY * speed);
+    if (flingMs > 0) this.knockbackUntil = Math.max(this.knockbackUntil, gameClock.now + flingMs);
   }
 
   /** A deflected tennis ball hit this cat. Bosses override this (stun!). `_rallies` = how often a tennis cat or Federer returned the ball first. */

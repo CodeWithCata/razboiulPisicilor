@@ -1,5 +1,6 @@
-/** @file Code-drawn cat sprites: normal (and the stands' fan, in any fur color), fat, ninja, kamikaze, flying, lucky, tennis (96x96, facing up). The tennis cat is layered: body, racket arm, racket. */
+/** @file Code-drawn cat sprites: normal (and the stands' fan, in any fur color), fat, ninja, kamikaze, flying, lucky, tennis, bomber (96x96, facing up). The tennis cat is layered: body, racket arm, racket. */
 import { COLORS } from '../../config/style';
+import { drawPetard } from './items';
 import { C, E, P, R, T, Tpart, ellipsePts, flat, heart, ink, layer, sparkle, type G, type Pt, type Shape } from './shapes';
 
 interface CatLook {
@@ -9,6 +10,8 @@ interface CatLook {
   bodyH?: number;
   tail?: Pt[];
   tailW?: number;
+  /** Leave out the right front paw (a loose arm layer takes its place, e.g. the bomber's). */
+  noRightFrontPaw?: boolean;
 }
 
 const TAIL: Pt[] = [[48, 70], [47, 81], [52, 88], [60, 86], [63, 79]];
@@ -20,6 +23,7 @@ function cat(g: G, o: CatLook): void {
   const side = w / 2 + 1;
   layer(g, [T(o.tail ?? TAIL, o.tailW ?? 7)], o.fur);
   const paws: Shape[] = [E(48 - side, 66, 10, 14), E(48 + side, 66, 10, 14), E(48 - side - 1, 38, 10, 12), E(48 + side + 1, 38, 10, 12)];
+  if (o.noRightFrontPaw) paws.pop(); // the right front paw is the last one
   layer(g, [E(48, 55, w, h), ...paws], o.fur);
   layer(g, [E(48, 26, 38, 32), P([[32, 24], [27, 4], [46, 13]]), P([[64, 24], [69, 4], [50, 13]])], o.fur);
   flat(g, [P([[33, 19], [31, 9], [40, 14]]), P([[63, 19], [65, 9], [56, 14]])], o.inner);
@@ -361,4 +365,66 @@ export function drawTennisRacket(g: G): void {
     const j = 7.8 * Math.sqrt(1 - ((u * 1.35) / 12.5) ** 2);
     ink(g, [rp(-j, u * 1.35), rp(j, u * 1.35)], 0.9, 0xb8a98a);
   }
+}
+
+const BOMBER_FUR = 0xf59a3c;
+const BOMBER_DARK = 0xd9731a;
+/** Where the bomber cat's throwing arm pivots (inside her body) and where its paw rests, in texture px (96x96). `BomberCatRig` reads these. */
+export const BOMBER_SHOULDER = { x: 60, y: 50 } as const;
+export const BOMBER_PAW = { x: 80, y: 61 } as const;
+
+/** Bomber cat (Pisica Bombardier): fat orange tabby, crossed leather straps over the back, petards (the same picture she throws) on her hip, a creepy white cat mask on her face, one paw raised for the throw (the petard she holds is a loose image, see `BomberCat`). */
+export function drawCatBomber(g: G): void {
+  const fur = BOMBER_FUR;
+  const dark = BOMBER_DARK;
+  const tail: Pt[] = [[48, 70], [47, 80], [41, 88], [33, 85], [32, 77]];
+  cat(g, { fur, inner: 0xf4a5a0, bodyW: 44, bodyH: 46, tail, noRightFrontPaw: true });
+  flat(g, [Tpart(tail, 7, 0.3, 0.45), Tpart(tail, 7, 0.65, 0.8)], dark);
+  // Tabby stripes on the back and head.
+  for (const [y, w] of [[47, 22], [57, 24], [67, 20]] as const) flat(g, [T([[48 - w / 2, y], [48, y + 3], [48 + w / 2, y]], 4)], dark);
+  for (const x of [43, 53]) ink(g, [[x, 14], [x, 19]], 2.2, dark);
+  // The throwing arm is a loose layer (`drawBomberArm`, moved by `BomberCatRig`).
+  // Crossed leather straps over the back.
+  layer(g, [T([[31, 43], [65, 74]], 4.5), T([[65, 43], [31, 74]], 4.5)], 0x8a4a2b, 2);
+  // Petards strapped along both straps (a bandolier): the same petard picture, across the strap.
+  for (const t of [0.14, 0.31, 0.69, 0.86]) {
+    petardAt(g, 31 + 34 * t, 43 + 31 * t, 42, 0.32);
+    petardAt(g, 65 - 34 * t, 43 + 31 * t, -42, 0.32);
+  }
+  flat(g, [C(48, 58.5, 3)], COLORS.gold);
+  // The petards on her hip are the very petard she throws (`drawPetard`, scaled down), fuses up, fanned out a little.
+  for (const [x, y, deg] of [[20, 68, -14], [28, 66, 0], [36, 68, 14]] as const) petardAt(g, x, y, deg, 0.4);
+  // Creepy cat mask covering her WHOLE head, ears included: pale, big slanted black eyes with red pupils, a tiny dark nose,
+  // rosy spots, whisker lines and a wide stitched grin.
+  layer(g, [E(48, 25, 46, 40), P([[29, 24], [23, 1], [47, 12]]), P([[67, 24], [73, 1], [49, 12]])], 0xf2efe6, 2.6);
+  flat(g, [P([[30, 18], [27, 6], [38, 13]]), P([[66, 18], [69, 6], [58, 13]])], 0x2a2a3a);
+  flat(g, [T([[31, 15], [43, 23]], 6), T([[65, 15], [53, 23]], 6)], 0x15151c);
+  flat(g, [C(40, 20.5, 1.7), C(56, 20.5, 1.7)], 0xff3b3b);
+  flat(g, [P([[45, 29], [51, 29], [48, 33]])], 0x2a2a3a);
+  flat(g, [C(30, 31, 3.4), C(66, 31, 3.4)], 0xe58a8a, 0.8);
+  ink(g, [[26, 27], [34, 29]], 1.2, 0x8a8478);
+  ink(g, [[70, 27], [62, 29]], 1.2, 0x8a8478);
+  ink(g, [[34, 36], [40, 40], [45, 36], [51, 40], [56, 36], [62, 40]], 1.8, 0x15151c);
+  for (const x of [40, 45, 51, 56]) ink(g, [[x, 35], [x, 41]], 1, 0x15151c);
+}
+
+/** The bomber cat's throwing arm: a fur arm from BOMBER_SHOULDER (inside the body) to a paw at BOMBER_PAW, with a leather wristband. It hangs at her side; the rig raises it for the throw. */
+export function drawBomberArm(g: G): void {
+  const { x: sx, y: sy } = BOMBER_SHOULDER;
+  const { x: px, y: py } = BOMBER_PAW;
+  layer(g, [T([[sx, sy], [(sx + px) / 2 + 1, (sy + py) / 2 - 1], [px, py]], 7), C(px, py, 4.5)], BOMBER_FUR);
+  flat(g, [T([[px - 5.5, py - 2.8], [px - 3, py - 0.8]], 2.8)], 0x8a4a2b);
+  // Hides the outline where the arm starts inside the body (same fur color).
+  flat(g, [C(sx, sy, 6.5)], BOMBER_FUR);
+}
+
+/** Draws the petard texture's picture (32x64, fuse up) centered on (x, y), turned `deg` and scaled, inside a bigger picture. */
+function petardAt(g: G, x: number, y: number, deg: number, scale: number): void {
+  g.save();
+  g.translateCanvas(x, y);
+  g.rotateCanvas((deg * Math.PI) / 180);
+  g.scaleCanvas(scale, scale);
+  g.translateCanvas(-16, -32);
+  drawPetard(g);
+  g.restore();
 }

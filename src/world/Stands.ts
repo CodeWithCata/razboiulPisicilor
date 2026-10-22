@@ -6,6 +6,7 @@ import { poly } from '../assets/paint';
 import { ARENA, PLAY_AREA, WORLD } from '../config/arena';
 import { STANDS } from '../config/stands';
 import { ringPosition } from './standsRing';
+import { hyp } from '../core/hyp';
 
 export type Side = 'left' | 'right' | 'top' | 'bottom';
 type Graphics = Phaser.GameObjects.Graphics;
@@ -416,7 +417,7 @@ function paintBunting(pen: Pen): void {
   for (let i = 0; i < path.length; i++) {
     const a = path[i]!;
     const z = path[(i + 1) % path.length]!;
-    const len = Math.hypot(z[0] - a[0], z[1] - a[1]);
+    const len = hyp(z[0] - a[0], z[1] - a[1]);
     const dx = (z[0] - a[0]) / len;
     const dy = (z[1] - a[1]) / len;
     const nx = -dy; // the inward side (the path runs clockwise on screen)
@@ -447,7 +448,7 @@ function paintBunting(pen: Pen): void {
   for (let i = 0; i < path.length; i++) {
     const a = path[i]!;
     const z = path[(i + 1) % path.length]!;
-    const len = Math.hypot(z[0] - a[0], z[1] - a[1]);
+    const len = hyp(z[0] - a[0], z[1] - a[1]);
     const spans = Math.max(1, Math.ceil(len / B.maxSpanPx));
     for (let s = 1; s < spans; s++) paintPole(pen, a[0] + ((z[0] - a[0]) * s) / spans, a[1] + ((z[1] - a[1]) * s) / spans);
   }

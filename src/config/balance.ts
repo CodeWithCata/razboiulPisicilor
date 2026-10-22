@@ -112,6 +112,8 @@ export const ENEMIES = {
   lucky: { hp: 1, speed: 215, size: 56, hitRadius: 16, contactDamage: 0, score: 150, knockbackResist: 0 },
   /** Pisica de Tenis (see TENNIS): a walking ranged cat. Keeps her distance and serves tennis balls the belt can swat back. */
   tennis: { hp: 2, speed: 150, size: 64, hitRadius: 16, contactDamage: 6, score: 30, knockbackResist: 0 },
+  /** Pisica Bombardier (see BOMBER): the strongest walking cat. Keeps her distance and lobs the fans' petard at Varu. */
+  bomber: { hp: 6, speed: 130, size: 72, hitRadius: 22, contactDamage: 12, score: 80, knockbackResist: 0.35 },
   // Bosses (their attack numbers are in config/bosses.ts). Armor makes belt hits weaker, see BOSS.armor.
   queen: { hp: 30, speed: 70, size: 150, hitRadius: 52, contactDamage: 14, score: 300, knockbackResist: 0.9 },
   mafia: { hp: 46, speed: 80, size: 140, hitRadius: 48, contactDamage: 14, score: 400, knockbackResist: 0.9 },
@@ -211,8 +213,8 @@ export const TENNIS = {
   },
   /** Wave numbers: the return and fireball chances start growing from the tennis cat's first wave (config/waves.ts). */
   scale: { fromWave: 8 },
-  /** The fireball: a longer windup (red flash) so Varu can see it coming; picked at random, and always after a ball she could not answer. */
-  fire: { chance: { base: 0.2, perWave: 0.035, max: 0.4 }, minGapMs: 5000, windUpMs: 700, windUpColor: 0xff4a2a, projectileSpeed: 340, spreadDeg: 3 },
+  /** The fireball: wound up exactly like a green ball (same time, same green flash: no warning which one it is); picked at random, and always after a ball she could not answer. */
+  fire: { chance: { base: 0.2, perWave: 0.035, max: 0.4 }, minGapMs: 5000, projectileSpeed: 340, spreadDeg: 3 },
 } as const;
 
 /**
@@ -335,6 +337,8 @@ export interface ProjectileStats {
   indestructible?: boolean;
   /** How many hits of the THROWN belt it takes to break it (default 1). A swing or a spin always breaks it in one. The belt flies out and back, so 2 = out and back. */
   throwHits?: number;
+  /** v172: a swing or a spin cannot break it at all (the belt just shrugs off it): only the THROWN belt can, `throwHits` times. It has to be dodged up close. */
+  rangedOnly?: boolean;
   /** Homing (only for the ones the boss spawns with `homing: true`): it turns toward Varu at `turnRadPerSec` for `followMs`, then flies straight; `lifetimeMs` replaces its normal life. */
   homing?: { readonly turnRadPerSec: number; readonly followMs: number; readonly lifetimeMs: number };
 }
@@ -345,7 +349,7 @@ export const PROJECTILES = {
   /** The tennis cat's red serve: a little harder than the green ball. The belt can neither send it back nor break it. */
   fireball: { size: 36, hitRadius: 13, damage: 13, spinPerSec: 720, lifetimeMs: 5000, deflectable: false, indestructible: true },
   /** The emo cat's broken heart. v148: the thrown belt needs 2 hits (out and back) to break it; the slow "sad" hearts home in on Varu for a while. */
-  heart: { size: 42, hitRadius: 15, damage: 11, spinPerSec: 100, lifetimeMs: 3500, deflectable: false, throwHits: 2, homing: { turnRadPerSec: 1.5, followMs: 3200, lifetimeMs: 5200 } },
+  heart: { size: 42, hitRadius: 15, damage: 11, spinPerSec: 100, lifetimeMs: 3500, deflectable: false, throwHits: 4, rangedOnly: true, homing: { turnRadPerSec: 1.5, followMs: 3200, lifetimeMs: 5200 } },
   sparkle: { size: 28, hitRadius: 10, damage: 7, spinPerSec: 360, lifetimeMs: 2600, deflectable: false }, // the queen's scepter sparkles (spin and scepter throw)
 } as const satisfies Record<string, ProjectileStats>;
 
@@ -358,6 +362,8 @@ export const WAVE_TIMING = {
   maxAlive: 28,
   maxAliveWithSummons: 40, // boss summons stop when this many cats are alive
   clearHeal: 12, // HP restored when a wave is cleared
+  /** v186: the long stretch before the final boss (waves 11 to 14, no boss between them) heals this much MORE per cleared wave. Endless waves are past `toWave`, so they heal as before. */
+  lateHeal: { fromWave: 11, toWave: 14, bonus: 8 },
 } as const;
 
 // ---------------------------------------------------------------------------

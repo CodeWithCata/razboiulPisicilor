@@ -4,6 +4,7 @@ export const SOUND_IDS = [
   'explosion', 'deflect', 'stun', 'bossIntro', 'waveStart', 'victory', 'gameOver',
   'rustle', 'thud', 'clank', 'boing', 'knock', 'smash', // arena props (config/props.ts)
   'heartbeat', // Varu is low on health (systems/LowHpSystem.ts)
+  'bomberThrow', // the bomber cat's own throw (systems/AudioSystem.ts, on Events.ThrowPetard)
   'blip', // one typed letter of a cutscene line (ui/cutscene/DialogueBox.ts)
 ] as const;
 export type SoundId = (typeof SOUND_IDS)[number];

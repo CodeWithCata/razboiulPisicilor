@@ -55,6 +55,7 @@ export const CAT_HIT_CURSES: Readonly<Record<string, BadKind>> = {
   flying: 'big', // her wind puffs him up (touch)
   yarn: 'big', // the flying cat's yarn ball (same curse as her touch)
   tennis: 'dumbbell', // the tennis cat's touch or green ball: the belt feels heavy (Federer's green balls too)
+  bomber: 'smoke', // the bomber cat's touch: smoke and soot
   fireball: 'dumbbell', // the tennis cat's red serve
 };
 

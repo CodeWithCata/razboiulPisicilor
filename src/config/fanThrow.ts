@@ -83,7 +83,7 @@ export const FAN_THROW = {
     tex: Tex.Petard,
     sizePx: 44,
     /** The fuse burns this long after it lands. The ring is the real blast reach; it grows, goes red and blinks near the end. */
-    fuseMs: 1500,
+    fuseMs: 200,
     radius: 105,
     /** Hurt to Varu if he is inside the ring when it goes off (he has `PLAYER.maxHp`), and to every cat in it (with this knockback). */
     damage: 16,
@@ -100,4 +100,13 @@ export const FAN_THROW = {
     /** The word over it when it lands (`PETARD_WORDS`). */
     word: { offsetY: -44, size: 28, color: '#ffd166' },
   },
+
+  /**
+   * v170 SWAT IT BACK: a petard THROWN BY A CAT (the bomber) can be knocked back by the belt (swing, spin or thrown belt) while it lies on the
+   * floor (the squash, the hop and the short fuse: about 0.7 s, so it is a matter of timing). It then flies back to where its thrower
+   * stands NOW (or to where she threw it from if she is gone) in `flightMs`, with a fresh fuse, and hurts the cats in its ring for `catDamage`
+   * instead of the usual `petard.catDamage` (enough to finish a bomber). A knocked-back petard cannot be swatted twice. Fans' petards cannot be swatted.
+   * `hitRadiusPx` is how far from the petard's middle the belt still counts as touching it.
+   */
+  swat: { hitRadiusPx: 34, flightMs: 520, catDamage: 6, word: { offsetY: -64, size: 30, color: '#9be28f' } },
 } as const;

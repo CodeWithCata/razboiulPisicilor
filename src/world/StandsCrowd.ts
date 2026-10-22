@@ -2,10 +2,11 @@
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { CROWD, MOOD_KEYS, type CrowdMood, type MoodLook, type ShoutKind, type ThrowPick, type ThrowSpot } from '../config/crowd';
-import { CROWD_LINES, pick } from '../content/lines';
+import { BOMBER_ENTRANCE, CROWD_LINES, pick } from '../content/lines';
+import { PERF } from '../config/perf';
 import { usesTouchControls } from '../core/device';
 import { Events, listen } from '../core/events';
-import type { BossStunnedPayload, WavePayload } from '../core/events';
+import type { BossStunnedPayload, PointPayload, WavePayload } from '../core/events';
 import type { StandsBuild, StandsFan } from './Stands';
 import { RING_LENGTH, ringPosition } from './standsRing';
 
@@ -49,7 +50,14 @@ export class StandsCrowd {
   private readonly confetti: Phaser.GameObjects.Particles.ParticleEmitter | null;
   private readonly off: Array<() => void> = [];
   private readonly touch = usesTouchControls();
-  private readonly limit = this.touch ? CROWD.touchMaxAnimated : CROWD.maxAnimated;
+  /** This frame's mood numbers, filled in place by `animate` (one object for the whole run, not one per frame). */
+  private readonly look = { hop: 0, tilt: 0, lean: 0, sway: 0, arms: 0 };
+  private readonly baseLimit = this.touch ? CROWD.touchMaxAnimated : CROWD.maxAnimated;
+  /** How many fans may animate at once: `baseLimit`, lowered while the phone is struggling (`adapt`). */
+  private limit: number = this.baseLimit;
+  private adaptScale = 1;
+  private slowRun = 0;
+  private fastRun = 0;
   private hooks: CrowdHooks | null = null;
 
   /** The eased numbers of the mood the crowd is in right now. */
@@ -122,6 +130,18 @@ export class StandsCrowd {
         this.hold('cheer', CROWD.cheer.throwMs);
         this.pulseAmt = Math.max(this.pulseAmt, CROWD.thrower.pulse);
       }),
+      // v170: the first bomber cat of the run: the stands cheer, a fan shouts at once (never held back by the quiet gap) and her name floats over her.
+      listen<PointPayload>(Events.BomberArrived, ({ x, y }) => {
+        this.hold('cheer', CROWD.cheer.bomberMs);
+        this.pulseAmt = 1;
+        this.shout('bomber');
+        this.hooks?.say(x, y - CROWD.shout.bomberNameLiftPx, BOMBER_ENTRANCE, CROWD.shout.bomberNameColor, CROWD.shout.bomberNameSize);
+      }),
+      // v170: Varu's belt knocked a petard back at the bomber: the stands go wild for a moment.
+      listen(Events.PetardSwatted, () => {
+        this.hold('cheer', CROWD.cheer.throwMs);
+        this.pulseAmt = Math.max(this.pulseAmt, CROWD.thrower.pulse);
+      }),
       listen(Events.Victory, () => this.roar(CROWD.roar.victoryMs, true)),
       listen(Events.GameOver, () => {
         this.hold('gloom', Infinity);
@@ -144,6 +164,30 @@ export class StandsCrowd {
     if (mood === 'roar') this.startConfetti();
     this.shout(mood === 'roar' ? 'roar' : mood === 'gloom' ? 'gloom' : mood === 'boo' ? 'boo' : 'cheer');
     return mood;
+  }
+
+  /** Called every half second with the measured average frame time (ms): fewer animated fans while the game is slow, back to normal when it is smooth again (`PERF.adapt`). */
+  adapt(frameAvgMs: number): void {
+    const A = PERF.adapt;
+    if (frameAvgMs > A.slowMs) {
+      this.fastRun = 0;
+      this.slowRun += 1;
+      if (this.slowRun >= A.slowSamples) {
+        this.slowRun = 0;
+        this.adaptScale = Math.max(A.minScale, this.adaptScale - A.step);
+      }
+    } else if (frameAvgMs < A.fastMs) {
+      this.slowRun = 0;
+      this.fastRun += 1;
+      if (this.fastRun >= A.fastSamples) {
+        this.fastRun = 0;
+        this.adaptScale = Math.min(1, this.adaptScale + A.step);
+      }
+    } else {
+      this.slowRun = 0;
+      this.fastRun = 0;
+    }
+    this.limit = Math.round(this.baseLimit * this.adaptScale);
   }
 
   update(deltaMs: number): void {
@@ -319,7 +363,7 @@ export class StandsCrowd {
   private shout(kind: ShoutKind): void {
     const s = CROWD.shout;
     if (!s.enabled || !this.hooks) return;
-    if ((kind !== 'boo' && this.t - this.lastShoutAt < s.minGapMs) || Math.random() >= s.chance[kind]) return;
+    if (((kind !== 'boo' && kind !== 'bomber') && this.t - this.lastShoutAt < s.minGapMs) || Math.random() >= s.chance[kind]) return;
     const fan = this.randomVisible();
     if (!fan) return;
     this.lastShoutAt = this.t;
@@ -338,13 +382,12 @@ export class StandsCrowd {
     const liveStep = dt / CROWD.liveFadeMs;
     const g = this.gain();
     const L = this.cur;
-    const look = {
-      hop: L.hop * g,
-      tilt: L.tiltDeg * g,
-      lean: L.lean * g,
-      sway: L.swayDeg * g,
-      arms: Math.min(1, L.arms * g),
-    };
+    const look = this.look;
+    look.hop = L.hop * g;
+    look.tilt = L.tiltDeg * g;
+    look.lean = L.lean * g;
+    look.sway = L.swayDeg * g;
+    look.arms = Math.min(1, L.arms * g);
     this.visible.length = 0;
     let used = 0;
     for (let n = 0; n < this.order.length; n++) {

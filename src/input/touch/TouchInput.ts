@@ -7,6 +7,7 @@ import { buzz } from '../../core/haptics';
 import { getAutoAttack } from '../../core/settings';
 import type { InputSource } from '../InputSource';
 import type { AutoAim } from './AutoAim';
+import { hyp } from '../../core/hyp';
 
 /** A floating joystick: it appears where the thumb lands. */
 export interface StickView {
@@ -135,7 +136,7 @@ export class TouchInput implements InputSource {
     if (!stick.active) return { x: 0, y: 0, strength: 0 };
     const dx = stick.knobX - stick.originX;
     const dy = stick.knobY - stick.originY;
-    const length = Math.hypot(dx, dy);
+    const length = hyp(dx, dy);
     const fraction = Math.min(1, length / TOUCH.stickRadius);
     if (length === 0 || fraction < TOUCH.deadZone) return { x: 0, y: 0, strength: 0 };
     const strength = Math.min(1, (fraction - TOUCH.deadZone) / (TOUCH.fullSpeedAt - TOUCH.deadZone));
@@ -145,7 +146,7 @@ export class TouchInput implements InputSource {
   private buttonAt(x: number, y: number): TouchButtonId | null {
     for (const id of TOUCH_BUTTON_IDS) {
       const b = TOUCH.buttons[id];
-      if (Math.hypot(x - b.x, y - b.y) <= b.r + TOUCH.buttonSlop) return id;
+      if (hyp(x - b.x, y - b.y) <= b.r + TOUCH.buttonSlop) return id;
     }
     return null;
   }
@@ -224,7 +225,7 @@ export class TouchInput implements InputSource {
   private drag(stick: StickView, pointer: Phaser.Input.Pointer): void {
     let dx = pointer.x - stick.originX;
     let dy = pointer.y - stick.originY;
-    const length = Math.hypot(dx, dy);
+    const length = hyp(dx, dy);
     if (length > TOUCH.stickRadius) {
       const k = TOUCH.stickRadius / length;
       if (TOUCH.stickFollows) {

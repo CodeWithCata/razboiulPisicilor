@@ -18,6 +18,8 @@ export class Fog {
   private readonly cfg = WEATHER.fog;
   private target = 0;
   private current = 0;
+  /** True once every cat has been set back to full visibility while the fog is gone: until the fog returns there is nothing to redo each frame (new cats start at 1). */
+  private clearApplied = true;
 
   constructor(
     scene: Phaser.Scene,
@@ -80,10 +82,14 @@ export class Fog {
     this.current += (this.target - this.current) * (1 - Math.exp(-delta / (this.cfg.transitionMs / 3)));
     this.haze.setAlpha(this.current);
     this.edges?.setAlpha(this.current);
-    for (const child of this.enemies.getChildren()) {
-      const enemy = child as Enemy;
+    const clear = this.current < 0.001; // the same test `visibleAlpha` uses to give every cat 1
+    if (clear && this.clearApplied) return; // clear weather: every cat is already at 1
+    const cats = this.enemies.getChildren();
+    for (let i = 0; i < cats.length; i++) {
+      const enemy = cats[i] as Enemy;
       enemy.fogAlpha = this.visibleAlpha(enemy);
     }
+    this.clearApplied = clear;
   }
 
   /** 1 = fully seen. Full near Varu, fading out past `clearRadius`, hidden past `hiddenRadius`, scaled by how thick the fog is right now. */

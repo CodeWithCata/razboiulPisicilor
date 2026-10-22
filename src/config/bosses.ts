@@ -90,13 +90,14 @@ export const QUEEN = {
   rushLockMs: 140,
   rushDamage: 16,
   doubleChargeChance: 0.5, // phase 2: chance of one rush after a charge. RAGE: always one, and this chance for a second.
-  /** The red carpet she leaves behind while charging. */
-  trail: { everyMs: 70, radius: 34, lifeMs: [1400, 2000, 2600] as const, damage: 5, color: 0xc1121f, edge: 0xffd166 },
+  /** The red carpet she leaves behind while charging: one plush rosette (`Tex.FxCarpetPad`, art/fx.ts) every `everyMs`, `popMs` to pop up, `alpha` while lying there. */
+  trail: { everyMs: 70, radius: 34, lifeMs: [1800, 2400, 3000] as const, damage: 5, alpha: 0.6, popMs: 140, fadeMs: 650 },
 
   // ---- scepter spin: the ring hurts every tick, and in phase 2+ it throws sparkles in a spiral ----
   spinTelegraphMs: 960, // v148: was 650. The ring grows to 145-175 px and Varu needs about 600-665 ms to run out of it from melee, so rage (x0.7) and phase 2 (x0.85) were undodgeable (scripts/boss-budget.mjs flagged it)
-  spinMs: [700, 950, 1100] as const,
-  spinTurns: [2, 3, 3] as const,
+  spinMs: [2200, 2400, 2600] as const, // v179: at least 2.2 s (was 700 / 950 / 1100)
+  spinTurns: [6, 7, 8] as const, // more turns so she keeps spinning at the same speed
+
   spinRadius: [145, 160, 175] as const,
   spinTickMs: 230,
   spinDamage: 9,
@@ -125,7 +126,9 @@ export const QUEEN = {
     hoverShots: [0, 0, 6] as const,
     recoverMs: [800, 700, 500] as const,
     scale: 1.15,
-    edge: 0xffd166, // gold: the warning lane and the hover ring
+    edge: 0xffd166, // gold: the warning lane
+    ringAlpha: 0.95, // the gold magic circle (`Tex.FxRing`) it spins in while it hovers
+    ringSpin: 0.0012, // rad per ms
   },
 
   // ---- red carpet (phase 2+): bands of floor strike one after the other, one band is safe (green) ----
@@ -139,8 +142,6 @@ export const QUEEN = {
     lingerMs: 250,
     damage: 10,
     recoverMs: [1100, 1000, 800] as const,
-    color: 0xd1213a,
-    edge: 0xffd166,
     safeColor: 0x7bd88f,
     strikeFadeMs: 380,
   },
@@ -152,10 +153,21 @@ export const QUEEN = {
  * 230 px ring) and he chose it MOST when Varu was close; now the warning is long enough to run out of the ring (`scripts/boss-budget.mjs`
  * checks it), the scream leaves him exhausted (long recover = the moment to hit him) and the crew is smaller.
  */
+/**
+ * v172/v173 LIGHTS OUT (every boss): when a boss is down to `atHp[boss]` (share of its health) it turns the lights off for the rest of the fight. A dark
+ * sheet (`darkness` 0..1, depth `depth`: over the cats and Varu, under the projectiles) leaves soft circles of light round Varu, the boss (`bossRadius`) and
+ * every street lamp (they rise out of the floor even by day). Projectiles, ground warnings, landing markers and the thrown belt stay above the dark.
+ * The sheet is drawn at 1/`divisor` of the screen.
+ */
+export const LIGHTS_OUT = {
+  atHp: { mafia: 0.35, queen: 0.3, federer: 0.25 } as const satisfies Record<BossType, number>,
+  fadeMs: 1800, darkness: 0.86, rgb: [6, 4, 15] as const, depth: 24.6, telegraphDepth: 26, varuRadius: 190, bossRadius: 95, lampRadius: 190, soft: 0.4, divisor: 4, marginPx: 40,
+} as const;
+
 export const MAFIA = {
   keepDistance: 320,
   cooldownMs: [1700, 1250] as const, // v142 buff was 1700 / 1000; 1250 keeps him below Federer in phase 2
-  heartCount: [7, 9] as const,
+  heartCount: [6, 8] as const, // v172: was [7, 9]: the hearts are tough now (only the thrown belt breaks them, 4 hits), so the fan has wider gaps to dodge through
   heartSpreadDeg: 85,
   heartSpeed: 260, // was 270
   heartTelegraphMs: 600,
@@ -167,16 +179,34 @@ export const MAFIA = {
   /** Hearts that fly out in a full circle right after the scream (phase 1 none, phase 2 this many): run out of the ring, then dodge them. */
   screamHearts: [0, 8] as const, // was 10: the gaps are wide enough to slip through
   screamColor: 0xe0409a, // the warning circle on the ground (pink instead of red)
-  /** v148 "sad hearts": slow hearts that turn toward Varu (`PROJECTILES.heart.homing`). Outrun them, sidestep when they come close, or break them (a swing or spin 1 hit, the thrown belt 2). They fan out from him, so they start wide and curve in. */
+  /** v148 "sad hearts": slow hearts that turn toward Varu (`PROJECTILES.heart.homing`). Outrun them or sidestep when they come close: a swing or spin cannot break them (v172), only the thrown belt can, 4 hits (`PROJECTILES.heart`). They fan out from him, so they start wide and curve in. */
   sadTelegraphMs: 700,
   sadHeartCount: [3, 4] as const,
   sadHeartSpeed: 150,
   sadSpreadDeg: 150,
   sadFlash: 0xc9a0ff,
   /** v148 tear puddles: the scream leaves `count` puddles (phase 1, phase 2) at random spots between `minFrom` px and the scream ring around him. They slow Varu to `slow` x his speed while he stands in one (not the cats), dry up after `lifeMs` and never more than `max` at once. */
-  puddle: { count: [3, 5] as const, minFrom: 80, radius: 48, slow: 0.55, lifeMs: 7500, blinkMs: 1500, max: 8, depth: -8.85, color: 0x7ad0ff, outline: 0x3a8fd0, alpha: 0.5 },
+  puddle: { count: [5, 8] as const, minFrom: 80, radius: 48, hitRatioY: 0.48, slow: 0.55, lifeMs: 7500, blinkMs: 1500, max: 12, depth: -8.85, alpha: 0.96, artGrow: 1.1, popMs: 350, wobble: 0.025, wobbleRate: 0.0042, rippleEveryMs: [900, 1700] as const, rippleMs: 1100, rippleColor: 0xeaf9ff, splashDrops: 5, splashPx: 34, dropColor: 0x9fd8ff },
+  /**
+   * v180 SCREAM FLOOD: the scream turns the whole floor inside the pink ring (`screamRadius`) into one big flat puddle that spreads out from him in `growMs`,
+   * ripples, and dries up (blinks the last `blinkMs`) after `lifeMs`. Only one at a time. Varu is slowed to `slow` x his speed while he stands inside it
+   * (`hitFactor` of the radius; the flood is `reach` x the scream ring, so it spreads well past the pink circle, so the thin edge does not count); a milder slow than a single puddle, because it is so big. It is cut off at the fence.
+   */
+  flood: { reach: 1.7, slow: 0.75, hitFactor: 0.94, lifeMs: 6500, blinkMs: 1500, growMs: 420, depth: -8.9, alpha: 0.9, rippleEveryMs: [650, 1100] as const, rippleMs: 1400, rimDrops: 24, dropPx: 22 },
   /** v148 "hiding": while at least `minNinjas` of his crew live he takes `crewFactor` of the damage (0.7 = 30% less); right after a scream (his `recoverMs.scream`) he is wide open and takes `exhaustedFactor`. */
   shield: { minNinjas: 2, crewFactor: 0.7, exhaustedFactor: 1.4 },
+  /**
+   * v172 RAINY MOOD: his cloud grows and darkens with every hit he takes. Once he is at `startAtHp` (share of his health) it really rains over the
+   * arena (the normal rain weather: streaks, and the belt rusts) and the rain keeps leaving tear puddles all over the floor (not near Varu: `minFromVaruPx`):
+   * every `puddleEveryMs` [just started, full storm] ms, with up to `puddleMax` [just started, full storm] on the floor, each drying after `puddleLifeMs`.
+   */
+  rain: { startAtHp: 0.7, puddleEveryMs: [5200, 2200] as const, puddleMax: [8, 14] as const, puddleLifeMs: 9000, minFromVaruPx: 140 },
+  /**
+   * v172 CRY FOR HELP: a hit between two attacks makes him cry for help with `chance` (at most once per `cooldownMs` after the last one, never while
+   * he is worn out from a scream): he hides behind his hood for `hideMs`, takes only `damageFactor` of the damage (a blue bubble shows it), cannot
+   * attack, and leaves a tear puddle at his feet every `puddleEveryMs` (so standing next to him slows Varu). Hit him less, or wait it out.
+   */
+  cry: { chance: 0.35, cooldownMs: 7000, hideMs: 1900, damageFactor: 0.35, puddleEveryMs: 380, puddleJitterPx: 46, flash: 0x8aa0ff },
   crewTelegraphMs: 700,
   crewCount: [3, 4] as const, // ninjas only, never other cat types (was 3, 5)
   crewRadius: 140,
@@ -271,7 +301,7 @@ export const FEDERER = {
    * v147 SECOND SERVE: when Varu is outside every ring of a serve she shouts "Fault!" and serves again at once: quicker warning, smaller ring
    * (a little less damage). Never a third serve.
    */
-  secondServe: { telegraphMs: 500, radius: 72, damage: 22, gapMs: 300, recoverMs: 1100 },
+  secondServe: { telegraphMs: 800, radius: 68, damage: 18, gapMs: 300, recoverMs: 1100 }, // v181: was 500 ms / 72 / 22: Varu needs ~90 px (350 ms) plus reaction to leave the ring, so 500 ms was undodgeable
   /**
    * v147 HOP BACK: she is about to attack and Varu is closer than `triggerPx`: she hops away first (`distancePx`, eased, `ms` long, needs at
    * least `minPx` of free room) instead of standing still. At most one hop per `cooldownMs`. The attack waits for the hop.
@@ -315,23 +345,62 @@ export const FEDERER = {
   /** At most this many things that can hurt Varu at once (her attack, the ball machine, her tennis ball boys); see `entities/bosses/FedererBudget.ts`. */
   maxDamageSources: 2,
   /**
-   * v147 BALL MACHINE (phase 2): it sits on the edge of the arena (the middle of the edge farthest from Varu when it arrives) and fires slow
-   * green tennis balls down `lanesDeg` (angles off its straight-ahead line). The lane is drawn on the floor for `telegraphMs` first; then
-   * `balls` balls follow `ballGapMs` apart. The balls are ordinary tennis balls: swat them (rally!) or dodge them. It waits `intervalMs` between
-   * volleys [phase 2, rage], only starts one when the damage budget allows it, and counts as a damage source until `clearMs` after its last ball.
+   * v147 BALL MACHINES (phase 2), v167: THREE launchers on the side edges of the arena, two on the left and one on the right. They are not
+   * still: while they wait they GLIDE along their edge (`glidePxPerSec`) to follow Varu's height, but each keeps its own offset from him
+   * (`units`: `offsetPx` up or down; the right one flips its side after every volley), so the shots always come in at an ANGLE, never
+   * straight across. They fire ONE AT A TIME, in turn (`order`: indexes into `units`: left top, right, left bottom, right...), and the one
+   * whose turn it is picks the lane closest to Varu from `lanesDeg` (angles off its straight-ahead line, none of them 0). The lane is drawn
+   * on the floor for `telegraphMs` first (the launcher stands still for that, and while its balls fly); then `balls` balls follow `ballGapMs`
+   * apart. The balls are ordinary tennis balls: swat them (rally!) or dodge them. `intervalMs` is the pause between two turns [phase 2, rage];
+   * a turn only starts when the damage budget allows it, and a launcher counts as a damage source until `clearMs` after its last ball.
+   * `gapPx` is the least space between the two launchers of one edge, `edgeMarginPx` how close to a corner a launcher may glide.
    */
   machine: {
     edgeInsetPx: 46,
-    lanesDeg: [-34, -17, 0, 17, 34] as readonly number[],
+    edgeMarginPx: 100,
+    gapPx: 150,
+    glidePxPerSec: 190,
+    units: [
+      { edge: 'left', offsetPx: -150 },
+      { edge: 'right', offsetPx: 170 },
+      { edge: 'left', offsetPx: 150 },
+    ] as readonly { readonly edge: 'left' | 'right'; readonly offsetPx: number }[],
+    order: [0, 1, 2, 1] as readonly number[],
+    lanesDeg: [-36, -22, -10, 10, 22, 36] as readonly number[],
     laneWidthPx: 44,
     telegraphMs: 900,
     balls: 2,
     ballGapMs: 420,
     ballSpeed: 230,
-    intervalMs: [3600, 2500] as const,
+    intervalMs: [2200, 1500] as const,
     firstDelayMs: 2200,
     clearMs: 1000,
     sizePx: 78,
+    /**
+     * v170 CROSSFIRE (set play): on a turn that belongs to a LEFT launcher, the two left launchers may fire TOGETHER instead. The upper one
+     * takes only lanes that slant down, the lower one only lanes that slant up, so the two lanes cross in an X in front of Varu (both are drawn
+     * for `telegraphMs` first, then both fire their balls at the same moment). `chance` is per eligible turn [phase 2, rage]; never two
+     * crossfires in a row. It counts as ONE damage source for the budget.
+     */
+    crossfire: { chance: [0.3, 0.55] as const },
+    /** v170 RAGE: the launchers glide `rageGlideFactor` times faster and turn their barrels `rageTurnRate` (radians per frame) instead of the normal 0.08. */
+    rageGlideFactor: 1.8,
+    rageTurnRate: 0.15,
+    /**
+     * v171 RED BALL: every single shot has a `chance` [phase 2, rage] to be the red FIREBALL instead of the green ball: much faster (`speed`
+     * px/s [phase 2, rage]), and like the tennis cat's red serve the belt cannot swat it back, so it has to be dodged (the lane is the same, no
+     * extra warning). The green ball keeps `ballSpeed`.
+     */
+    red: { chance: [0.4, 0.65] as const, speed: [420, 500] as const },
+    /** v171 RAGE: green balls fly `rageBallSpeedFactor` times faster and every volley has `rageExtraBalls` more balls. */
+    rageBallSpeedFactor: 1.2,
+    rageExtraBalls: 1,
+    /**
+     * v171 SMASH: every ball breaks what stands in its way (props, barrels, lamps; never the fences). `damage` to a prop per ball [green, red]
+     * (props: bush 5 hp, box 5, bed 4, scratcher 6, rock 9; barrels 2; lamps), times `rageFactor` in the rage. What breaks lets the ball fly on,
+     * what survives (a rock hit by a green ball) stops it and is cracked for the next ball.
+     */
+    smash: { damage: [5, 9] as const, rageFactor: 1.4 },
   },
   /**
    * v147 THE CROWD: after a rally of `rallyHits` hits on one ball (Varu's swats plus returns by her or a tennis cat) the fans throw Varu a gift

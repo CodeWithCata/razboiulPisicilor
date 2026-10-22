@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const TEMPLATE = join(dirname(fileURLToPath(import.meta.url)), 'sw-template.js');
 const SW_FILE = 'sw.js';
 /** Not worth saving on the player's phone. */
-const SKIP = /\.(map|txt)$/i;
+const SKIP = /\.(map|txt|mp4|webm)$/i; // videos (public/videos) are streamed, not saved: they would add MBs to every update
 
 /** All files below `dir` as paths relative to `root`, with forward slashes. */
 function walk(dir, root) {

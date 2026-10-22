@@ -70,3 +70,16 @@ export const BOSS_CURSE_LINES: Record<BossType, string> = {
   mafia: 'Țipăt emo: acum mergi ca melcul!',
   federer: 'Smash de plumb: cureaua-i o gantera!',
 };
+
+/** v172: what the emo cat says when it starts to rain, when he turns the lights off, and when he cries for help (Romanian). */
+export const MAFIA_MOODS = {
+  rain: 'Plouă și în sufletul meu...',
+  cry: ['Lasă-mă... în pace...', 'Nu mă mai atinge...', 'Vreau să fiu singur...'] as readonly string[],
+} as const;
+
+/** v173: what each boss says when it turns the lights off (Romanian). */
+export const LIGHTS_OUT_LINES: Record<BossType, string> = {
+  mafia: 'Stingeți luminile. Oricum nu mă vede nimeni.',
+  queen: 'Fără lumină, supușilor! Regina vede tot!',
+  federer: 'Meciul continuă... pe întuneric!',
+};

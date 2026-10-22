@@ -6,6 +6,7 @@ import { bus, Events, type CutsceneSfxPayload, type MusicPayload } from '../../c
 import type { ScriptedInput } from '../../input/ScriptedInput';
 import { CUTSCENE_HOOKS } from './hooks';
 import type { CutsceneHost, CutsceneStage } from './CutsceneStage';
+import { hyp } from '../../core/hyp';
 
 /** How the dialogue steps talk to the director (it owns the line counter and hears the player's taps). */
 export interface LineChannel {
@@ -127,7 +128,7 @@ class WalkStep implements StepHandle {
     const player = this.ctx.host.player;
     const dx = this.target.x - player.x;
     const dy = this.target.y - player.y;
-    if (Math.hypot(dx, dy) <= CUTSCENE.walk.stopRadiusPx) {
+    if (hyp(dx, dy) <= CUTSCENE.walk.stopRadiusPx) {
       this.complete(false);
     } else if (this.elapsed >= this.maxMs) {
       this.complete(true);

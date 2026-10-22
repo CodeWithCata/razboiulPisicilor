@@ -4,7 +4,7 @@ import { DAY_NIGHT } from '../config/dayNight';
 import { GAME } from '../config/balance';
 import { ENDLESS, FINAL_WAVE } from '../config/waves';
 import type { RunMode } from '../core/run';
-import { Events, listen, type WavePayload } from '../core/events';
+import { Events, listen, type LightsOutPayload, type WavePayload } from '../core/events';
 import { FloorLamp } from './FloorLamp';
 import type { Obstacles } from './props/Obstacles';
 
@@ -31,6 +31,8 @@ export class DayNight {
   private current: number;
   private target: number;
   private clock = 0;
+  /** v172: lights out (the emo cat): the lamps rise even by day and shine bright. */
+  private forcedUp = false;
   /** The game ms of the frame being applied (the lamps' rise runs on it). */
   private step = 0;
 
@@ -47,10 +49,14 @@ export class DayNight {
     const startUp = this.current >= DAY_NIGHT.lamp.onAt;
     for (const lamp of this.lamps) lamp.snapTo(startUp); // no emerge animation at the very start of a run
 
-    const off = listen<WavePayload>(Events.WaveStarted, ({ wave }) => {
+    const offWave = listen<WavePayload>(Events.WaveStarted, ({ wave }) => {
       this.target = nightProgress(wave, this.mode);
     });
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
+    const offLights = listen<LightsOutPayload>(Events.LightsOut, ({ on }) => (this.forcedUp = on));
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      offWave();
+      offLights();
+    });
   }
 
   update(delta: number): void {
@@ -95,8 +101,8 @@ export class DayNight {
 
     // Lamps: underground in the afternoon, out from `onAt` on, brighter the darker it gets.
     const L = DAY_NIGHT.lamp;
-    const up = p >= L.onAt;
-    const bright = Phaser.Math.Clamp((p - L.onAt) / (1 - L.onAt), 0, 1);
+    const up = p >= L.onAt || this.forcedUp;
+    const bright = Math.max(Phaser.Math.Clamp((p - L.onAt) / (1 - L.onAt), 0, 1), this.forcedUp ? 0.7 : 0);
     for (const lamp of this.lamps) lamp.update(this.step, up, bright, this.clock);
   }
 }

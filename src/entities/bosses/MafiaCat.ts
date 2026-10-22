@@ -3,8 +3,8 @@ import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { EMO_POSE_MS as MS, EMO_POSES as POSE, EMO_RIG } from '../../config/animation';
 import { BOSS_CURSE, byPhase, MAFIA } from '../../config/bosses';
-import { BOSS_CURSE_LINES } from '../../content/bosses';
-import { bus, Events, type CurseZonePayload, type ExplosionPayload, type SpawnProjectilePayload } from '../../core/events';
+import { BOSS_CURSE_LINES, MAFIA_MOODS } from '../../content/bosses';
+import { bus, Events, type CurseZonePayload, type ExplosionPayload, type SpawnProjectilePayload, type WeatherPayload } from '../../core/events';
 import { telegraphCircle } from '../../systems/Telegraph';
 import type { Enemy } from '../Enemy';
 import { SmoothOrbit } from './SmoothOrbit';
@@ -26,6 +26,13 @@ export class MafiaCat extends Boss {
   private readonly puddles: TearPuddles;
   /** Until this game time he is worn out from a scream: wide open (`MAFIA.shield.exhaustedFactor`). */
   private exhaustedUntil = 0;
+  /** v172: it rains (his cloud turned the weather), the lights are off, and the cry for help (hiding behind his hood). */
+  private raining = false;
+  private nextRainPuddleAt = 0;
+  private hiding = false;
+  private hidingUntil = 0;
+  private nextCryAt = 0;
+  private nextHideDropAt = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'mafia', Tex.BossMafia);
@@ -57,7 +64,60 @@ export class MafiaCat extends Boss {
   override preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
     this.rig.sync(gameClock.scaled(delta));
-    if (this.ctx) this.puddles.update(this.ctx.player);
+    if (this.ctx) {
+      this.puddles.update(this.ctx.player);
+      this.moods(gameClock.now);
+    }
+  }
+
+  /** v172: the rainy mood (cloud, rain, spreading puddles), lights out at low health, and the end of the cry for help. */
+  private moods(now: number): void {
+    if (this.hp <= 0) return;
+    const frac = this.hp / this.maxHp;
+    this.rig.setGloom(1 - frac);
+    if (!this.raining && frac <= MAFIA.rain.startAtHp) this.startRain(now);
+    if (this.raining && now >= this.nextRainPuddleAt) {
+      const R = MAFIA.rain;
+      const k = Phaser.Math.Clamp((R.startAtHp - frac) / R.startAtHp, 0, 1); // 0 = it just started, 1 = full storm
+      this.puddles.spread(this.ctx.player.x, this.ctx.player.y, R.minFromVaruPx, Math.round(Phaser.Math.Linear(R.puddleMax[0], R.puddleMax[1], k)), R.puddleLifeMs);
+      this.nextRainPuddleAt = now + Phaser.Math.Linear(R.puddleEveryMs[0], R.puddleEveryMs[1], k);
+    }
+    if (this.hiding) {
+      if (now >= this.hidingUntil) {
+        this.hiding = false;
+        this.rig.setHiding(false);
+      } else if (now >= this.nextHideDropAt) {
+        this.nextHideDropAt = now + MAFIA.cry.puddleEveryMs;
+        this.puddles.beneath(this.x, this.y, MAFIA.cry.puddleJitterPx);
+      }
+    }
+  }
+
+  /** The cloud turns the weather: real rain over the arena (the normal rain weather: streaks, rusty belt). */
+  private startRain(now: number): void {
+    this.raining = true;
+    this.nextRainPuddleAt = now + 1500;
+    const weather: WeatherPayload = { weather: 'rain', wave: this.ctx.wave ?? 0 };
+    bus.emit(Events.WeatherChanged, weather);
+    this.shout(MAFIA_MOODS.rain);
+  }
+
+  /** A hit between two attacks may make him cry for help: he hides behind his hood for a moment (less damage, puddles at his feet, no attacks). */
+  private tryHide(): void {
+    const C = MAFIA.cry;
+    const now = gameClock.now;
+    if (this.hiding || now < this.nextCryAt || now < this.exhaustedUntil || !this.isBetweenAttacks || Math.random() >= C.chance) return;
+    this.hiding = true;
+    this.hidingUntil = now + C.hideMs;
+    this.nextCryAt = this.hidingUntil + C.cooldownMs;
+    this.nextHideDropAt = now;
+    this.interlude(C.hideMs);
+    this.rig.to(POSE.hide, MS.hide, 'out');
+    this.rig.to(POSE.slump, MS.hideBack, 'inOut', C.hideMs - MS.hideBack);
+    this.rig.setHiding(true);
+    this.rig.spray(12, true);
+    this.flash(C.flash, 300);
+    this.shout(Phaser.Utils.Array.GetRandom([...MAFIA_MOODS.cry]));
   }
 
   /** v148: his crew hides him (less damage while 2+ ninjas live), and right after a scream he is wide open. */
@@ -66,13 +126,17 @@ export class MafiaCat extends Boss {
     let factor = super.damageFactor;
     if (gameClock.now < this.exhaustedUntil) factor *= S.exhaustedFactor;
     else if (this.ninjaCount() >= S.minNinjas) factor *= S.crewFactor;
+    if (this.hiding) factor *= MAFIA.cry.damageFactor; // v172: behind his hood
     return factor;
   }
 
   /** Getting hit makes him jolt and spurt tears. */
   protected override applyHit(effective: number, fromX: number, fromY: number, knockback: number): boolean {
     const killed = super.applyHit(effective, fromX, fromY, knockback);
-    if (!killed) this.rig.hurt();
+    if (!killed) {
+      this.rig.hurt();
+      this.tryHide();
+    }
     return killed;
   }
 
@@ -86,6 +150,10 @@ export class MafiaCat extends Boss {
   }
 
   override destroy(fromScene?: boolean): void {
+    if (!fromScene) {
+      // He is gone: the rain he made stops (the lights come back in `Boss.destroy`).
+      if (this.raining) bus.emit(Events.WeatherChanged, { weather: 'clear', wave: this.ctx?.wave ?? 0 } satisfies WeatherPayload);
+    }
     this.rig.destroy(!fromScene && this.hp <= 0); // beaten: he bursts into tears
     this.puddles.destroy(this.ctx?.player ?? null);
     super.destroy(fromScene);
@@ -184,7 +252,9 @@ export class MafiaCat extends Boss {
           const zone: CurseZonePayload = { x: this.x, y: this.y, radius: MAFIA.screamRadius, curse: { kind: BOSS_CURSE.mafia.kind, line: BOSS_CURSE_LINES.mafia } };
           bus.emit(Events.CurseZone, zone); // anyone inside the pink ring is cursed too
           this.heartRing(byPhase(MAFIA.screamHearts, this.phase)); // phase 2: a circle of hearts follows the shockwave
-          this.puddles.splash(byPhase(MAFIA.puddle.count, this.phase), this.x, this.y, MAFIA.screamRadius + 20); // v148: he leaves puddles of tears
+          const floodRadius = MAFIA.screamRadius * MAFIA.flood.reach;
+          this.puddles.floodAround(this.x, this.y, floodRadius); // v180: the floor around him turns into one big puddle, wider than the ring...
+          this.puddles.splash(byPhase(MAFIA.puddle.count, this.phase), this.x, this.y, floodRadius); // ...and v148: he leaves deeper puddles of tears in it
           this.exhaustedUntil = gameClock.now + MAFIA.recoverMs.scream; // and is wide open while he catches his breath
         },
       },

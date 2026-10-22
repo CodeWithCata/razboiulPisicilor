@@ -11,20 +11,26 @@ export type WaveDef = Partial<Record<EnemyType, number>>;
 export const WAVES: readonly WaveDef[] = [
   { normal: 8 },
   { normal: 12 },
-  { normal: 9, kamikaze: 5 }, // kamikaze debut
-  { normal: 9, fat: 2 }, // fat cat debut
-  { normal: 9, ninja: 5 }, // ninja debut
-  { normal: 8, flying: 5 }, // flying debut
-  { queen: 1, normal: 6 }, // MID BOSS: Queen Cat
-  { normal: 9, kamikaze: 4, fat: 2, tennis: 3 }, // tennis cat debut
-  { normal: 9, ninja: 6, flying: 5, tennis: 3 },
-  { mafia: 1, normal: 6, kamikaze: 3 }, // MID BOSS: Mafia Cat (the emo cat)
-  { normal: 12, fat: 3, kamikaze: 6, tennis: 4 },
-  { normal: 12, ninja: 6, flying: 6, fat: 3, kamikaze: 6, tennis: 4 },
-  { normal: 14, ninja: 8, flying: 8, fat: 3, kamikaze: 8, tennis: 5 },
-  { normal: 15, ninja: 8, flying: 8, fat: 5, kamikaze: 9, tennis: 5 },
+  { normal: 10, kamikaze: 3 }, // kamikaze debut (v186: was 5, a +58% jump on wave 3)
+  { normal: 11, fat: 2 }, // fat cat debut
+  { normal: 11, ninja: 5 }, // ninja debut
+  { normal: 10, flying: 5 }, // flying debut
+  { queen: 1, normal: 7 }, // MID BOSS: Queen Cat
+  { normal: 8, kamikaze: 3, fat: 2, tennis: 2 }, // tennis cat debut (v186: was 9 / 4 / 2 / 3)
+  { normal: 9, ninja: 5, flying: 4, tennis: 3 },
+  { mafia: 1, normal: 7, kamikaze: 3 }, // MID BOSS: Mafia Cat (the emo cat)
+  { normal: 11, fat: 3, kamikaze: 5, tennis: 4 },
+  { normal: 12, ninja: 4, flying: 4, fat: 2, kamikaze: 4, tennis: 3, bomber: 1 }, // bomber cat debut (v186: was 38 cats, +60% over wave 11)
+  { normal: 13, ninja: 5, flying: 5, fat: 3, kamikaze: 6, tennis: 4, bomber: 1 },
+  { normal: 14, ninja: 6, flying: 6, fat: 4, kamikaze: 7, tennis: 4, bomber: 2 },
   { federer: 1 }, // FINAL BOSS: Pisica Federer (her ball boys show up in phase 2)
 ];
+
+/**
+ * The wave endless mode repeats (then grows by `ENDLESS.growthPerWave`). It is the OLD campaign wave 14 on purpose: v186 eased the
+ * campaign's last waves, and endless (a bonus for people who already won) keeps its difficulty.
+ */
+const ENDLESS_BASE_WAVE: WaveDef = { normal: 15, ninja: 8, flying: 8, fat: 5, kamikaze: 9, tennis: 5, bomber: 2 };
 
 export const FINAL_WAVE = WAVES.length;
 
@@ -63,5 +69,5 @@ export function getWave(n: number): WaveDef {
     wave[boss] = 1;
     return wave;
   }
-  return scaled(WAVES[WAVES.length - 2]!, growth);
+  return scaled(ENDLESS_BASE_WAVE, growth);
 }

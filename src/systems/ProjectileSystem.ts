@@ -6,10 +6,11 @@ import { FIREBALL_FX } from '../config/animation';
 import { PROJECTILES, type ProjectileKind, type ProjectileStats } from '../config/balance';
 import { fitToSize, setCircleHitbox } from '../core/sprite';
 import type { ArenaQuery } from '../core/arena';
-import { bus, Events, listen, type RallyHitPayload, type SpawnProjectilePayload } from '../core/events';
+import { bus, Events, listen, type ProjectileSmashPayload, type RallyHitPayload, type SpawnProjectilePayload } from '../core/events';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { gameClock } from '../core/clock';
+import { snapshotInto } from '../core/snapshot';
 
 /** Placeholder texture per kind. */
 const TEXTURES: Record<ProjectileKind, TexKey> = { yarn: Tex.Yarn, tennis: Tex.Tennis, fireball: Tex.Fireball, heart: Tex.Heart, sparkle: Tex.Star };
@@ -20,6 +21,9 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   readonly deflectable: boolean;
   /** The belt cannot touch it (the tennis cat's fireball). */
   readonly indestructible: boolean;
+  /** v172: only the thrown belt can break it (the emo cat's hearts). */
+  readonly rangedOnly: boolean;
+  private shrugReadyAt = 0;
   /** True once the belt has sent it back: it now hurts cats and bosses instead of Varu. */
   friendly = false;
   /** How many times a tennis cat or Federer has smashed this ball back at Varu (a ball is returned only so often). */
@@ -30,6 +34,11 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   throwHitsLeft: number;
   /** A homing heart follows Varu until this game time (0 = not homing). */
   homeUntil = 0;
+  /** v171: damage to props, barrels and lamps in its way (Federer's ball machines); 0 = it does not smash. */
+  smashDamage = 0;
+  /** Where it was last frame (the smash test sweeps the way it flew). */
+  lastX: number;
+  lastY: number;
   /** Time left (ms) until the fireball's next puff of embers. */
   flameMs = 0;
   expiresAt: number;
@@ -41,10 +50,13 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
+    this.lastX = x;
+    this.lastY = y;
     this.kind = kind;
     this.damage = stats.damage;
     this.deflectable = stats.deflectable;
     this.indestructible = stats.indestructible ?? false;
+    this.rangedOnly = stats.rangedOnly ?? false;
     this.throwHitsLeft = stats.throwHits ?? 1;
     this.spinPerSec = stats.spinPerSec;
     this.expiresAt = gameClock.now + stats.lifetimeMs;
@@ -124,11 +136,21 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   crack(): void {
     this.setTint(0xffffff);
     this.scene.tweens.add({ targets: this, scale: this.scale * 1.3, duration: 70, yoyo: true });
-    this.scene.time.delayedCall(90, () => {
-      if (!this.active) return;
-      if (this.homeUntil > 0) this.setTint(0xc9a0ff);
-      else this.clearTint();
-    });
+    this.scene.time.delayedCall(90, () => this.restoreTint());
+  }
+
+  /** A swing or spin touched a ranged-only heart: a quick white flash, nothing else (at most one per 250 ms). */
+  shrug(): void {
+    if (gameClock.now < this.shrugReadyAt) return;
+    this.shrugReadyAt = gameClock.now + 250;
+    this.setTint(0xffffff);
+    this.scene.time.delayedCall(70, () => this.restoreTint());
+  }
+
+  private restoreTint(): void {
+    if (!this.active) return;
+    if (this.homeUntil > 0) this.setTint(0xc9a0ff);
+    else this.clearTint();
   }
 
   tick(deltaMs: number): void {
@@ -140,6 +162,8 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
 export class ProjectileSystem {
   readonly group: Phaser.Physics.Arcade.Group;
   private readonly off: Array<() => void> = [];
+  /** Reused copy of the shot list for the per-frame loop (see `snapshotInto`). */
+  private readonly scratch: Phaser.GameObjects.GameObject[] = [];
   /** The fireball's embers (FIREBALL_FX), one emitter for all of them. */
   private readonly flames: Phaser.GameObjects.Particles.ParticleEmitter;
 
@@ -188,12 +212,12 @@ export class ProjectileSystem {
     );
 
     this.off.push(
-      listen<SpawnProjectilePayload>(Events.SpawnProjectile, ({ kind, x, y, angle, speed, homing }) => {
+      listen<SpawnProjectilePayload>(Events.SpawnProjectile, ({ kind, x, y, angle, speed, homing, smashDamage }) => {
         const proj = new Projectile(this.scene, kind, x, y, angle, speed);
         this.group.add(proj);
         proj.launch(angle, speed); // the group's add reset the velocity to 0: set it again now
         if (homing) proj.makeHoming();
-
+        if (smashDamage && smashDamage > 0) proj.smashDamage = smashDamage;
       }),
     );
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off.forEach((f) => f()));
@@ -206,19 +230,38 @@ export class ProjectileSystem {
 
   update(time: number, delta: number): void {
     const margin = 80;
-    for (const child of this.group.getChildren().slice()) {
-      const p = child as Projectile;
+    const shots = snapshotInto(this.group.getChildren(), this.scratch);
+    for (let i = 0; i < shots.length; i++) {
+      const p = shots[i] as Projectile;
       p.tick(delta);
       if (p.homeUntil > 0) p.steer(this.player.x, this.player.y, delta);
       if (p.kind === 'fireball') this.emitFlames(p, delta);
       const outside = p.x < -margin || p.x > WORLD.width + margin || p.y < -margin || p.y > WORLD.height + margin;
       if (outside || time >= p.expiresAt) {
         p.destroy();
-      } else if (this.arena.isSolidAt(p.x, p.y)) {
+        continue;
+      }
+      // v171: a smashing ball (Federer's ball machines) breaks what stands in its way. What breaks lets it fly on, what survives stops it.
+      if (p.smashDamage > 0 && !p.friendly && this.smashThings(p)) {
+        bus.emit(Events.ProjectileBlocked, { x: p.x, y: p.y });
+        p.destroy();
+        continue;
+      }
+      p.lastX = p.x;
+      p.lastY = p.y;
+      if (this.arena.isSolidAt(p.x, p.y)) {
         bus.emit(Events.ProjectileBlocked, { x: p.x, y: p.y }); // walls stop everything, yarn and tennis balls alike
         p.destroy();
       }
     }
+    shots.length = 0;
+  }
+
+  /** Tells the props, barrels and lamps that a smashing ball flew through them this frame. True when something survived the hit (the ball is spent). */
+  private smashThings(p: Projectile): boolean {
+    const hit: ProjectileSmashPayload = { prevX: p.lastX, prevY: p.lastY, x: p.x, y: p.y, radius: PROJECTILES[p.kind].hitRadius, damage: p.smashDamage, absorbed: false };
+    bus.emit(Events.ProjectileSmash, hit);
+    return hit.absorbed;
   }
 
   /** A few embers behind the fireball, a little late and scattered, so it trails a short flame. */

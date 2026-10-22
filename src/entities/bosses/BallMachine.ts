@@ -1,4 +1,4 @@
-/** @file Federer's ball machine (phase 2): sits on the edge of the arena and fires slow tennis balls down lanes that are drawn on the floor first. More balls to rally with, and a hazard. */
+/** @file One of Federer's ball launchers (phase 2): stands on a side edge of the arena, glides along it, turns its barrel to Varu and, when it is its turn, draws a lane on the floor and fires tennis balls down it (v171: they smash what is in their way, and some are red and fast). The three launchers are run by BallMachines.ts. */
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { PLAY_AREA } from '../../config/arena';
@@ -6,34 +6,38 @@ import { FEDERER } from '../../config/bosses';
 import { bus, Events, type SpawnProjectilePayload, type TeleportPayload } from '../../core/events';
 import { telegraphLine, type Telegraph } from '../../systems/Telegraph';
 
-/** What the boss tells the machine every frame. All times are game ms. */
+/** What the bank tells a launcher every frame. All times are game ms. */
 export interface MachineFrame {
   now: number;
   /** Where Varu stands (the lane that is closest to him is picked). */
   playerX: number;
   playerY: number;
-  /** The damage budget has room for the machine to start a new volley. */
+  /** It is this launcher's turn and the damage budget has room: it may start a volley. */
   allowed: boolean;
   /** Stand still (towel break): a lane being drawn is dropped, nothing new starts. */
   paused: boolean;
-  /** Tie-break rage: shorter pauses and a red tint. */
+  /** Tie-break rage: a red tint, and the barrel turns faster. */
   rage: boolean;
+  /** Crossfire: +1 = only lanes that slant down on the screen, -1 = only lanes that slant up, 0 = any lane (the normal single volley). */
+  bias?: 1 | -1 | 0;
 }
 
 type MachineState = 'wait' | 'aim' | 'fire';
+export type MachineEdge = 'left' | 'right';
 
 /**
- * It rolls out on the edge of the arena that is farthest from Varu (the middle of that edge, never a corner), turns its barrel to a lane, draws the
- * lane on the floor for `FEDERER.machine.telegraphMs` and then fires `balls` slow tennis balls down it. The balls are normal tennis balls: swat
- * them (a rally!) or step aside. Numbers: `FEDERER.machine`. The boss owns it (it is destroyed with her) and tells it every frame what is allowed.
+ * One launcher. It rolls out on its edge (`left` fires right, `right` fires left), is moved up and down by the bank while it waits, keeps its
+ * barrel turned towards Varu (within the lane fan), and on its turn draws the closest lane for `FEDERER.machine.telegraphMs` and then fires
+ * `balls` slow tennis balls down it. It never moves while a lane is drawn or balls are leaving, so the warning stays true. The balls are
+ * normal tennis balls: swat them (a rally!) or step aside. Numbers: `FEDERER.machine`.
  */
 export class BallMachine {
-  private readonly sprite: Phaser.GameObjects.Image;
-  private readonly baseScale: number;
+  readonly edge: MachineEdge;
   /** The direction straight into the arena (radians). */
   private readonly facing: number;
+  private readonly sprite: Phaser.GameObjects.Image;
+  private readonly baseScale: number;
   private state: MachineState = 'wait';
-  private nextAt: number;
   private fireAt = 0;
   private shotsLeft = 0;
   private nextShotAt = 0;
@@ -42,42 +46,46 @@ export class BallMachine {
   private lane: Telegraph | null = null;
   private rageLook = false;
   private destroyed = false;
+  /** How many volleys it has finished (the bank watches this to pass the turn on). */
+  volleys = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
-    farFromX: number,
-    farFromY: number,
-    now: number,
+    edge: MachineEdge,
+    y: number,
   ) {
     const M = FEDERER.machine;
-    const midX = (PLAY_AREA.left + PLAY_AREA.right) / 2;
-    const midY = (PLAY_AREA.top + PLAY_AREA.bottom) / 2;
-    const inset = M.edgeInsetPx;
-    const spots = [
-      { x: midX, y: PLAY_AREA.top + inset, facing: Math.PI / 2 }, // top edge, fires down
-      { x: midX, y: PLAY_AREA.bottom - inset, facing: -Math.PI / 2 },
-      { x: PLAY_AREA.left + inset, y: midY, facing: 0 },
-      { x: PLAY_AREA.right - inset, y: midY, facing: Math.PI },
-    ];
-    let best = spots[0]!;
-    for (const spot of spots) {
-      if (Math.hypot(spot.x - farFromX, spot.y - farFromY) > Math.hypot(best.x - farFromX, best.y - farFromY)) best = spot;
-    }
-    this.facing = best.facing;
-    this.laneAngle = best.facing;
-    this.nextAt = now + M.firstDelayMs;
-    this.sprite = scene.add.image(best.x, best.y, Tex.BallMachine).setDepth(14).setDisplaySize(M.sizePx, M.sizePx).setRotation(best.facing + Math.PI / 2);
+    this.edge = edge;
+    this.facing = edge === 'left' ? 0 : Math.PI;
+    this.laneAngle = this.facing;
+    const x = edge === 'left' ? PLAY_AREA.left + M.edgeInsetPx : PLAY_AREA.right - M.edgeInsetPx;
+    this.sprite = scene.add.image(x, y, Tex.BallMachine).setDepth(14).setDisplaySize(M.sizePx, M.sizePx).setRotation(this.facing + Math.PI / 2);
     this.baseScale = this.sprite.scaleX;
     // It rolls in with a puff of smoke.
     this.sprite.setScale(this.baseScale * 0.1);
     scene.tweens.add({ targets: this.sprite, scaleX: this.baseScale, scaleY: this.baseScale, duration: 320, ease: 'Back.easeOut' });
-    const puff: TeleportPayload = { x: best.x, y: best.y };
+    const puff: TeleportPayload = { x, y };
     bus.emit(Events.Teleport, puff);
   }
 
-  /** True from the moment a lane is drawn until `clearMs` after its last ball: the machine counts as a damage source meanwhile. */
+  get y(): number {
+    return this.sprite.y;
+  }
+
+  /** True while a lane is drawn or balls are leaving: the bank must not move it, and no other launcher starts. */
+  get active(): boolean {
+    return this.state !== 'wait';
+  }
+
+  /** True from the moment a lane is drawn until `clearMs` after its last ball: the launcher counts as a damage source meanwhile. */
   busy(now: number): boolean {
     return this.state !== 'wait' || now < this.clearAt;
+  }
+
+  /** Glides along its edge towards `targetY`, at most `step` px this frame. Does nothing while it is aiming or firing. */
+  glide(targetY: number, step: number): void {
+    if (this.destroyed || this.active) return;
+    this.sprite.y += Phaser.Math.Clamp(targetY - this.sprite.y, -step, step);
   }
 
   /** Every frame. */
@@ -91,11 +99,11 @@ export class BallMachine {
     }
     if (f.paused) {
       if (this.state !== 'wait') this.cancelAim(); // a lane being drawn or a volley under way is dropped
-      this.nextAt = Math.max(this.nextAt, f.now + 500);
       return;
     }
     if (this.state === 'wait') {
-      if (f.now >= this.nextAt && f.allowed) this.beginAim(f);
+      this.trackBarrel(f);
+      if (f.allowed) this.beginAim(f, f.bias ?? 0);
       return;
     }
     if (this.state === 'aim') {
@@ -103,42 +111,50 @@ export class BallMachine {
       this.sprite.rotation = Phaser.Math.Angle.RotateTo(this.sprite.rotation, this.laneAngle + Math.PI / 2, 0.12);
       if (f.now >= this.fireAt) {
         this.state = 'fire';
-        this.shotsLeft = M.balls;
+        this.shotsLeft = M.balls + (this.rageLook ? M.rageExtraBalls : 0); // v171: one more ball in the rage
         this.nextShotAt = f.now;
       }
       return;
     }
     // fire
-    if (this.shotsLeft > 0) {
-      if (f.now >= this.nextShotAt) {
-        this.shoot();
-        this.shotsLeft -= 1;
-        this.nextShotAt = f.now + M.ballGapMs;
-        if (this.shotsLeft === 0) {
-          this.clearAt = f.now + M.clearMs;
-          this.state = 'wait';
-          this.nextAt = f.now + M.intervalMs[f.rage ? 1 : 0];
-          this.lane = null; // the lane drawing has finished by itself
-        }
+    if (f.now >= this.nextShotAt && this.shotsLeft > 0) {
+      this.shoot();
+      this.shotsLeft -= 1;
+      this.nextShotAt = f.now + M.ballGapMs;
+      if (this.shotsLeft === 0) {
+        this.clearAt = f.now + M.clearMs;
+        this.state = 'wait';
+        this.volleys += 1;
+        this.lane = null; // the lane drawing has finished by itself
       }
     }
   }
 
-  /** Pick the lane closest to Varu (now and then a neighbour, so it is not a sniper) and draw it. */
-  private beginAim(f: MachineFrame): void {
+  /** While it waits the barrel follows Varu, kept inside the lane fan (so it never points along its edge). */
+  private trackBarrel(f: MachineFrame): void {
+    const M = FEDERER.machine;
+    const widest = Phaser.Math.DegToRad(Math.max(...M.lanesDeg.map(Math.abs)));
+    const bearing = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, f.playerX, f.playerY);
+    const off = Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(bearing - this.facing), -widest, widest);
+    this.sprite.rotation = Phaser.Math.Angle.RotateTo(this.sprite.rotation, this.facing + off + Math.PI / 2, f.rage ? FEDERER.machine.rageTurnRate : 0.08);
+  }
+
+  /** Pick the lane closest to Varu (now and then a neighbour, so it is not a sniper) and draw it. `bias` (crossfire) limits it to lanes that slant down (+1) or up (-1). */
+  private beginAim(f: MachineFrame, bias: 1 | -1 | 0): void {
     const M = FEDERER.machine;
     const bearing = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, f.playerX, f.playerY);
+    const lanes = M.lanesDeg.filter((deg) => bias === 0 || Math.sign(deg) === bias); // lanesDeg are sorted, so the filtered list is too
     let bestIndex = 0;
     let bestGap = Infinity;
-    M.lanesDeg.forEach((deg, i) => {
+    lanes.forEach((deg, i) => {
       const gap = Math.abs(Phaser.Math.Angle.Wrap(this.facing + Phaser.Math.DegToRad(deg) - bearing));
       if (gap < bestGap) {
         bestGap = gap;
         bestIndex = i;
       }
     });
-    if (Math.random() < 0.3) bestIndex = Phaser.Math.Clamp(bestIndex + (Math.random() < 0.5 ? -1 : 1), 0, M.lanesDeg.length - 1);
-    this.laneAngle = this.facing + Phaser.Math.DegToRad(M.lanesDeg[bestIndex]!);
+    if (bias === 0 && Math.random() < 0.3) bestIndex = Phaser.Math.Clamp(bestIndex + (Math.random() < 0.5 ? -1 : 1), 0, lanes.length - 1);
+    this.laneAngle = this.facing + Phaser.Math.DegToRad(lanes[bestIndex]!);
     const ms = Math.max(FEDERER.minWarningMs, M.telegraphMs);
     const from = this.muzzle();
     this.lane = telegraphLine(this.scene, from.x, from.y, this.laneAngle, this.laneLength(from.x, from.y), M.laneWidthPx, ms);
@@ -162,12 +178,21 @@ export class BallMachine {
     return Math.max(80, Math.min(tx, ty));
   }
 
-  /** One slow green ball down the lane, with a little recoil. */
+  /**
+   * One ball down the lane, with a little recoil. v171: it breaks what stands in its way (`smashDamage`), and each ball has a chance to be
+   * the red, faster fireball instead of the slow green one; the rage makes the red likelier and every ball faster and harder-hitting.
+   */
   private shoot(): void {
+    const M = FEDERER.machine;
     const from = this.muzzle();
-    const ball: SpawnProjectilePayload = { kind: 'tennis', x: from.x, y: from.y, angle: this.laneAngle, speed: FEDERER.machine.ballSpeed };
+    const rage = this.rageLook ? 1 : 0;
+    const red = Math.random() < M.red.chance[rage]!;
+    const speed = red ? M.red.speed[rage]! : M.ballSpeed * (rage ? M.rageBallSpeedFactor : 1);
+    const smashDamage = M.smash.damage[red ? 1 : 0]! * (rage ? M.smash.rageFactor : 1);
+    const ball: SpawnProjectilePayload = { kind: red ? 'fireball' : 'tennis', x: from.x, y: from.y, angle: this.laneAngle, speed, smashDamage };
     bus.emit(Events.SpawnProjectile, ball);
-    this.scene.tweens.add({ targets: this.sprite, scaleX: this.baseScale * 1.1, scaleY: this.baseScale * 0.9, duration: 70, yoyo: true });
+    const kick = red ? 1.18 : 1.1; // the red one kicks the machine back a little harder
+    this.scene.tweens.add({ targets: this.sprite, scaleX: this.baseScale * kick, scaleY: this.baseScale * (2 - kick), duration: 70, yoyo: true });
   }
 
   private cancelAim(): void {

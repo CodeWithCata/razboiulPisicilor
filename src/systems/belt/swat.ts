@@ -9,8 +9,12 @@ import type { Projectile } from '../ProjectileSystem';
  * Tennis balls are DEFLECTED back (toward the boss if there is one, which stuns it) and become friendly.
  * The fireball is left alone (the belt passes through it). Everything else is just destroyed.
  */
-export function swatProjectile(proj: Projectile, enemies: Phaser.Physics.Arcade.Group): void {
+export function swatProjectile(proj: Projectile, enemies: Phaser.Physics.Arcade.Group, ranged = false): void {
   if (!proj.active || proj.friendly || proj.indestructible) return; // the fireball ignores the belt
+  if (proj.rangedOnly && !ranged) {
+    proj.shrug(); // v172: the emo cat's hearts: a swing or spin cannot break them, only the thrown belt (and only after `throwHits` hits)
+    return;
+  }
 
   if (proj.deflectable) {
     const boss = enemies.getChildren().find((e) => (e as Enemy).isBoss && e.active) as Enemy | undefined;

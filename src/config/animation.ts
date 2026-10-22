@@ -460,12 +460,18 @@ export const QUEEN_RIG = {
   aura: { sizePx: 300, alpha: 0.16, pulseAlpha: 0.07, color: 0xff3d5a, pulseRate: 0.006 },
   sparkle: { everyMs: { min: 700, max: 1500 }, sizePx: 16, lifeMs: 480 },
   burst: { count: 9, reachPx: 90, lifeMs: 520 },
-  dust: { everyMs: 45, behindPx: 38, startScale: 1.1, endScale: 3.4, lifeMs: 380, alpha: 0.55, color: 0xefe3cf },
-  ring: { color: 0xffd166, alpha: 0.12, strokeAlpha: 0.8 },
+  /** Dust puffs behind her (`Tex.FxPuff`, a cartoon cloud, 24 px radius at scale 1): scales are of that picture. */
+  dust: { everyMs: 45, behindPx: 38, startScale: 0.5, endScale: 1.5, lifeMs: 420, alpha: 0.8, color: 0xefe3cf, spinDeg: 40 },
+  /** The gold magic circle on the floor while she spins (`Tex.FxRing`). `color` is also the default color of `pulse`. */
+  ring: {
+    color: 0xffd166, alpha: 0.95, spinRate: 0.03,
+    /** The gold diamonds that circle it (`RingDiamonds`): `orbit` = share of the ring radius, `rate` rad/ms, `flipRate` rad/ms of the glint, `texH` = height of the picture. `h` = size in game px (spin ring / scepter ring). */
+    diamonds: { count: 10, hoverCount: 6, orbit: 0.83, rate: 0.0016, flipRate: 0.006, h: 20, hoverH: 14, texH: 32 },
+  },
   dizzy: { stars: 3, headPx: 62, orbitPx: 48, rate: 0.0038, crownTiltDeg: 16, crownRate: 0.011, scepterDroopDeg: 38 },
   death: { crownRisePx: 90, crownSpinDeg: 420, lifeMs: 1000 },
   /** The bubble around her while her elite guards live (she takes half damage). */
-  shield: { radius: 96, color: 0x6fd3ff, alpha: 0.14, pulseAlpha: 0.06, pulseRate: 0.008 },
+  shield: { radius: 96, alpha: 0.9, pulseAlpha: 0.1, pulseRate: 0.008, breathe: 0.025, sparkleEveryMs: 420, sparkleSizePx: 14, sparkleLifeMs: 520 },
 } as const;
 
 /** Poses of Regina's loose parts per attack moment (see `QueenPose` in `entities/bosses/QueenRig.ts`), and how long each change takes (ms). */
@@ -515,7 +521,7 @@ export const EMO_RIG = {
   tear: {
     everyMs: 230,
     fringeEveryMs: 520,
-    w: 5, h: 8,
+    w: 7, h: 11,
     colors: [0x9fd8ff, 0xcdeeff, 0x9fd8ff, 0x15151c], // every 4th one is black mascara
     outline: 0x1b2340,
     gravity: 520,
@@ -534,9 +540,14 @@ export const EMO_RIG = {
     puffs: [[-13, 3, 11], [0, -3, 15], [14, 2, 12], [3, 6, 11]] as const, // x, y, radius
     color: 0x6a6f8a, darkColor: 0x40445c, flashColor: 0xf777b9, outline: 0x1b2340, outlineW: 2.2,
     alpha: 0.95, depth: 19,
-    rain: { everyMs: 120, w: 2, h: 8, color: 0x9fd8ff, speed: 190, lifeMs: 460, jitter: 16 },
+    rain: { everyMs: 120, w: 5, h: 9, color: 0x9fd8ff, speed: 190, lifeMs: 460, jitter: 16 },
     /** Phase 2: darker, rains harder, and flashes pink now and then. */
     stormRainMult: 2.2,
+    /** v172 rainy mood: at full gloom (he has lost all his health) the cloud is this many times bigger and rains this many times more. */
+    gloomScale: 1.9,
+    gloomRainMult: 2.5,
+    /** The lavender soap bubble round him while he hides (cry for help, `Tex.FxBubbleEmo`): game px radius, it breathes a little. */
+    hideBubble: { radius: 66, alpha: 0.95, depth: 17, breathe: 0.03, breatheRate: 0.006 },
     flashEveryMs: { min: 1800, max: 3600 },
     flashMs: 110,
   },
@@ -554,9 +565,12 @@ export const EMO_POSES = {
   crewFire: { squash: -0.05, tiltDeg: -9, sob: 0, cry: 2.4 },
   stunned: { squash: 0.2, tiltDeg: 13, sob: 1, cry: 4.5 },
   breakdown: { squash: 0.12, tiltDeg: 0, sob: 1, cry: 4 },
+  /** v172 cry for help: curled up small behind his hood. */
+  hide: { squash: 0.3, tiltDeg: 0, sob: 1, cry: 6 },
 } as const;
 
 export const EMO_POSE_MS = {
+  hide: 220, hideBack: 500,
   heartsWind: 520, heartsFire: 130, heartsBack: 650, // v143: fires and recoveries a little slower and eased both ways (was 90 / 500)
   screamWind: 700, screamFire: 120, screamBack: 800,
   crewWind: 560, crewFire: 150, crewBack: 650,
@@ -668,7 +682,7 @@ export const BALL_LOB = {
   dust: { count: 8, tint: [0xe6d9b3, 0xc2b48c, 0xf5ecd0] },
   /** The pop on the ground: a ring (game px) that spreads. */
   pop: { ringMs: 300, color: 0xf1fba0 },
-  depth: { marker: 6, ball: 50, fuzz: 49, dust: 11 },
+  depth: { marker: 26, ball: 50, fuzz: 49, dust: 11 }, // marker 26: above the lights-out dark sheet (24.6) so the landing warning stays readable
 } as const;
 
 /** The fireball's little flames (`systems/ProjectileSystem.ts`): a few embers leave the ball every `everyMs` and rise while they fade. Visual only. */
@@ -735,4 +749,61 @@ export const IDLE_HABITS = {
   neck: { ms: 800, times: [0, 0.22, 0.4, 0.62, 0.78, 1], tiltDeg: [0, -9, -9, 7, 7, 0] },
   /** Where the little glint of the belt shows, relative to the fist (px, before the body turn). */
   glintCount: 4,
+} as const;
+
+/**
+ * The bed cage show (systems/props/PropFx.ts, listens to CatCaged / CatReleased / BedRearmed). All code-drawn, visual only:
+ * bars + a padlock over the bed with the cat behind them, a fluff burst when it gets out, a pillow that drops back with a squash.
+ * Sizes are px around the bed's center (a bed is 2x2 tiles = 80 px).
+ */
+export const BED_CAGE_FX = {
+  /** Above the bed, below the actors (they start at 10). */
+  depth: 9.6,
+  /** Cage box: half width / half height, and how far down from the bed's center it sits. */
+  box: { halfW: 32, halfH: 22, offsetY: 4 },
+  bars: { count: 5, width: 5, rail: 6, fill: 0xb9c4d6, light: 0xeaf0fa, outline: 0x1b2340, outlinePx: 3 },
+  /** The padlock hangs on the bottom rail. */
+  lock: { w: 16, h: 13, shackleR: 5, fill: 0xf5c518, keyhole: 0x1b2340, popDelayMs: 130, popMs: 170 },
+  /** The bars drop in from above when the cat is caged. */
+  drop: { fromPx: 28, ms: 220 },
+  /** The whole cage shakes when it slams shut (and the camera nudges). */
+  slam: { px: 5, ms: 55, repeats: 5, cameraMs: 80, cameraIntensity: 0.003 },
+  /** The cat behind the bars: smaller, dim, and shaking a little all the time (muffled). */
+  cat: { fitW: 54, fitH: 38, tint: 0xaeb2d6, alpha: 0.9, shakePx: 1.5, wobbleDeg: 3, shakeMs: 70 },
+  /** A small "miau" from inside now and then. */
+  miau: { firstMs: 450, everyMs: { min: 900, max: 1500 }, color: '#d9d9f2', size: 15, offsetY: 8 },
+  /** The word when the cage shuts. */
+  word: { color: '#ffe9a0', size: 30, offsetY: -58 },
+  /** The cat gets out: fluff (more if it escaped by itself), the bars lift away. */
+  release: {
+    fluff: 14, fluffEscaped: 32, glintEscaped: 5,
+    liftPx: 26, liftMs: 190,
+    shakeMs: 90, shakeIntensity: 0.004,
+    word: { color: '#ffb3cf', size: 34, offsetY: -48 },
+  },
+  /** The rest is over: a pillow drops onto the bed, squashes, springs back and fades into the real one. */
+  rearm: {
+    pillow: { w: 56, h: 30, fill: 0xffd6dc, shade: 0xf2a9bd, seam: 0xe58aa4, outline: 0x1b2340, outlinePx: 3 },
+    startPx: 48, restOffsetY: -4, fallMs: 240,
+    squashX: 1.3, squashY: 0.6, squashMs: 100,
+    springMs: 380, hopPx: 8,
+    holdMs: 120, fadeMs: 180,
+    pop: { glint: 5, fluff: 6 },
+    word: { color: '#ffd1e0', size: 22, offsetY: -40 },
+  },
+} as const;
+
+/** The queen's red carpet attack drawn as a real carpet (`systems/CarpetRoll.ts`). Sizes in game px, times in ms. */
+export const CARPET_FX = {
+  navy: 0x1b2340,
+  gold: 0xffd166,
+  rollColor: 0x8f0d18,
+  /** Thickness of the gold trim along the long edges, and of the roll at the tip while the carpet unrolls. */
+  trimPx: 12,
+  rollPx: 22,
+  /** The carpet is a bit see-through while it warns, solid when it strikes (flash, hold, then fade). */
+  warnAlpha: 0.72,
+  flashAlpha: 0.45,
+  flashMs: 140,
+  holdMs: 140,
 } as const;

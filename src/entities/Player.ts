@@ -10,6 +10,7 @@ import { gameClock } from '../core/clock';
 import { CIG_SMOKE, ENERGY_FLIP, ENERGY_TRAIL, EMO_FX, GOLD_BELT, IDLE_HABITS, MILK_FX, MILK_TRAIL, RUST_FX, SMOKE_BREAK, VARU_ANIM, type ZLook } from '../config/animation';
 import { setCircleHitbox } from '../core/sprite';
 import { BELT_FX, css, FONT } from '../config/style';
+import { hyp } from '../core/hyp';
 
 /** Body frames of the cigarette drag: arm down, half way, cigarette at his mouth. */
 const BODY_FRAMES: readonly TexKey[] = [Tex.Varu, Tex.VaruDrag1, Tex.VaruDrag2];
@@ -500,7 +501,7 @@ export class Player extends Actor {
 
     if (active) {
       const last = this.milkPath[this.milkPath.length - 1];
-      const moved = !last || Math.hypot(this.x - last.x, this.y - last.y) >= cfg.sampleDist;
+      const moved = !last || hyp(this.x - last.x, this.y - last.y) >= cfg.sampleDist;
       if (moved) {
         this.milkPath.push({ x: this.x, y: this.y, t: now });
         // Splotches along the edges of the ribbon.
@@ -553,7 +554,7 @@ export class Player extends Actor {
       for (let i = 0; i < n; i++) {
         const prev = pts[Math.max(0, i - 1)]!;
         const next = pts[Math.min(n - 1, i + 1)]!;
-        const len = Math.hypot(next.x - prev.x, next.y - prev.y) || 1;
+        const len = hyp(next.x - prev.x, next.y - prev.y) || 1;
         const nx = -(next.y - prev.y) / len;
         const ny = (next.x - prev.x) / len;
         const hw = halfW(pts[i]!.t);
@@ -598,7 +599,7 @@ export class Player extends Actor {
       this.zLast = { x: this.x, y: this.y };
       return;
     }
-    if (Math.hypot(this.x - last.x, this.y - last.y) >= cfg.everyPx) {
+    if (hyp(this.x - last.x, this.y - last.y) >= cfg.everyPx) {
       last.x = this.x;
       last.y = this.y;
       this.zTimer = 0;

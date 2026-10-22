@@ -24,10 +24,13 @@ export class FlowField {
   private readonly dist: Int16Array;
   private readonly queue: Int32Array;
   private targetIndex = -1;
+  /** One shared tile-center point per tile, made on first use: `nextPoint` is called per blocked cat per frame and must not allocate. Callers only read it. */
+  private readonly centers: Array<Point | undefined>;
 
   constructor(private readonly grid: FlowGrid) {
     this.dist = new Int16Array(grid.cols * grid.rows).fill(UNREACHED);
     this.queue = new Int32Array(grid.cols * grid.rows);
+    this.centers = new Array<Point | undefined>(grid.cols * grid.rows);
   }
 
   private col(x: number): number {
@@ -80,7 +83,7 @@ export class FlowField {
 
   /**
    * The center of the neighbor tile that is closest to the target, or null if the cat is already in the
-   * target tile, stands in an unreachable spot, or there is no better neighbor.
+   * target tile, stands in an unreachable spot, or there is no better neighbor. The point is shared (cached per tile): read it, never change it.
    */
   nextPoint(x: number, y: number): Point | null {
     const { cols, rows, tile } = this.grid;
@@ -99,7 +102,8 @@ export class FlowField {
       if (d === UNREACHED || d >= bestDist) continue;
       if (dc !== 0 && dr !== 0 && (this.grid.isSolidTile(c + dc, r) || this.grid.isSolidTile(c, r + dr))) continue;
       bestDist = d;
-      best = { x: (nc + 0.5) * tile, y: (nr + 0.5) * tile };
+      const at = nr * cols + nc;
+      best = this.centers[at] ??= { x: (nc + 0.5) * tile, y: (nr + 0.5) * tile };
     }
     return best;
   }

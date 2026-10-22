@@ -10,6 +10,7 @@ export class SoundBank {
   ) {}
 
   play(id: SoundId, pitch = 1, volume = 1): void {
+    if (!Number.isFinite(pitch) || !Number.isFinite(volume)) return; // AudioParam throws on NaN / Infinity: skip the sound instead of crashing the game
     const level = this.ctx.createGain();
     level.gain.value = volume;
     level.connect(this.out);

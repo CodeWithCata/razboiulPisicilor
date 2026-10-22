@@ -18,9 +18,10 @@ import { SmoothOrbit } from './SmoothOrbit';
 import { FedererRig, type FedererPose } from './FedererRig';
 import { FedererHabits, type HabitShifts } from './FedererHabits';
 import { FedererBudget } from './FedererBudget';
-import { BallMachine } from './BallMachine';
+import { BallMachines } from './BallMachines';
 import type { BossLook } from './BossViews';
 import { gameClock } from '../../core/clock';
+import { hyp } from '../../core/hyp';
 
 /**
  * FINAL BOSS. Volleys of tennis balls (swing the belt to DEFLECT them back: a returned ball stuns her and hurts a lot), a power
@@ -36,7 +37,7 @@ import { gameClock } from '../../core/clock';
  *  - HOP BACK: about to attack with Varu within `hop.triggerPx`: she hops away first.
  *  - HABITS: the last ~10 s of Varu shift her attack weights (camping far = lobs and serves, hugging = dashes, swatting a lot = fewer volleys), at most 40 percent.
  *  - PLACEMENT: she stays out of the corners; her ball boys appear on the side away from Varu. At most 2 of them are tennis cats, the rest normal cats.
- *  - BALL MACHINE (phase 2): `BallMachine.ts`. Slow telegraphed balls down lanes: a hazard and more balls to rally with.
+ *  - BALL MACHINES (phase 2): `BallMachines.ts` (3 launchers, 2 left and 1 right, gliding along the edges to follow Varu at an angle, firing in turn) + `BallMachine.ts` (one launcher). Slow telegraphed balls down lanes: a hazard and more balls to rally with.
  *  - TIE-BREAK RAGE (last quarter): a towel break (free hits), then she smashes her racket (a ring), turns red and attacks quicker.
  *  - Every new warning lasts at least `minWarningMs`, and `FedererBudget` keeps her damage sources (attack, machine, tennis ball boys) at two at most.
  */
@@ -82,7 +83,7 @@ export class PisicaFederer extends Boss {
   /** v147: what she has seen of Varu, the cap on her damage sources, and the machine of phase 2. */
   private readonly habits = new FedererHabits();
   private readonly budget = new FedererBudget();
-  private machine: BallMachine | null = null;
+  private machine: BallMachines | null = null;
   /** Her tennis ball boys that are still alive (never more than `FEDERER.ballBoys.maxTennis`). */
   private tennisBoys: Enemy[] = [];
   /** The attacks of the set play she is running (the next one is `queue[0]`), empty when none. */
@@ -155,7 +156,7 @@ export class PisicaFederer extends Boss {
   private cornerDistance(x: number, y: number): number {
     const dx = Math.min(x - PLAY_AREA.left, PLAY_AREA.right - x);
     const dy = Math.min(y - PLAY_AREA.top, PLAY_AREA.bottom - y);
-    return Math.hypot(dx, dy);
+    return hyp(dx, dy);
   }
 
   /** 0 = far from every corner, up to 1 = in a corner. */
@@ -264,7 +265,7 @@ export class PisicaFederer extends Boss {
     this.rig.twirl();
     this.callBoys(FEDERER.phase2Summon);
     const p = this.ctx.player;
-    this.machine ??= new BallMachine(this.scene, p.x, p.y, gameClock.now); // the ball machine rolls in
+    this.machine ??= new BallMachines(this.scene, p.y, gameClock.now); // the three ball launchers roll in
   }
 
   /** Getting stunned by a returned ball: she slumps, the racket droops, the ball drops out of her paw. A set play or towel break is over. */
@@ -580,7 +581,7 @@ export class PisicaFederer extends Boss {
   private reachAlong(heading: number, distance: number): { x: number; y: number; length: number } {
     const target = clampToArena(this.x + Math.cos(heading) * distance, this.y + Math.sin(heading) * distance, 70);
     const end = lastFreePoint(this.x, this.y, target.x, target.y, this.hitRadius, this.obstacles);
-    return { x: end.x, y: end.y, length: Math.hypot(end.x - this.x, end.y - this.y) };
+    return { x: end.x, y: end.y, length: hyp(end.x - this.x, end.y - this.y) };
   }
 
   /** How far she can go sideways of `heading` (`dir` +1 / -1 = which side). */
@@ -717,11 +718,11 @@ export class PisicaFederer extends Boss {
       const p = child as Projectile;
       if (!p.active || !p.friendly || p.kind !== 'tennis' || !p.body) continue;
       const v = (p.body as Phaser.Physics.Arcade.Body).velocity;
-      const speed = Math.hypot(v.x, v.y);
+      const speed = hyp(v.x, v.y);
       if (speed < 50) continue;
       const dx = this.x - p.x;
       const dy = this.y - p.y;
-      const dist = Math.hypot(dx, dy);
+      const dist = hyp(dx, dy);
       if (dist >= bestDist) continue;
       if ((v.x * dx + v.y * dy) / speed <= 0) continue; // flying away from her
       if (Math.abs(v.x * dy - v.y * dx) / speed > R.lateralPx) continue; // will miss her
@@ -849,7 +850,7 @@ export class PisicaFederer extends Boss {
       }
       const edge = clampToArena(x, y, L.edgeMargin);
       best = this.obstacles.nearestOpen(edge.x, edge.y, L.radius * 0.4);
-      const crowded = this.lobSpots.some((s) => Math.hypot(s.x - best.x, s.y - best.y) < L.spacing);
+      const crowded = this.lobSpots.some((s) => hyp(s.x - best.x, s.y - best.y) < L.spacing);
       if (!crowded) break;
     }
     return best;

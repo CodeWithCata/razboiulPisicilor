@@ -5,6 +5,7 @@ import { Tex, type TexKey } from '../../assets/keys';
 import { FEDERER_RIG as RIG } from '../../config/animation';
 import { COLORS } from '../../config/style';
 import type { BossLook } from './BossViews';
+import { hyp } from '../../core/hyp';
 
 /** Texture size and center of every Federer layer (they are all drawn on the same 128x128 canvas). */
 const TEX = 128;
@@ -391,7 +392,7 @@ export class FedererRig {
   /** Short fading puffs behind the racket head while it moves fast: the swoosh. */
   private updateTrail(dt: number): void {
     const T = RIG.trail;
-    const speed = this.haveHead ? (Math.hypot(this.head.x - this.prevHead.x, this.head.y - this.prevHead.y) / Math.max(dt, 1)) * 1000 : 0;
+    const speed = this.haveHead ? (hyp(this.head.x - this.prevHead.x, this.head.y - this.prevHead.y) / Math.max(dt, 1)) * 1000 : 0;
     this.prevHead.x = this.head.x;
     this.prevHead.y = this.head.y;
     this.haveHead = true;

@@ -4,8 +4,8 @@ import { Tex, type TexKey } from '../../assets/keys';
 import { clampToArena } from '../../core/arena';
 import { type BossType, type EnemyType } from '../../config/balance';
 import { ANIM } from '../../config/animation';
-import { BOSS, FINAL_BOSS } from '../../config/bosses';
-import { BOSS_TEXT } from '../../content/bosses';
+import { BOSS, FINAL_BOSS, LIGHTS_OUT } from '../../config/bosses';
+import { BOSS_TEXT, LIGHTS_OUT_LINES } from '../../content/bosses';
 import {
   bus,
   Events,
@@ -67,6 +67,8 @@ export abstract class Boss extends Enemy {
   /** Dev (boss lab): when set, the boss only ever picks this attack. */
   debugOnly: string | null = null;
   protected phase = 1;
+  /** v173: the lights are off (every boss turns them off at `LIGHTS_OUT.atHp`). */
+  private lightsOff = false;
   protected ctx!: EnemyContext;
   /** A boss sets this (ms) to glide to a stop instead of freezing in one frame. */
   protected brakeMs = 0;
@@ -234,6 +236,7 @@ export abstract class Boss extends Enemy {
     this.clearTelegraphs();
     this.stunStars.forEach((s) => s.destroy());
     this.stunStars = [];
+    if (this.lightsOff && !fromScene) bus.emit(Events.LightsOut, { on: false });
     super.destroy(fromScene);
   }
 
@@ -244,6 +247,7 @@ export abstract class Boss extends Enemy {
     this.log.tick(this.mode, delta, this.logTier());
     this.attackList ??= this.defineAttacks();
     this.checkPhase(time);
+    this.checkLightsOut();
 
     switch (this.mode) {
       case 'intro':
@@ -348,6 +352,14 @@ export abstract class Boss extends Enemy {
     this.current = null;
     this.comboNext = null;
     this.setVelocity(0, 0);
+  }
+
+  /** Low on health the boss turns the lights off for good (`Blackout` draws the dark, `DayNight` raises the lamps); `destroy` turns them back on. */
+  private checkLightsOut(): void {
+    if (this.lightsOff || this.hp <= 0 || this.hp > this.maxHp * LIGHTS_OUT.atHp[this.bossKey]) return;
+    this.lightsOff = true;
+    bus.emit(Events.LightsOut, { on: true });
+    this.shout(LIGHTS_OUT_LINES[this.bossKey]);
   }
 
   private checkPhase(time: number): void {
@@ -459,6 +471,11 @@ export abstract class Boss extends Enemy {
     this.mode = 'recover';
     this.modeUntil = gameClock.now + ms;
     if (thenId) this.comboNext = { id: thenId, gapMs: 0 };
+  }
+
+  /** True while he is circling or catching his breath: not winding up, firing or stunned (a safe moment to interrupt him). */
+  protected get isBetweenAttacks(): boolean {
+    return this.mode === 'idle' || this.mode === 'recover';
   }
 
   /** Push the next attack back so it does not start before `ms` from now (only matters while the boss is circling). */

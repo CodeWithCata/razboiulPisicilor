@@ -11,6 +11,7 @@ import { Enemy, type EnemyContext } from '../Enemy';
 import type { Player } from '../Player';
 import type { Projectile } from '../../systems/ProjectileSystem';
 import { TennisCatRig } from './TennisCatRig';
+import { hyp } from '../../core/hyp';
 
 type TennisPhase = 'move' | 'windup';
 /** What she decided to do about a ball Varu swatted back at her. */
@@ -125,12 +126,12 @@ export class TennisCat extends Enemy {
     if (canServe && time >= this.nextShotAt) {
       this.phase = 'windup';
       this.fireNext = !this.ballBoy && (this.angry || (time >= this.fireReadyAt && Math.random() < this.scaled(TENNIS.fire.chance)));
-      const windUpMs = this.fireNext ? TENNIS.fire.windUpMs : TENNIS.windUpMs;
+      const windUpMs = TENNIS.windUpMs; // the same windup and the same green flash for both balls: Varu cannot tell which one is coming
       this.fireAt = time + windUpMs;
       this.setVelocity(0, 0);
       this.swung = false;
       this.rig.toss(windUpMs - MS.smash);
-      this.flash(this.fireNext ? TENNIS.fire.windUpColor : TENNIS.windUpColor, windUpMs); // red = the fireball is coming
+      this.flash(TENNIS.windUpColor, windUpMs);
       return;
     }
 
@@ -194,11 +195,11 @@ export class TennisCat extends Enemy {
       const p = child as Projectile;
       if (!p.active || !p.friendly || p.kind !== 'tennis' || !p.body) continue;
       const v = (p.body as Phaser.Physics.Arcade.Body).velocity;
-      const speed = Math.hypot(v.x, v.y);
+      const speed = hyp(v.x, v.y);
       if (speed < 50) continue;
       const dx = this.x - p.x;
       const dy = this.y - p.y;
-      const dist = Math.hypot(dx, dy);
+      const dist = hyp(dx, dy);
       if (dist >= bestDist) continue;
       if ((v.x * dx + v.y * dy) / speed <= 0) continue; // flying away from her
       if (Math.abs(v.x * dy - v.y * dx) / speed > R.lateralPx) continue; // will miss her
@@ -226,7 +227,7 @@ export class TennisCat extends Enemy {
       this.plan = 'dodge';
       this.callOff();
       const v = (ball.body as Phaser.Physics.Arcade.Body).velocity;
-      const speed = Math.hypot(v.x, v.y) || 1;
+      const speed = hyp(v.x, v.y) || 1;
       // Sideways to the ball's flight, to the side she already stands on.
       const nx = -v.y / speed;
       const ny = v.x / speed;
@@ -271,7 +272,7 @@ export class TennisCat extends Enemy {
       const flightSec = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y) / ballSpeed;
       let ox = body.velocity.x * flightSec * L.factor;
       let oy = body.velocity.y * flightSec * L.factor;
-      const len = Math.hypot(ox, oy);
+      const len = hyp(ox, oy);
       if (len > L.maxPx) {
         ox = (ox / len) * L.maxPx;
         oy = (oy / len) * L.maxPx;

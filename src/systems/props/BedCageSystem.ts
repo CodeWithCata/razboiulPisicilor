@@ -1,12 +1,14 @@
 /** @file Bed cages: each bed is READY (pillow) -> OCCUPIED -> COOLDOWN -> READY; a flung cat is locked in, then escapes. */
 import Phaser from 'phaser';
 import { ARENA } from '../../config/arena';
+import { ENEMIES } from '../../config/balance';
 import { BED_CAGE, HIDEOUT, PROP_TUNING } from '../../config/props';
 import { gameClock } from '../../core/clock';
-import { bus, Events, type BedRearmedPayload, type CatCagedPayload, type CatReleasedPayload, type PropHitPayload } from '../../core/events';
+import { bus, Events, listen, type BedRearmedPayload, type CatCagedPayload, type CatJailedPayload, type CatReleasedPayload, type PropHitPayload } from '../../core/events';
 import { nearestOnBox } from '../../core/reach';
 import type { Enemy } from '../../entities/Enemy';
 import type { Prop } from './Prop';
+import { hyp } from '../../core/hyp';
 
 type BedState = 'ready' | 'occupied' | 'cooldown';
 
@@ -27,12 +29,42 @@ interface Bed {
  * Beds never spawn cats (no hide and seek here): they catch them. A cat flung into a READY bed at `captureSpeed` or more is locked in
  * (hidden, frozen, harmless; it stays `active`, so the wave still waits for it). It gets out after `holdMs`, after `escapeShakes` hits
  * on the bed, or when the bed breaks. Then the bed rests without its pillow for `rearmCooldownMs` and traps nothing.
+ * v170: a caged cat does not hold the wave (GameScene.waveCatCount skips it). If the wave ends while it is still inside, it is JAILED for good:
+ * the cat is removed and `Events.CatJailed` gives Varu a bonus and maybe a pickup (`BED_CAGE.jail`).
  */
 export class BedCageSystem {
   private readonly beds: Bed[] = [];
 
   constructor(scene: Phaser.Scene) {
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.clear());
+    const off = [listen(Events.WaveCleared, () => this.jailAll()), listen(Events.Victory, () => this.jailAll())];
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      off.forEach((f) => f());
+      this.clear();
+    });
+  }
+
+  /** The wave is over: every cat still locked in a bed is taken away for good (it pays Varu), and the bed rests like after any release. */
+  private jailAll(): void {
+    const now = gameClock.now;
+    for (const bed of this.beds) {
+      const { cat, prop } = bed;
+      if (bed.state !== 'occupied' || !cat || !cat.active) continue;
+      const J = BED_CAGE.jail;
+      const payload: CatJailedPayload = {
+        x: prop.cx,
+        y: prop.cy,
+        type: cat.enemyType,
+        points: Math.round(ENEMIES[cat.enemyType].score * J.scoreFactor),
+        pickup: Math.random() < J.pickupChance,
+        bedId: bed.id,
+      };
+      bed.state = 'cooldown';
+      bed.cat = null;
+      bed.until = now + BED_CAGE.rearmCooldownMs;
+      cat.destroy(); // jailed, not killed: no kill, no EnemyKilled
+      prop.hit(-bed.nx, -bed.ny, BED_CAGE.power.release);
+      bus.emit(Events.CatJailed, payload);
+    }
   }
 
   /** A bed from the map joins. It starts READY, or (startReady false) READY only if the map shows the pillow. */
@@ -62,7 +94,7 @@ export class BedCageSystem {
         const near = nearestOnBox(cat.x, cat.y, bed.prop.box);
         let nx = cat.x - near.x;
         let ny = cat.y - near.y;
-        const dist = Math.hypot(nx, ny);
+        const dist = hyp(nx, ny);
         if (dist > reach) continue;
         if (dist < 0.001) {
           nx = -body.velocity.x / speed;
@@ -88,7 +120,7 @@ export class BedCageSystem {
     let bestBed = Infinity;
     for (const b of this.beds) {
       if (b.state !== 'ready' || b.prop.dead) continue;
-      const d = Math.hypot(b.prop.cx - x, b.prop.cy - y);
+      const d = hyp(b.prop.cx - x, b.prop.cy - y);
       if (d < bestBed) {
         bestBed = d;
         bed = b;
@@ -100,7 +132,7 @@ export class BedCageSystem {
     for (const child of enemies.getChildren()) {
       const e = child as Enemy;
       if (!e.active || e.flies || e.popping || e.caged || e.isBonus || e.isBoss) continue;
-      const d = Math.hypot(e.x - bed.prop.cx, e.y - bed.prop.cy);
+      const d = hyp(e.x - bed.prop.cx, e.y - bed.prop.cy);
       if (d < bestCat) {
         bestCat = d;
         cat = e;
@@ -109,7 +141,7 @@ export class BedCageSystem {
     cat ??= spawn();
     let nx = x - bed.prop.cx;
     let ny = y - bed.prop.cy;
-    const len = Math.hypot(nx, ny);
+    const len = hyp(nx, ny);
     if (len < 0.001) {
       nx = 0;
       ny = 1;

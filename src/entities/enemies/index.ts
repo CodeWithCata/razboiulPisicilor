@@ -9,6 +9,7 @@ import { FatCat } from './FatCat';
 import { FlyingCat } from './FlyingCat';
 import { KamikazeCat } from './KamikazeCat';
 import { LuckyCat } from './LuckyCat';
+import { BomberCat } from './BomberCat';
 import { NinjaCat } from './NinjaCat';
 import { NormalCat } from './NormalCat';
 import { TennisCat } from './TennisCat';
@@ -24,6 +25,7 @@ const FACTORIES: Record<EnemyType, EnemyFactory> = {
   flying: (s, x, y) => new FlyingCat(s, x, y),
   lucky: (s, x, y) => new LuckyCat(s, x, y),
   tennis: (s, x, y) => new TennisCat(s, x, y),
+  bomber: (s, x, y) => new BomberCat(s, x, y),
   queen: (s, x, y) => new QueenCat(s, x, y),
   mafia: (s, x, y) => new MafiaCat(s, x, y),
   federer: (s, x, y) => new PisicaFederer(s, x, y),

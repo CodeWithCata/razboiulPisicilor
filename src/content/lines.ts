@@ -40,6 +40,8 @@ export const CROWD_LINES: Record<ShoutKind, readonly string[]> = {
   surrender: ['Hahaha, steag alb!', 'Fugi, fraiero!', 'Mamaaa, plec!', 'Ce rușine!'],
   gloom: ['Nuuu, Varule!', 'Ce păcat...', 'Revanșa mâine!', 'Aoleu...'],
   /** v147: the stands boo when Federer is stunned. */
+  /** v170: the first bomber cat walks in. */
+  bomber: ['Vine pisica cu bombe!', 'Atenție, bombardiera!', 'Aoleu, Pisica Bombardier!', 'Feriți-vă de petarde!'],
   boo: ['Buuuu!', 'Arbitruuu!', 'Nu e corect!', 'Ridică-te, Federer!'],
 };
 
@@ -91,6 +93,15 @@ export const SURRENDER_LINES = [
   'Steag alb, frate!',
 ];
 /** Pisica Norocoasă (config/balance.ts LUCKY): the HUD banner when she appears, the words when she shows up and when she is caught, and what she shouts when she gets away. */
+/** Varu's belt knocked a bomber's petard back at her (v170). */
+export const PETARD_SWAT_WORDS = ['Înapoi la expeditor!', 'Ține-o tu!', 'Retur!', 'Livrare gratuită!', 'Prinde!'];
+
+/** The wave ended with a cat still in a bed cage (v170): the word over the bed, then the score line. */
+/** The name that floats over the first bomber cat when she walks in. */
+export const BOMBER_ENTRANCE = 'PISICA BOMBARDIER!';
+
+export const JAIL_WORDS = ['Pușcărie!', 'La răcoare!', 'Eliberare? Nu!', 'Condamnată!', 'Doarme la zdup!'];
+
 export const LUCKY_TEXT = { banner: 'Pisica Norocoasă! Prinde-o!', spawnWord: 'NOROC!', catchWord: 'JACKPOT!' };
 export const LUCKY_ESCAPE_LINES = ['Pa, pa, bogaților!', 'Mă duc să-mi număr banii.', 'Nu mă prinzi, Varule!', 'Ne vedem la bancă!'];
 
@@ -150,6 +161,7 @@ export const CAT_CHATTER: Record<Exclude<EnemyType, BossType>, readonly string[]
   kamikaze: ['Banzai!', 'Zâmbește!', 'Fără regrete!', 'Am lăsat aragazul pornit...'],
   flying: ['Vin de sus!', 'Aer curat!', 'Cioara e prietena mea.', 'Fără taxe pe cer.'],
   lucky: ['Nu mă prinzi!', 'Fug cu banii!', 'Sunt norocoasă, nu proastă.', 'Prinde-mă dacă poți!'],
+  bomber: ['Bum!', 'Am adus petarde pentru toți.', 'Să fie lumină!', 'Mai încape o bombă?', 'Sunt expertă. Aproape.'],
   tennis: ['Ace!', 'Mingea e în terenul tău.', 'Fault! Ba nu, e bine.', 'Servesc eu.', 'Zero la nimic!'],
 };
 
@@ -161,6 +173,18 @@ export const HIDEOUT_TAUNTS: readonly string[] = ['Bu!', 'Surpriză!', 'Ta-daaa!
 
 /** A cat that jumps out of a bed lands yawning and says one of these (Romanian, sleepy). */
 export const HIDEOUT_SLEEPY_TAUNTS: readonly string[] = ['Mă las... încă 5 minute!', 'Hoaaah... ce-i gălăgia?', 'Mmm... încă puțin...', 'Cine mi-a stricat visul?'];
+
+/** A cat gets trapped in a bed cage (a word near the bed). */
+export const BED_CAGE_WORDS = ['PRINS!', 'ÎN COLIVIE!', 'CLANC!', 'NU MAI IEȘI!', 'LA ODIHNĂ!'] as const;
+
+/** A caged cat gets out: it escaped, or the bed was hit and let it go. */
+export const BED_ESCAPE_WORDS = ['A SCĂPAT!', 'EVADARE!', 'LIBER!', 'PA-PA, COLIVIE!'] as const;
+
+/** The pillow is back and the bed can trap again. */
+export const BED_REARM_WORDS = ['PERNA E ÎNAPOI!', 'PUF! GATA DE PRINS!', 'PAT REFĂCUT!'] as const;
+
+/** What a caged cat says from inside (small, above the bed). */
+export const BED_CAGED_CAT_LINES: readonly string[] = ['Miau?! Scoate-mă!', 'E prea moale aici...', 'Cine a pus gratii pe pat?', 'Mrr... sunt prins!'];
 
 /** The word that pops where a flung cat slams into another one. */
 export const BUMP_WORDS = ['POC-POC!', 'BILIARD!', 'ȚAC!', 'EFECT!'];
@@ -236,6 +260,13 @@ export const ENDLESS_TEXT = {
 } as const;
 
 /** The main menu (scenes/MenuScene.ts). */
+/** Opening videos (ui/IntroVideo.ts). */
+export const INTRO_TEXT = {
+  skip: 'Sari peste ⏭',
+  /** Black title card before the last clip. */
+  nightCard: 'În aceeași noapte, după ce tatăl Negrescu a avut grijă de copilul lui!',
+} as const;
+
 export const MENU_TEXT = {
   titleTop: 'VARU',
   titleVs: 'vs.',
@@ -276,6 +307,25 @@ export const END_SCREEN_TEXT = {
   menu: 'M = meniu',
   againTouch: 'Atinge ecranul = din nou',
   menuTouch: 'Meniu',
+} as const;
+
+/**
+ * The first-run tutorial card (ui/Tutorial.ts), one entry per step, in order. `keyboard` and `touch` are the two wordings of the same step.
+ * `done` words pop up in green when a step is done. `tip` is the last card (no action to wait for).
+ */
+export const TUTORIAL_TEXT = {
+  steps: [
+    { id: 'move', keyboard: 'Mișcă-te cu W A S D', touch: 'Ține degetul în stânga și mișcă-l' },
+    { id: 'swing', keyboard: 'Țintește cu mouse-ul și dă click ca să lovești', touch: 'Apasă „Lovește” ca să dai cu cureaua' },
+    { id: 'spin', keyboard: 'Ești încercuit? Apasă Shift ca să te învârți', touch: 'Ești încercuit? Apasă „Învârte”' },
+    { id: 'throw', keyboard: 'Apasă E ca să arunci cureaua', touch: 'Apasă „Aruncă” ca să arunci cureaua' },
+  ],
+  done: ['Așa!', 'Bravo!', 'Perfect!', 'Bine!'],
+  tip: 'Fugi din cercurile de pe jos și adună bonusurile. Succes, Varule!',
+  skipKeyboard: 'Enter = sari peste',
+  skipTouch: 'Atinge cartonașul = sari peste',
+  /** Counter in the corner of the card: "1 / 4". */
+  counter: (n: number, total: number): string => `${n} / ${total}`,
 } as const;
 
 /** HUD texts that are not tied to one thing. */
@@ -367,6 +417,16 @@ export const DEBUG_SECTIONS: readonly DebugSection[] = [
     ],
   },
   {
+    title: 'PATURI (COLIVIE)',
+    column: 1,
+    rows: [
+      // Every letter key is taken: these three are click-only (no `code`), the dot is just the cap on the card.
+      { id: 'cageCat', key: '•', label: 'Pisică în cel mai apropiat pat', kind: 'action' },
+      { id: 'freeCat', key: '•', label: 'Eliberează pisica din colivie', kind: 'action' },
+      { id: 'rearmBeds', key: '•', label: 'Rearmează toate paturile', kind: 'action' },
+    ],
+  },
+  {
     title: 'VARU',
     column: 2,
     rows: [
@@ -436,6 +496,9 @@ export const DEBUG_TEXT = {
     badLuck: 'Ghinion pe Varu',
     mysteryPrize: 'Semnul ? lângă Varu',
     clearBad: 'Ghinionul a trecut',
+    cageCat: 'Pisică prinsă în pat',
+    freeCat: 'Pisici eliberate',
+    rearmBeds: 'Paturi rearmate',
     weather: 'Vremea',
     marti13: 'Marți 13!',
     curseSure: 'Zaruri mereu câștigă (ghinionul aleatoriu nu mai ratează)',

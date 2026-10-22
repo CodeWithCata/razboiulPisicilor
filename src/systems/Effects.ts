@@ -11,6 +11,7 @@ import {
   listen,
   type BallLandedPayload,
   type CatBumpPayload,
+  type CatJailedPayload,
   type CatSurrenderPayload,
   type IdleHabitPayload,
   type BossDefeatedPayload,
@@ -24,7 +25,7 @@ import {
   type TeleportPayload,
 } from '../core/events';
 import { gameClock } from '../core/clock';
-import { BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, pick } from '../content/lines';
+import { JAIL_WORDS, BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, pick } from '../content/lines';
 import { createDrops, createPuddles } from './belt/gooEmitters';
 
 /**
@@ -32,7 +33,12 @@ import { createDrops, createPuddles } from './belt/gooEmitters';
  * It listens to the event bus, so enemies and the belt never know about it.
  * Everything here is code-drawn, so it needs no art.
  */
+/** How many finished floating words are kept for reuse (more than ever float at once in a normal fight). */
+const TEXT_POOL_MAX = 16;
+
 export class Effects {
+  /** Hidden floating words waiting to be reused by `floatText`. The scene destroys the objects itself on shutdown. */
+  private readonly textPool: Phaser.GameObjects.Text[] = [];
   private readonly sparks: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly fur: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly smoke: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -88,11 +94,18 @@ export class Effects {
           this.shake(LUCKY.fx.catchShakeMs, LUCKY.fx.catchShake);
         }
       }),
+      listen<PointPayload>(Events.BomberArrived, () => this.shake(200, 0.004)), // she is an event
       listen<PointPayload>(Events.LuckySpawn, ({ x, y }) => {
         this.sparks.explode(LUCKY.fx.appearSparks, x, y);
         this.floatText(x, y - 50, LUCKY_TEXT.spawnWord, '#f5c518', 36);
       }),
       listen<PointPayload>(Events.LuckyGone, ({ x, y }) => this.floatText(x, y - 50, pick(LUCKY_ESCAPE_LINES), '#f5c518', 26, FONT, 500)), // she got away
+      // A cat is jailed for good (the wave ended while it was locked in a bed): a sparkle, the word and the bonus.
+      listen<CatJailedPayload>(Events.CatJailed, ({ x, y, points }) => {
+        this.sparks.explode(10, x, y);
+        this.floatText(x, y - 50, pick(JAIL_WORDS), '#ffb3cf', 30, FONT_SFX);
+        this.floatText(x, y - 84, `+${points}`, '#f5c518', 30);
+      }),
       listen<CatBumpPayload>(Events.CatBump, ({ x, y }) => {
         this.sparks.explode(8, x, y);
         this.floatText(x, y - 44, pick(BUMP_WORDS), '#ffd9a8', 24, FONT_SFX);
@@ -163,7 +176,10 @@ export class Effects {
         this.shake(550, 0.016);
       }),
     );
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off.forEach((f) => f()));
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.off.forEach((f) => f());
+      this.textPool.length = 0;
+    });
   }
 
   /** Slow-motion (systems/SlowMoSystem.ts): the burst particles run at this speed too (1 = normal). Particle emitters have a `timeScale`. */
@@ -179,14 +195,29 @@ export class Effects {
 
   /** Floating word. Jokes and big shouts use the normal font; pass FONT_SFX for the small hit / environment words. `holdMs` = how long it stays put, fully visible, before it floats up and fades (a line that must be read). */
   floatText(x: number, y: number, text: string, color = '#ffffff', size = 28, font = FONT, holdMs = 0): void {
-    const label = this.scene.add
-      .text(x, y, text, { fontFamily: font, fontSize: `${size}px`, color, stroke: '#1b2340', strokeThickness: 5 })
-      .setOrigin(0.5)
-      .setDepth(60);
+    // A finished word goes back to a small pool instead of being destroyed: a new Text means a new canvas and a new GPU texture, which is what makes a frame stutter in a busy fight.
+    const label = this.textPool.pop() ?? this.scene.add.text(0, 0, '').setOrigin(0.5).setDepth(60);
+    label
+      .setStyle({ fontFamily: font, fontSize: `${size}px`, color, stroke: '#1b2340', strokeThickness: 5 })
+      .setText(text)
+      .setPosition(x, y)
+      .setAlpha(1)
+      .setActive(true)
+      .setVisible(true);
     this.scene.tweens.add({
       targets: label, y: y - 46, alpha: 0, duration: 650, delay: holdMs, ease: 'Cubic.easeOut',
-      onComplete: () => label.destroy(),
+      onComplete: () => this.recycleText(label),
     });
+  }
+
+  /** A floating word finished: hide it and keep it for the next one (at most `TEXT_POOL_MAX`, the rest are destroyed). */
+  private recycleText(label: Phaser.GameObjects.Text): void {
+    if (this.textPool.length >= TEXT_POOL_MAX) {
+      label.destroy();
+      return;
+    }
+    label.setVisible(false).setActive(false);
+    this.textPool.push(label);
   }
 
   /** Varu lands his back flip: a green ring spreads on the floor, a puff of dust, a small shake and a word. */

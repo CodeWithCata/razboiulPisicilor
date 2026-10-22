@@ -77,6 +77,11 @@ export class FloorLamp {
     return { x: this.x - halfWidth, y: this.y - height, w: halfWidth * 2, h: height };
   }
 
+  /** v172: 0 (underground or broken) .. 1 (fully risen): how much light it gives (lights out draws a hole of light round it). */
+  get lightLevel(): number {
+    return this.broken ? 0 : this.out;
+  }
+
   /** True while it can be hit: nearly all the way out and not broken. */
   get hittable(): boolean {
     return !this.broken && this.out >= L.hitFrom;

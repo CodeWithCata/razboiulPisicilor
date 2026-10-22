@@ -11,6 +11,8 @@ const HELP_HIDDEN_KEY = `${KEY_PREFIX}help-hidden`;
 const ENDLESS_UNLOCKED_KEY = `${KEY_PREFIX}endless-unlocked`;
 const AUTO_ATTACK_KEY = `${KEY_PREFIX}auto-attack`;
 const SEEN_CUTSCENES_KEY = `${KEY_PREFIX}cutscenes-seen`;
+const TUTORIAL_DONE_KEY = `${KEY_PREFIX}tutorial-done`;
+const INTRO_SEEN_KEY = `${KEY_PREFIX}intro-seen`;
 const DEBUG_INFO_KEY = `${KEY_PREFIX}debug-info`;
 const volumeKey = (kind: string): string => `${KEY_PREFIX}volume-${kind}`;
 
@@ -109,4 +111,22 @@ export function loadSeenCutscenes(): string[] {
 export function saveSeenCutscene(id: string): void {
   const seen = loadSeenCutscenes();
   if (!seen.includes(id)) write(SEEN_CUTSCENES_KEY, JSON.stringify([...seen, id]));
+}
+
+/** Has this device finished (or skipped) the first-run tutorial? */
+export function loadTutorialDone(): boolean {
+  return read(TUTORIAL_DONE_KEY) === '1';
+}
+
+export function saveTutorialDone(): void {
+  write(TUTORIAL_DONE_KEY, '1');
+}
+
+/** Has this device already watched (or skipped) the opening videos? */
+export function loadIntroSeen(): boolean {
+  return read(INTRO_SEEN_KEY) === '1';
+}
+
+export function saveIntroSeen(): void {
+  write(INTRO_SEEN_KEY, '1');
 }

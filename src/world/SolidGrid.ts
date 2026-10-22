@@ -1,5 +1,6 @@
 /** @file Which tiles are solid, as a plain grid (implements ArenaQuery). No Phaser. */
 import type { ArenaQuery, Point } from '../core/arena';
+import { hyp } from '../core/hyp';
 
 /** A solid rectangle that is not a map tile (see `SolidGrid.addBlocker`). */
 interface Blocker {
@@ -125,7 +126,7 @@ export class SolidGrid implements ArenaQuery {
           const cx = (col + 0.5) * this.tile;
           const cy = (row + 0.5) * this.tile;
           if (!this.isCircleFree(cx, cy, clearance)) continue;
-          const dist = Math.hypot(cx - x, cy - y);
+          const dist = hyp(cx - x, cy - y);
           if (dist < bestDist) {
             bestDist = dist;
             best = { x: cx, y: cy };

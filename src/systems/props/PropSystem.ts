@@ -1,7 +1,7 @@
 /** @file The living arena: creates props, reacts to belt / projectiles / walking / bosses, hide-and-seek, destruction. */
 import Phaser from 'phaser';
 import { ARENA, ARENA_RULES } from '../../config/arena';
-import { BED_BOUNCE, BUSH_REGROW, HIDEOUT, KICKABLE, KICK_HIT, PROP_AMBIENT, PROP_HP, PROP_LOOK, PROP_TUNING, SMASH, type AmbientAction, type KickKind, type PropKind } from '../../config/props';
+import { BED_CAGE, BUSH_REGROW, HIDEOUT, KICKABLE, KICK_HIT, PROP_AMBIENT, PROP_HP, PROP_LOOK, PROP_TUNING, SMASH, type AmbientAction, type KickKind, type PropKind } from '../../config/props';
 import type { ArenaQuery } from '../../core/arena';
 import { gameClock } from '../../core/clock';
 import {
@@ -18,15 +18,18 @@ import {
   type PropCrackedPayload,
   type PropThinnedPayload,
   type PropDestroyedPayload,
+  type ProjectileSmashPayload,
   type PropHitPayload,
 } from '../../core/events';
 import { nearestOnBox, segmentTouchesBox, sweepTouchesBox, type Box } from '../../core/reach';
 import type { Enemy } from '../../entities/Enemy';
 import type { Player } from '../../entities/Player';
 import type { ArenaMap } from '../../world/ArenaMap';
+import { BedCageSystem } from './BedCageSystem';
 import { Fences } from './Fences';
 import { Kickable, type KickHost } from './Kickable';
 import { Prop } from './Prop';
+import { hyp } from '../../core/hyp';
 
 const T = ARENA.tile;
 
@@ -56,6 +59,7 @@ export class PropSystem implements KickHost {
   private readonly kickables: Kickable[] = [];
   private readonly propAt = new Map<number, Prop>();
   private fences: Fences | null = null;
+  private readonly cages: BedCageSystem;
   private readonly fenceSweep = new Map<number, number>();
   private readonly off: Array<() => void> = [];
   private readonly grid: ArenaQuery;
@@ -84,6 +88,7 @@ export class PropSystem implements KickHost {
     private readonly enemies: Phaser.Physics.Arcade.Group,
   ) {
     this.grid = arena.grid;
+    this.cages = new BedCageSystem(scene);
     const layout = arena.props;
     if (!layout || !arena.fenceLayer) return;
     this.active = true;
@@ -91,6 +96,7 @@ export class PropSystem implements KickHost {
     for (const o of layout.objects) {
       const prop = new Prop(scene, o.name, o.col, o.row, (p, stage) => this.cracked(p, stage));
       this.props.push(prop);
+      if (BED_CAGE.enabled && BED_CAGE.kinds.includes(o.name)) this.cages.add(prop, gameClock.now);
       for (let dr = 0; dr < 2; dr++) {
         for (let dc = 0; dc < 2; dc++) this.propAt.set((o.row + dr) * this.cols + o.col + dc, prop);
       }
@@ -110,6 +116,7 @@ export class PropSystem implements KickHost {
       listen<BeltSweepPayload>(Events.BeltSweep, (p) => this.onSweep(p)),
       listen<BeltFlightPayload>(Events.BeltFlight, (p) => this.onFlight(p)),
       listen<PointPayload>(Events.ProjectileBlocked, ({ x, y }) => this.onProjectileWall(x, y)),
+      listen<ProjectileSmashPayload>(Events.ProjectileSmash, (p) => this.onProjectileSmash(p)),
       listen<ExplosionPayload>(Events.Explosion, ({ x, y, radius, fromBoss }) => {
         this.shock(x, y, radius, PROP_TUNING.shock.explosion);
         if (fromBoss) this.bossBlast(x, y, radius);
@@ -131,7 +138,7 @@ export class PropSystem implements KickHost {
     this.viewBottom = view.bottom + m;
 
     this.regrowBushes(now);
-    this.bedBounce(now, dt); // before the physics stops a flung cat dead against the bed
+    this.cages.update(now, dt, this.enemies); // before the physics stops a flung cat dead against the bed
     this.touchByActors(now);
     for (const prop of this.props) prop.update(dt, now, this.onScreen(prop.cx, prop.cy));
     for (const kick of this.kickables) kick.update(dt);
@@ -141,10 +148,27 @@ export class PropSystem implements KickHost {
     this.ambient(now);
   }
 
+  // ---- bed cages (dev cheats, see BedCageSystem) ----
+
+  /** Dev: lock a cat in the ready bed nearest to (x, y). False when no bed is ready. */
+  debugCageCat(x: number, y: number, spawn: () => Enemy): boolean {
+    return this.cages.debugCage(x, y, this.enemies, spawn);
+  }
+
+  /** Dev: let every caged cat out. Returns how many. */
+  debugFreeCats(): number {
+    return this.cages.debugFree();
+  }
+
+  /** Dev: re-arm every resting bed. Returns how many. */
+  debugRearmBeds(): number {
+    return this.cages.debugRearmAll();
+  }
+
   // ---- hide and seek ----
 
   /**
-   * Maybe hide the next cat in a bush, box or bed near Varu (on screen, not too close, not too far). The hideout shakes as a warning,
+   * Maybe hide the next cat in a bush or box (never a bed: beds catch cats, see BedCageSystem) near Varu (on screen, not too close, not too far). The hideout shakes as a warning,
    * then `reveal` gets the spot just outside it, on the side facing Varu. Returns false when the cat should spawn the normal way.
    * `force` (debug key R) always tries, ignoring the chance and the cooldown.
    */
@@ -155,8 +179,8 @@ export class PropSystem implements KickHost {
 
     const { minSpawnDistanceFromPlayer: min, maxSpawnDistanceFromPlayer: max } = ARENA_RULES;
     const spots = this.props.filter((p) => {
-      if (!HIDEOUT.kinds.includes(p.kind) || this.busy.has(p) || !this.onScreen(p.cx, p.cy)) return false;
-      const dist = Math.hypot(p.cx - this.player.x, p.cy - this.player.y);
+      if (!HIDEOUT.kinds.includes(p.kind) || BED_CAGE.kinds.includes(p.kind) || this.busy.has(p) || !this.onScreen(p.cx, p.cy)) return false;
+      const dist = hyp(p.cx - this.player.x, p.cy - this.player.y);
       return dist >= min && dist <= max;
     });
     if (spots.length === 0) return false;
@@ -185,7 +209,7 @@ export class PropSystem implements KickHost {
     // The jump: a big shove and a burst, then the cat steps out facing Varu.
     this.scene.time.delayedCall(HIDEOUT.telegraphMs, () => {
       this.busy.delete(prop);
-      const len = Math.hypot(this.player.x - prop.cx, this.player.y - prop.cy) || 1;
+      const len = hyp(this.player.x - prop.cx, this.player.y - prop.cy) || 1;
       const dirX = (this.player.x - prop.cx) / len;
       const dirY = (this.player.y - prop.cy) / len;
       prop.hit(-dirX, -dirY, 1);
@@ -201,59 +225,6 @@ export class PropSystem implements KickHost {
       reveal(prop.cx + dirX * out, prop.cy + dirY * out, dirX, dirY, prop.kind);
     });
     return true;
-  }
-
-  // ---- bouncy beds ----
-
-  /** Cats that were boinged lately: when each may be boinged again (game ms). */
-  private readonly boingedAt = new WeakMap<Enemy, number>();
-
-  /**
-   * A cat flung into a bed boings back, pinball style. The check looks a few px AHEAD of the cat (the physics would stop it dead
-   * on contact), mirrors its velocity around the bed's surface and sends it back as a fresh fling, so PinballSystem sees it
-   * and it hurts whatever stands behind it. The bed squashes and says BOING like it does for any hit.
-   */
-  private bedBounce(now: number, dt: number): void {
-    if (!BED_BOUNCE.enabled) return;
-    const beds = this.props.filter((p) => BED_BOUNCE.kinds.includes(p.kind) && !p.dead);
-    if (beds.length === 0) return;
-    for (const child of this.enemies.getChildren()) {
-      const cat = child as Enemy;
-      if (!cat.active || cat.flies || cat.popping) continue;
-      const speed = cat.flungSpeed;
-      if (speed < BED_BOUNCE.minSpeed) continue;
-      if (now < (this.boingedAt.get(cat) ?? 0)) continue;
-      const body = cat.body as Phaser.Physics.Arcade.Body;
-      const vx = body.velocity.x;
-      const vy = body.velocity.y;
-      const reach = cat.hitRadius + BED_BOUNCE.probe + speed * dt;
-      for (const bed of beds) {
-        const near = nearestOnBox(cat.x, cat.y, bed.box);
-        let nx = cat.x - near.x;
-        let ny = cat.y - near.y;
-        const dist = Math.hypot(nx, ny);
-        if (dist > reach) continue;
-        if (dist < 0.001) {
-          nx = -vx / speed; // the center is already inside: push back the way it came
-          ny = -vy / speed;
-        } else {
-          nx /= dist;
-          ny /= dist;
-        }
-        const into = vx * nx + vy * ny; // negative = moving toward the bed
-        if (into >= 0) continue;
-        const outX = vx - 2 * into * nx;
-        const outY = vy - 2 * into * ny;
-        const outLen = Math.hypot(outX, outY) || 1;
-        const outSpeed = Math.max(BED_BOUNCE.minOut, outLen * BED_BOUNCE.keep);
-        cat.boing((outX / outLen) * outSpeed, (outY / outLen) * outSpeed, BED_BOUNCE.flingMs);
-        this.boingedAt.set(cat, now + BED_BOUNCE.catGapMs);
-        bed.readyAt = now + PROP_TUNING.hitCooldownMs;
-        bed.hit(-nx, -ny, BED_BOUNCE.power); // the bed is shoved away from the cat
-        this.emitHit(bed.kind, near.x, near.y, -nx, -ny, BED_BOUNCE.power, false);
-        break;
-      }
-    }
   }
 
   /** A rock got a new crack, or a bush got thinner (it has its own event: leaves, not chips). */
@@ -362,18 +333,19 @@ export class PropSystem implements KickHost {
 
   /** A shock wave from (x, y): everything within reach is shoved away, the far ones a moment later. */
   private shock(x: number, y: number, radius: number, strength: number): void {
+    if (!Number.isFinite(radius) || !Number.isFinite(strength) || radius <= 0) return; // a blast with no real size would make NaN powers (and a NaN sound volume)
     const reach = radius * PROP_TUNING.shock.reachFactor;
     const speed = PROP_TUNING.shock.speed;
 
     const wave = (box: Box, apply: (dirX: number, dirY: number, power: number, at: PointPayload) => void): void => {
       const near = nearestOnBox(x, y, box);
-      const dist = Math.hypot(near.x - x, near.y - y);
+      const dist = hyp(near.x - x, near.y - y);
       if (dist > reach) return;
       const power = strength * (1 - dist / reach);
-      if (power < PROP_TUNING.minPower) return;
+      if (!(power >= PROP_TUNING.minPower)) return; // also catches NaN
       const cx = box.x + box.w / 2;
       const cy = box.y + box.h / 2;
-      const len = Math.hypot(cx - x, cy - y) || 1;
+      const len = hyp(cx - x, cy - y) || 1;
       const dirX = (cx - x) / len;
       const dirY = (cy - y) / len;
       this.scene.time.delayedCall((dist / speed) * 1000, () => apply(dirX, dirY, power, near));
@@ -409,6 +381,27 @@ export class PropSystem implements KickHost {
     }
   }
 
+  /**
+   * v171: a smashing ball (Federer's ball machine) flies through props. Every prop on its way, nearest first, takes the ball's damage as a
+   * boss hit: what breaks lets the ball fly on, the first one that survives stops it. Fences never break (PROP_HP), they end the ball as before.
+   */
+  private onProjectileSmash(p: ProjectileSmashPayload): void {
+    if (!this.active) return;
+    const len = hyp(p.x - p.prevX, p.y - p.prevY) || 1;
+    const dirX = (p.x - p.prevX) / len;
+    const dirY = (p.y - p.prevY) / len;
+    const touched = this.props
+      .filter((prop) => segmentTouchesBox(p.prevX, p.prevY, p.x, p.y, prop.box, p.radius))
+      .sort((a, b) => hyp(a.cx - p.prevX, a.cy - p.prevY) - hyp(b.cx - p.prevX, b.cy - p.prevY));
+    for (const prop of touched) {
+      this.smash(prop, p.damage, dirX, dirY, true);
+      if (this.props.includes(prop)) {
+        p.absorbed = true; // it is still standing: the ball stops here
+        return;
+      }
+    }
+  }
+
   /** A yarn or a broken heart ended on a wall: whatever stands there feels the knock. */
   private onProjectileWall(x: number, y: number): void {
     const now = gameClock.now;
@@ -418,7 +411,7 @@ export class PropSystem implements KickHost {
     // The shove points from the hit toward the middle of the thing that was hit.
     const cx = prop ? prop.cx : (col + 0.5) * T;
     const cy = prop ? prop.cy : (row + 0.5) * T;
-    const len = Math.hypot(cx - x, cy - y) || 1;
+    const len = hyp(cx - x, cy - y) || 1;
     this.hitCellAt(x, y, (cx - x) / len, (cy - y) / len, 0.7, now);
   }
 
@@ -438,7 +431,7 @@ export class PropSystem implements KickHost {
     if (!body || !body.enable) return;
     const vx = body.velocity.x;
     const vy = body.velocity.y;
-    const speed = Math.hypot(vx, vy);
+    const speed = hyp(vx, vy);
     const bump = PROP_TUNING.bump;
 
     if (speed < bump.minSpeed) return;
@@ -484,9 +477,9 @@ export class PropSystem implements KickHost {
   private bossBlast(x: number, y: number, radius: number): void {
     for (const prop of this.props.slice()) {
       const near = nearestOnBox(x, y, prop.box);
-      const dist = Math.hypot(near.x - x, near.y - y);
+      const dist = hyp(near.x - x, near.y - y);
       if (dist > radius) continue;
-      const len = Math.hypot(prop.cx - x, prop.cy - y) || 1;
+      const len = hyp(prop.cx - x, prop.cy - y) || 1;
       const dirX = (prop.cx - x) / len;
       const dirY = (prop.cy - y) / len;
       const amount = SMASH.boss.blast * (1 - 0.5 * (dist / radius));
@@ -515,6 +508,7 @@ export class PropSystem implements KickHost {
     for (let dr = 0; dr < 2; dr++) {
       for (let dc = 0; dc < 2; dc++) this.propAt.delete((row + dr) * this.cols + col + dc);
     }
+    this.cages.destroyed(prop); // a caged cat is let out
     this.arena.removeObject(col, row);
     prop.breakAway(dirX);
     if (prop.kind === 'bush') {
@@ -582,7 +576,7 @@ export class PropSystem implements KickHost {
         if ((kick.x - cat.x) ** 2 + (kick.y - cat.y) ** 2 > reach * reach) continue;
         if (kick.speed >= KICK_HIT.minSpeed) {
           if (kick.height > KICK_HIT.maxHeightPx || !cat.alive || !cat.hittable) continue;
-          const len = Math.hypot(kick.x - cat.x, kick.y - cat.y) || 1;
+          const len = hyp(kick.x - cat.x, kick.y - cat.y) || 1;
           const dirX = (kick.x - cat.x) / len;
           const dirY = (kick.y - cat.y) / len;
           if (cat.takeBump(KICK_HIT.damage[kick.kind], kick.x, kick.y, KICK_HIT.knockback, KICK_HIT.gapMs)) {
@@ -712,7 +706,7 @@ export class PropSystem implements KickHost {
   /** The belt (or its flight) hit a prop: the shove points away from where the belt is, the bits fly from the closest edge. */
   private hitFrom(prop: Prop, fromX: number, fromY: number, box: Box, power: number, damage = 0): void {
     const near = nearestOnBox(fromX, fromY, box);
-    const len = Math.hypot(prop.cx - fromX, prop.cy - fromY) || 1;
+    const len = hyp(prop.cx - fromX, prop.cy - fromY) || 1;
     const dirX = (prop.cx - fromX) / len;
     const dirY = (prop.cy - fromY) / len;
     prop.hit(dirX, dirY, power);
@@ -725,7 +719,7 @@ export class PropSystem implements KickHost {
     const near = nearestOnBox(fromX, fromY, box);
     const cx = box.x + T / 2;
     const cy = box.y + T / 2;
-    const len = Math.hypot(cx - fromX, cy - fromY) || 1;
+    const len = hyp(cx - fromX, cy - fromY) || 1;
     const dirX = (cx - fromX) / len;
     const dirY = (cy - fromY) / len;
     if (this.fences?.hit(col, row, dirX, dirY, power)) this.emitHit('fence', near.x, near.y, dirX, dirY, power, false);
@@ -733,7 +727,7 @@ export class PropSystem implements KickHost {
 
   /** The belt kicks a can pile or the ball away from where the belt is. */
   private kickFrom(kick: Kickable, fromX: number, fromY: number, speed: number, power: number): void {
-    const len = Math.hypot(kick.x - fromX, kick.y - fromY) || 1;
+    const len = hyp(kick.x - fromX, kick.y - fromY) || 1;
     const dirX = (kick.x - fromX) / len;
     const dirY = (kick.y - fromY) / len;
     kick.kick(dirX, dirY, speed * power, KICKABLE[kick.kind].pop);
@@ -761,7 +755,7 @@ export class PropSystem implements KickHost {
     let bestDist = Infinity;
     for (const prop of this.props) {
       if (prop.kind !== 'bush') continue;
-      const d = Math.hypot(prop.cx - x, prop.cy - y);
+      const d = hyp(prop.cx - x, prop.cy - y);
       if (d < bestDist) {
         bestDist = d;
         best = prop.variant;

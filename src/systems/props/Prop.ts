@@ -32,7 +32,7 @@ export class Prop {
   /** Bushes: index into BUSH_VARIANTS (leaf colors). Other props: 0. */
   readonly variant: number;
   hp: number;
-  /** Called after every hit with its power (BedCageSystem uses it to count the shakes). Null = nobody listens. */
+  /** Told about every hit with its power (BedCageSystem counts the shakes that free a caged cat). Null = nobody listens. */
   onHit: ((power: number) => void) | null = null;
 
   private readonly feel: PropFeel;
@@ -94,11 +94,9 @@ export class Prop {
     this.onHit?.(power);
   }
 
-  /** Changes the picture to the one of another 2x2 object (a bed with or without its pillow). The springs, hp and `kind` stay the same. */
-  setLook(look: ObjectName): void {
-    if (this.dead) return;
-    const key = propKey(look);
-    if (this.scene.textures.exists(key)) this.sprite.setTexture(key);
+  /** Swap the picture only (a bed with or without its pillow). The prop's kind, feel and map tiles stay the same. */
+  setLook(kind: ObjectName): void {
+    if (!this.dead) this.sprite.setTexture(propKey(kind));
   }
 
   /** A puff of wind: only a lean, no squash and no shove. */

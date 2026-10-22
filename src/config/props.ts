@@ -1,4 +1,4 @@
-/** @file Living-arena numbers: prop springs, FX, kickables, rock cracks, hide-and-seek, bouncy beds, hp / smash, gold leaf, fence splinters. */
+/** @file Living-arena numbers: prop springs, FX, kickables, rock cracks, hide-and-seek, bed cages, hp / smash, gold leaf, fence splinters. */
 import type { SoundId } from '../assets/audioKeys';
 import { Tex, type TexKey } from '../assets/keys';
 import type { ObjectName } from './arena';
@@ -41,7 +41,7 @@ export const PROP_TUNING = {
   /** Floating words ("FÂȘ!"). Quiet hits (rolling, landing) never show one. */
   words: { minPower: 0.3, cooldownMs: 110, size: 20 },
   /** Walking into a prop. Speeds in px/s. */
-  bump: { minSpeed: 70, fullSpeed: 260, power: 0.55, probe: 6, flyerPower: 0.3, flyerCooldownMs: 450 },
+  bump: { minSpeed: 70, fullSpeed: 260, power: 0.55, probe: 48, flyerPower: 0.3, flyerCooldownMs: 450 },
   /** Belt: power of a swing and of a spin on props. */
   sweep: { swing: 0.85, spin: 1 },
   /** The thrown belt passes through props. */
@@ -231,12 +231,12 @@ export const ROCK_CRACKS = {
   word: { color: '#e6e6ee', size: 26 },
 } as const;
 
-/** Hide and seek: now and then a cat does not walk in from a spawn point, it jumps out of a bush, a box or a bed near Varu (a cat from a bed comes out yawning, with a sleepy line). */
+/** Hide and seek: now and then a cat does not walk in from a spawn point, it jumps out of a bush or a box near Varu (beds are cages now, they never spawn cats). */
 export const HIDEOUT = {
   enabled: true,
   /** Chance that a normal cat uses a hideout (when one fits). */
   chance: 0.3,
-  kinds: ['bush', 'box', 'bed'] as readonly PropKind[],
+  kinds: ['bush', 'box'] as readonly PropKind[],
   /** The prop shakes this long before the cat jumps out, in pulses this far apart (the warning). */
   telegraphMs: 800,
   pulseMs: 200,
@@ -267,56 +267,45 @@ export const HIDEOUT = {
 } as const;
 
 /**
- * Bouncy beds: a cat that is flung into a bed (belt hit, pinball bump) boings back off it like a pinball bumper,
- * and the rebound is a real fling, so it slams into whatever stands behind it (systems/PinballSystem.ts does the hurting).
- * Checked a few px BEFORE the cat touches the bed, because the physics would stop it dead on contact.
- */
-export const BED_BOUNCE = {
-  enabled: true,
-  kinds: ['bed', 'bedCushion'] as readonly PropKind[],
-  /** The cat must be flung at least this fast (px/s). A slower one just bumps the bed like any prop. */
-  minSpeed: 150,
-  /** Share of its speed the cat keeps (above 1 = the bed gives it extra energy), and the slowest rebound allowed (px/s; above PINBALL.minSpeed so it always counts as a fling). */
-  keep: 1.05,
-  minOut: 300,
-  /** The rebound counts as a fling for this long, so it flies far enough to reach the cats behind it (ms). */
-  flingMs: 380,
-  /** Reaction starts this far (px) before the body would touch, plus the distance one frame at its speed. */
-  probe: 6,
-  /** The same cat can be boinged again after this long (ms). */
-  catGapMs: 250,
-  /** Power of the bed's own squash and BOING (0..1, see PROP_FEEL.bed). */
-  power: 1,
-} as const;
-
-/**
- * Bed cages: a cat flung into a READY bed (one that shows its pillow) is locked in: hidden, frozen, harmless (it stays alive, so the
- * wave still waits for it). It gets out after `holdMs`, after `escapeShakes` real hits on the bed, or when the bed breaks.
- * Then the bed rests (no pillow) for `rearmCooldownMs` and traps nothing. Beds need `readyKind` / `emptyKind` pictures from the tileset.
+ * Bed cages. A bed is a trap with two looks: READY = the pillow variant (`bedCushion`), EMPTY = the variant without the pillow (`bed`).
+ * A cat flung into a READY bed is locked in and the bed shows EMPTY. When the cat gets out (time is up, the bed is hit, or it is destroyed)
+ * the bed stays EMPTY for `rearmCooldownMs` and traps nothing; then the pillow comes back and it is READY again.
+ * Beds never spawn cats (see HIDEOUT). Logic: systems/props/BedCageSystem.ts.
  */
 export const BED_CAGE = {
   enabled: true,
-  /** Every bed starts READY. False = only beds that the map shows with the pillow (`readyKind`) start ready. */
+  /** Both kinds are the same bed with two looks (the kind picked on the map is only where it starts). */
+  kinds: ['bed', 'bedCushion'] as readonly PropKind[],
+  /** The look while the bed can trap a cat (the pillow). */
+  readyKind: 'bedCushion' as ObjectName,
+  /** The look while it holds a cat or rests after one (no pillow). */
+  emptyKind: 'bed' as ObjectName,
+  /** Beds on the map that start READY: all of them, or only the ones whose map kind is the pillow variant. */
   startReady: true,
-  /** The picture of a READY bed (with the pillow) and of one with no pillow (a cat inside, or resting). */
-  readyKind: 'bedCushion',
-  emptyKind: 'bed',
-  /** The cat must be flung at least this fast (px/s) to be caught. */
-  captureSpeed: 200,
-  /** Reaction starts this far (px) before the body would touch, plus the distance one frame at its speed. */
+  /** A cat must be flung at least this fast (px/s) to be caged. A slower one just bumps the bed like any prop. */
+  captureSpeed: 60,
+  /** Reaction starts this far (px) before the body would touch, plus the distance one frame at its speed. A wide probe makes the bed a magnet: a cat flung NEAR it is pulled in too. */
   probe: 6,
-  /** How long a cat stays locked in (ms). */
-  holdMs: 4000,
-  /** Real hits on the occupied bed that shake the cat loose. 0 = hits never free it. */
-  escapeShakes: 3,
-  /** After the cat left, the bed waits this long (ms) before it gets its pillow back. */
-  rearmCooldownMs: 6000,
-  /** The released cat flies out at this speed (px/s). A hard shake makes it a real fling for `releaseFlingMs` (otherwise it just hops out). */
-  releaseFlingSpeed: 380,
+  /** How many cats one bed holds. */
+  maxCagedPerBed: 1,
+  /** A caged cat gets out by itself after this long (ms). */
+  holdMs: 8000,
+  /** Hits on the bed that shake a caged cat loose (belt, blast...). 0 = only time frees it. */
+  escapeShakes: 4,
+  /** The freed cat flies out at this speed (px/s) for `releaseFlingMs`; it counts as flung only if the bed was hit hard. */
+  releaseFlingSpeed: 260,
   releaseFlingMs: 300,
-  /** Power (0..1) of the bed's squash when it traps a cat, lets it go and gets its pillow back. */
-  power: { trap: 1, release: 0.8, rearm: 0.5 },
-} as const satisfies { readyKind: ObjectName; emptyKind: ObjectName } & Record<string, unknown>;
+  /** After a cat is gone the bed rests (no pillow, traps nothing) this long (ms), then the pillow is back. */
+  rearmCooldownMs: 2500,
+  /** Power (0..1) of the bed's squash when it traps a cat, frees it, and when the pillow comes back. */
+  power: { trap: 1, release: 0.7, rearm: 0.5 },
+  /**
+   * v170 THE REASON TO CAGE: a cat that is still locked in a bed when the wave ends (every other cat gone) does not count for the wave
+   * any more (the wave ends without waiting for it) and is jailed for good: Varu gets `scoreFactor` x that cat's kill score (no kill is counted),
+   * and with `pickupChance` the bed also drops a pickup (the usual random kind). So a strong cat (the bomber: 80) is worth more behind bars.
+   */
+  jail: { scoreFactor: 1.5, pickupChance: 0.6 },
+} as const;
 
 /** Destroying the arena. Fences never break. Rocks and the rest only break to bosses; bushes also to Varu. */
 export const PROP_HP: Record<ObjectName, { hp: number; byPlayer: boolean; byBoss: boolean }> = {

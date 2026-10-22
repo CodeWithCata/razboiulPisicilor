@@ -1,9 +1,12 @@
 /** @file Regina Pisicilor's moving parts (cape, feet, crown, scepter arm, glow, sparkles, dizzy stars) that follow her body and are posed by her attacks. */
 import Phaser from 'phaser';
+import { FX_BUBBLE_R, FX_RING_R, FX_SHOCK_R } from '../../assets/art/fx';
 import { QUEEN_CROWN_BASE, QUEEN_GEMS, QUEEN_SHOULDER } from '../../assets/art/queen';
 import { Tex, type TexKey } from '../../assets/keys';
 import { QUEEN_RIG as RIG } from '../../config/animation';
 import type { BossLook } from './BossViews';
+import { RingDiamonds } from './RingDiamonds';
+import { hyp } from '../../core/hyp';
 
 /** Texture size and center of every Queen layer (they are all drawn on the same 128x128 canvas). */
 const TEX = 128;
@@ -61,8 +64,8 @@ export class QueenRig {
   private readonly glowCrown: Phaser.GameObjects.Arc;
   private readonly glowScepter: Phaser.GameObjects.Arc;
   private readonly aura: Phaser.GameObjects.Arc;
-  private readonly ring: Phaser.GameObjects.Arc;
-  private readonly shield: Phaser.GameObjects.Arc;
+  private readonly ring: Phaser.GameObjects.Image;
+  private readonly shield: Phaser.GameObjects.Image;
   private readonly tmp = { x: 0, y: 0 };
 
   private clock = 0;
@@ -75,6 +78,9 @@ export class QueenRig {
   private dust = false;
   private dustIn = 0;
   private sparkleIn: number = RIG.sparkle.everyMs.min;
+  private shieldSparkleIn = 0;
+  private ringRadius = 0;
+  private readonly diamonds: RingDiamonds;
   private sparkleOnCrown = true;
   private dizzyMs = 0;
   private dizzyStars: Phaser.GameObjects.Image[] = [];
@@ -100,14 +106,11 @@ export class QueenRig {
     this.glowCrown = glow();
     this.glowScepter = glow();
     this.aura = scene.add.circle(owner.x, owner.y, RIG.aura.sizePx / 2, RIG.aura.color, 0).setDepth(RIG.depth.aura).setVisible(false);
-    this.ring = scene.add
-      .circle(owner.x, owner.y, 10, RIG.ring.color, RIG.ring.alpha)
-      .setStrokeStyle(3, RIG.ring.color, RIG.ring.strokeAlpha)
-      .setDepth(RIG.depth.aura + 1)
-      .setVisible(false);
+    this.ring = scene.add.image(owner.x, owner.y, Tex.FxRing).setAlpha(RIG.ring.alpha).setDepth(RIG.depth.aura + 1).setVisible(false);
+    this.diamonds = new RingDiamonds(scene, RIG.ring.diamonds.count, RIG.ring.diamonds.h, RIG.depth.aura + 2);
     this.shield = scene.add
-      .circle(owner.x, owner.y, RIG.shield.radius, RIG.shield.color, RIG.shield.alpha)
-      .setStrokeStyle(4, RIG.shield.color, 0.9)
+      .image(owner.x, owner.y, Tex.FxBubbleQueen)
+      .setScale(RIG.shield.radius / FX_BUBBLE_R)
       .setDepth(RIG.depth.glow + 1)
       .setVisible(false);
   }
@@ -187,8 +190,12 @@ export class QueenRig {
   /** A faint ring on the floor showing how far a spin reaches. */
   setRing(on: boolean, radius = 0): void {
     this.ringOn = on;
-    if (on) this.ring.setRadius(radius);
+    if (on) {
+      this.ring.setScale(radius / FX_RING_R);
+      this.ringRadius = radius;
+    }
     this.ring.setVisible(on);
+    if (!on) this.diamonds.setVisible(false);
   }
 
   /** Red jewel glow instead of golden (the charge wind-up). Off = golden, or red while she is furious. */
@@ -216,9 +223,9 @@ export class QueenRig {
 
   /** A ring that races out of her and fades: the decree, the end of a spin. */
   pulse(radius: number, color: number = RIG.ring.color): void {
-    const ring = this.scene.add.circle(this.owner.x, this.owner.y, 12, color, 0.18).setStrokeStyle(6, color, 1).setDepth(44);
+    const ring = this.scene.add.image(this.owner.x, this.owner.y, Tex.FxShock).setTint(color).setDepth(44).setScale(12 / FX_SHOCK_R);
     this.scene.tweens.add({
-      targets: ring, scale: radius / 12, alpha: 0, duration: RIG.burst.lifeMs, ease: 'Cubic.easeOut',
+      targets: ring, scale: radius / FX_SHOCK_R, alpha: 0, duration: RIG.burst.lifeMs, ease: 'Cubic.easeOut',
       onComplete: () => ring.destroy(),
     });
   }
@@ -310,7 +317,7 @@ export class QueenRig {
     // The cape lags behind her movement and sways with her steps; `capeFlare` stretches it out.
     let lagX = -body.velocity.x * RIG.cape.lagPerSpeed;
     let lagY = -body.velocity.y * RIG.cape.lagPerSpeed;
-    const lag = Math.hypot(lagX, lagY);
+    const lag = hyp(lagX, lagY);
     if (lag > RIG.cape.maxLagPx) {
       lagX = (lagX / lag) * RIG.cape.maxLagPx;
       lagY = (lagY / lag) * RIG.cape.maxLagPx;
@@ -334,13 +341,18 @@ export class QueenRig {
     if (this.look === 'side') for (const img of [this.crown, this.scepter]) img.setVisible(false);
     if (this.scepterHidden) this.scepter.setVisible(false);
     if (this.shieldOn) {
-      const pulse = RIG.shield.alpha + Math.sin(this.clock * RIG.shield.pulseRate) * RIG.shield.pulseAlpha;
-      this.shield.setPosition(o.x, o.y).setFillStyle(RIG.shield.color, pulse).setVisible(o.visible);
+      const wave = Math.sin(this.clock * RIG.shield.pulseRate);
+      const fit = RIG.shield.radius / FX_BUBBLE_R;
+      this.shield.setPosition(o.x, o.y).setAlpha(RIG.shield.alpha + wave * RIG.shield.pulseAlpha).setScale(fit * (1 + wave * RIG.shield.breathe)).setVisible(o.visible);
+      this.updateShieldSparkles(dt, o);
     }
 
     this.updateGlow(o);
     this.updateAura(o);
-    if (this.ringOn) this.ring.setPosition(o.x, o.y).setVisible(o.visible);
+    if (this.ringOn) {
+      this.ring.setPosition(o.x, o.y).setAngle(this.clock * RIG.ring.spinRate).setVisible(o.visible);
+      this.diamonds.update(o.x, o.y, this.ringRadius, this.clock, o.visible);
+    }
     if (this.dust) this.updateDust(dt);
     this.updateSparkles(dt);
     if (dizzy) this.updateDizzy(dt, o);
@@ -368,10 +380,24 @@ export class QueenRig {
     if (this.dustIn > 0) return;
     this.dustIn = RIG.dust.everyMs;
     const at = this.world((Math.random() - 0.5) * 30, RIG.dust.behindPx, this.tmp);
-    const puff = this.scene.add.circle(at.x, at.y, 10, RIG.dust.color, RIG.dust.alpha).setDepth(8).setScale(RIG.dust.startScale);
+    const puff = this.scene.add.image(at.x, at.y, Tex.FxPuff).setTint(RIG.dust.color).setAlpha(RIG.dust.alpha).setDepth(8).setScale(RIG.dust.startScale).setAngle(Math.random() * 360);
     this.scene.tweens.add({
-      targets: puff, scale: RIG.dust.endScale, alpha: 0, duration: RIG.dust.lifeMs, ease: 'Cubic.easeOut',
+      targets: puff, scale: RIG.dust.endScale, alpha: 0, angle: puff.angle + (Math.random() < 0.5 ? -1 : 1) * RIG.dust.spinDeg, duration: RIG.dust.lifeMs, ease: 'Cubic.easeOut',
       onComplete: () => puff.destroy(),
+    });
+  }
+
+  /** A twinkle on the rim of the shield every now and then. */
+  private updateShieldSparkles(dt: number, o: Phaser.Physics.Arcade.Sprite): void {
+    this.shieldSparkleIn -= dt;
+    if (this.shieldSparkleIn > 0 || !o.visible) return;
+    const S = RIG.shield;
+    this.shieldSparkleIn = S.sparkleEveryMs * (0.6 + Math.random() * 0.8);
+    const a = Math.random() * Math.PI * 2;
+    const star = this.scene.add.image(o.x + Math.cos(a) * S.radius, o.y + Math.sin(a) * S.radius, Tex.Star).setDisplaySize(S.sparkleSizePx, S.sparkleSizePx).setDepth(RIG.depth.glow + 2).setScale(0.2);
+    this.scene.tweens.add({
+      targets: star, scale: 1, angle: 90, alpha: 0, duration: S.sparkleLifeMs, ease: 'Cubic.easeOut',
+      onComplete: () => star.destroy(),
     });
   }
 
@@ -427,6 +453,7 @@ export class QueenRig {
     this.glowScepter.destroy();
     this.aura.destroy();
     this.ring.destroy();
+    this.diamonds.destroy();
     this.shield.destroy();
   }
 }

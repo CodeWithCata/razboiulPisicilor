@@ -1,4 +1,4 @@
-/** @file The fans throw something into the arena now and then: a gift (a normal pickup) or a bad item (a petard with a burning fuse, or a cursed item that curses Varu if he stands in its ring). Decides WHEN, flies the item and lands it. */
+/** @file The fans (and the bomber cat) throw something into the arena now and then: a gift (a normal pickup) or a bad item (a petard with a burning fuse, or a cursed item that curses Varu if he stands in its ring). Decides WHEN, flies the item and lands it. */
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { PLAY_AREA } from '../config/arena';
@@ -7,14 +7,16 @@ import type { ThrowPick, ThrowSpot } from '../config/crowd';
 import { FEDERER } from '../config/bosses';
 import { FAN_THROW as F } from '../config/fanThrow';
 import { PICKUP_VISUALS, pickLook } from '../config/pickups';
-import { CURSE_DODGE_WORDS, FAN_THROW_LINES, PETARD_WORDS, pick } from '../content/lines';
+import { CURSE_DODGE_WORDS, FAN_THROW_LINES, PETARD_SWAT_WORDS, PETARD_WORDS, pick } from '../content/lines';
 import type { ArenaQuery, Point } from '../core/arena';
 import { gameClock } from '../core/clock';
 import { weightedPick } from '../core/random';
-import { bus, Events, listen, type BossDefeatedPayload, type BossSpawnedPayload, type ExplosionPayload, type FanLandedPayload, type FanThrowPayload, type RallyHitPayload, type WavePayload } from '../core/events';
+import { distToSegment, isSwept } from '../core/sweep';
+import { bus, Events, listen, type BeltFlightPayload, type BeltSweepPayload, type BossDefeatedPayload, type BossSpawnedPayload, type ExplosionPayload, type FanLandedPayload, type FanThrowPayload, type PointPayload, type RallyHitPayload, type ThrowPetardPayload, type WavePayload } from '../core/events';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { WaveSystem } from './WaveSystem';
+import { hyp } from '../core/hyp';
 
 /** What the system needs from the scene (GameScene hands these over; it only wires). */
 export interface FanThrowSources {
@@ -45,6 +47,26 @@ interface ItemLook {
   color: number;
 }
 
+/** Where a petard came from: the cat that threw it (null = a fan), the spot it was thrown from, and whether the belt already knocked it back. */
+interface PetardTrip {
+  by: Phaser.GameObjects.GameObject | null;
+  origin: Point;
+  returned: boolean;
+}
+
+const NO_TRIP: PetardTrip = { by: null, origin: { x: 0, y: 0 }, returned: false };
+
+/** A petard on the floor (squash, hop, fuse): the belt can still knock it back until it goes off. */
+interface Lying {
+  x: number;
+  y: number;
+  item: Phaser.GameObjects.Image;
+  ring: Phaser.GameObjects.Arc;
+  trip: PetardTrip;
+  /** It was knocked back (or the run ended): its tweens must do nothing any more. */
+  cancelled: boolean;
+}
+
 const TAU = Math.PI * 2;
 
 /** A bad pickup carried by a throw is a curse drop (a petard is `null`, a gift is a good pickup). */
@@ -61,6 +83,8 @@ export class FanThrowSystem {
   private readonly dust: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly sparks: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly off: Array<() => void> = [];
+  /** Petards lying on the floor right now (v170: the belt can knock the cat-thrown ones back). */
+  private readonly lying: Lying[] = [];
   /** Waves started in this run (an endless run counts from its own first wave) and throws let go so far (the first is always a gift). */
   private runWaves = 0;
   private thrown = 0;
@@ -119,6 +143,9 @@ export class FanThrowSystem {
         if (boss === 'federer') this.federerAlive = false;
       }),
       listen<RallyHitPayload>(Events.RallyHit, ({ hits }) => this.onRally(hits)),
+      listen<ThrowPetardPayload>(Events.ThrowPetard, (e) => this.lobPetard(e)),
+      listen<BeltSweepPayload>(Events.BeltSweep, (p) => this.onSweep(p)),
+      listen<BeltFlightPayload>(Events.BeltFlight, (p) => this.onFlight(p)),
       listen(Events.GameOver, () => this.stop()),
       listen(Events.Victory, () => this.stop()),
     );
@@ -197,6 +224,12 @@ export class FanThrowSystem {
     this.giveUpAt = this.dueAt + F.giveUpMs;
   }
 
+  /** A cat (the bomber) lobs a petard: the very same flight, fuse and blast as a fan's petard. Cat throws are not fan throws: no crowd cheer, no wave logic. */
+  private lobPetard(e: ThrowPetardPayload): void {
+    if (this.over) return;
+    this.fly({ x: e.x, y: e.y }, { x: e.toX, y: e.toY }, this.lookOf(null), null, { by: e.by ?? null, origin: { x: e.x, y: e.y }, returned: false });
+  }
+
   /** Nothing more to throw this wave (a fan that is already winding up still lets go). */
   private cancel(): void {
     this.left = 0;
@@ -208,6 +241,59 @@ export class FanThrowSystem {
   private stop(): void {
     this.over = true;
     this.cancel();
+    for (const l of this.lying) l.cancelled = true; // nothing is swatted any more
+    this.lying.length = 0;
+  }
+
+  /* ------------------------------------------------------------ swat it back */
+
+  private forget(l: Lying): void {
+    const i = this.lying.indexOf(l);
+    if (i >= 0) this.lying.splice(i, 1);
+  }
+
+  /** The belt swings or spins around (p.x, p.y): a cat-thrown petard that lies inside the arc is knocked back. */
+  private onSweep(p: BeltSweepPayload): void {
+    if (this.lying.length === 0) return;
+    const reach = p.range + F.swat.hitRadiusPx;
+    for (const l of this.lying.slice()) {
+      if (hyp(l.x - p.x, l.y - p.y) > reach) continue;
+      if (!isSwept(Math.atan2(l.y - p.y, l.x - p.x), p.startAngle, p.swept)) continue;
+      this.swat(l);
+    }
+  }
+
+  /** The thrown belt flew from (prevX, prevY) to (x, y) this frame. */
+  private onFlight(p: BeltFlightPayload): void {
+    if (this.lying.length === 0) return;
+    for (const l of this.lying.slice()) {
+      if (distToSegment(l.x, l.y, p.prevX, p.prevY, p.x, p.y) <= p.radius + F.swat.hitRadiusPx) this.swat(l);
+    }
+  }
+
+  /** The belt hit a lying petard: if a cat threw it (and it was not knocked back yet) it flies back to her with a fresh fuse. */
+  private swat(l: Lying): void {
+    if (this.over || l.cancelled || l.trip.returned || !l.trip.by) return;
+    const S = F.swat;
+    l.cancelled = true;
+    this.forget(l);
+    this.scene.tweens.killTweensOf(l.item);
+    l.item.destroy();
+    l.ring.destroy();
+
+    const thrower = l.trip.by as Enemy;
+    const target = thrower.active ? { x: thrower.x, y: thrower.y } : l.trip.origin;
+    const m = F.wallMargin;
+    const to = this.src.arena.nearestOpen(
+      Phaser.Math.Clamp(target.x, PLAY_AREA.left + m, PLAY_AREA.right - m),
+      Phaser.Math.Clamp(target.y, PLAY_AREA.top + m, PLAY_AREA.bottom - m),
+      F.petard.radius * 0.25,
+    );
+    this.dust.explode(F.dust.count, l.x, l.y);
+    this.src.say(l.x, l.y + S.word.offsetY, pick(PETARD_SWAT_WORDS), S.word.color, S.word.size);
+    const swatted: PointPayload = { x: l.x, y: l.y };
+    bus.emit(Events.PetardSwatted, swatted);
+    this.fly({ x: l.x, y: l.y }, to, this.lookOf(null), null, { by: l.trip.by, origin: l.trip.origin, returned: true });
   }
 
   /** Gift or petard? The first throw of a run is a gift, a boss in the arena means gifts only, and a hurt Varu gets pity. */
@@ -233,7 +319,7 @@ export class FanThrowSystem {
     const dx = spot.x - p.x;
     const dy = spot.y - p.y;
     const toFan = Math.atan2(dy, dx);
-    const reach = Math.max(0, Math.hypot(dx, dy) - F.minThrowPx);
+    const reach = Math.max(0, hyp(dx, dy) - F.minThrowPx);
     const near = Math.min(F.landFromVaruPx.min, reach);
     const far = Math.min(F.landFromVaruPx.max, reach);
     for (let i = 0; i < F.tries; i++) {
@@ -277,7 +363,7 @@ export class FanThrowSystem {
    * The lob: the item travels in a straight line over the floor while it is drawn higher and bigger at the top of its arc (closer to the
    * camera). Its shadow stays on the floor and its ring (already the real reach for a petard) fades in at the spot it is heading for.
    */
-  private fly(from: ThrowSpot, to: Point, look: ItemLook, kind: PickupKind | null): void {
+  private fly(from: ThrowSpot, to: Point, look: ItemLook, kind: PickupKind | null, trip: PetardTrip = NO_TRIP): void {
     const scene = this.scene;
     const A = F.arc;
     const M = F.marker;
@@ -297,11 +383,12 @@ export class FanThrowSystem {
       .setDepth(F.depth.marker)
       .setAlpha(0);
     const spin = Math.random() < 0.5 ? -1 : 1;
+    const flightMs = trip.returned ? F.swat.flightMs : F.flightMs; // a knocked-back petard comes back faster
 
     scene.tweens.addCounter({
       from: 0,
       to: 1,
-      duration: F.flightMs,
+      duration: flightMs,
       ease: 'Linear',
       onUpdate: (tween) => {
         const u = tween.getValue() ?? 0;
@@ -311,7 +398,7 @@ export class FanThrowSystem {
         item
           .setPosition(gx, gy - arc * A.heightPx)
           .setScale(base * (A.startScale + (1 - A.startScale) * u + (A.apexScale - 1) * arc))
-          .setAngle(u * F.flightMs * A.spinDegPerMs * spin);
+          .setAngle(u * flightMs * A.spinDegPerMs * spin);
         const grow = (M.startShare + (1 - M.startShare) * u) * (1 - 0.3 * arc);
         shadow
           .setPosition(gx, gy)
@@ -326,7 +413,7 @@ export class FanThrowSystem {
           ring.destroy();
           return;
         }
-        if (kind === null) this.landPetard(item, ring, to, base);
+        if (kind === null) this.landPetard(item, ring, to, base, trip);
         else if (isCurse(kind)) this.landCurse(item, ring, to, kind);
         else this.landGift(item, ring, to, kind, look.color, look.tex);
       },
@@ -366,13 +453,15 @@ export class FanThrowSystem {
   /* ------------------------------------------------------------ the petard */
 
   /** The petard hits the floor: it squashes, hops once and lies down hissing. The ring (the real blast reach) stays where it is. */
-  private landPetard(item: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Arc, to: Point, base: number): void {
+  private landPetard(item: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Arc, to: Point, base: number, trip: PetardTrip): void {
     const scene = this.scene;
     const P = F.petard;
-    const lying = Math.random() * 360;
-    item.setPosition(to.x, to.y).setAngle(lying).setScale(base).setDepth(F.depth.lying);
+    const lyingAngle = Math.random() * 360;
+    const lying: Lying = { x: to.x, y: to.y, item, ring, trip, cancelled: false };
+    this.lying.push(lying);
+    item.setPosition(to.x, to.y).setAngle(lyingAngle).setScale(base).setDepth(F.depth.lying);
     this.dust.explode(F.dust.count, to.x, to.y);
-    this.src.say(to.x, to.y + P.word.offsetY, pick(PETARD_WORDS), P.word.color, P.word.size);
+    if (!trip.returned) this.src.say(to.x, to.y + P.word.offsetY, pick(PETARD_WORDS), P.word.color, P.word.size);
     const landed: FanLandedPayload = { x: to.x, y: to.y, bad: true };
     bus.emit(Events.FanLanded, landed);
 
@@ -391,14 +480,15 @@ export class FanThrowSystem {
           duration: P.hop.ms,
           ease: 'Quad.easeOut',
           yoyo: true,
-          onComplete: () => this.burn(item, ring, to, base, lying),
+          onComplete: () => this.burn(lying, to, base, lyingAngle),
         });
       },
     });
   }
 
   /** The fuse burns: sparks off its tip, the petard throbs faster and faster and flashes at the end, the ring grows and blinks red. Then it goes off. */
-  private burn(item: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Arc, to: Point, base: number, angleDeg: number): void {
+  private burn(lying: Lying, to: Point, base: number, angleDeg: number): void {
+    const { item, ring } = lying;
     const P = F.petard;
     const R = P.ring;
     const rad = Phaser.Math.DegToRad(angleDeg);
@@ -413,6 +503,7 @@ export class FanThrowSystem {
       duration: P.fuseMs,
       ease: 'Linear',
       onUpdate: (tween) => {
+        if (lying.cancelled) return; // knocked back: the picture is gone
         const u = tween.getValue() ?? 0;
         const elapsed = u * P.fuseMs;
         // The throb gets faster as the fuse gets shorter: the phase is the integral of the rate, so it never jumps.
@@ -435,15 +526,17 @@ export class FanThrowSystem {
         ring.setAlpha((0.4 + 0.6 * u) * blink);
       },
       onComplete: () => {
+        if (lying.cancelled) return;
+        this.forget(lying);
         item.destroy();
         ring.destroy();
-        if (!this.over) this.explode(to);
+        if (!this.over) this.explode(to, lying.trip);
       },
     });
   }
 
   /** Goes off: the usual blast event (it hurts Varu if he is inside, breaks barrels, shakes the screen) and every cat in the ring takes a hit. */
-  private explode(at: Point): void {
+  private explode(at: Point, trip: PetardTrip): void {
     const P = F.petard;
     const blast: ExplosionPayload = { x: at.x, y: at.y, radius: P.radius, damage: P.damage, shockwave: true, fur: false };
     bus.emit(Events.Explosion, blast);
@@ -451,7 +544,7 @@ export class FanThrowSystem {
       const enemy = child as Enemy;
       if (!enemy.active || !enemy.hittable) continue;
       const dist = Phaser.Math.Distance.Between(at.x, at.y, enemy.x, enemy.y) - enemy.hitRadius;
-      if (dist <= P.radius) enemy.takeDamage(P.catDamage, at.x, at.y, P.knockback);
+      if (dist <= P.radius) enemy.takeDamage(trip.returned ? F.swat.catDamage : P.catDamage, at.x, at.y, P.knockback);
     }
   }
 }

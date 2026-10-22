@@ -166,6 +166,16 @@ export class AudioSystem {
       listen(Events.CatBump, () => this.play('bonk', { pitch: AUDIO.pitch.bump })), // a flung cat hits another cat
       listen(Events.FanThrow, () => this.play('swing', { pitch: AUDIO.pitch.fanThrow })), // a fan lets go: a light whoosh
       listen<FanLandedPayload>(Events.FanLanded, ({ bad }) => (bad ? this.play('thud', { pitch: AUDIO.pitch.petardLand }) : this.play('boing', { pitch: AUDIO.pitch.fanGift }))), // a petard thuds, a gift boings
+      listen(Events.ThrowPetard, () => this.play('bomberThrow')), // only the bomber cat throws through this event
+      listen(Events.PetardSwatted, () => {
+        this.play('deflect', { pitch: 1.2 });
+        this.play('swing', { pitch: 0.8 });
+      }),
+      listen(Events.BomberArrived, () => this.play('bossIntro', { pitch: 1.5, gain: 0.8 })),
+      listen(Events.CatJailed, () => {
+        this.play('clank', { pitch: 0.7 }); // the cell door
+        this.play('pickup', { pitch: 1.3 });
+      }),
       listen(Events.LuckySpawn, () => this.play('pickup', { pitch: AUDIO.pitch.luckySpawn })), // a bright ding: the lucky cat is here
       listen(Events.LuckyGone, () => this.play('boing', { pitch: AUDIO.pitch.luckyGone })), // and a boing when she gets away
       listen(Events.CatSurrender, () => this.play('miau', { pitch: AUDIO.pitch.surrender })), // a small, high, sad "miau" as the white flag goes up
@@ -192,6 +202,7 @@ export class AudioSystem {
     const spread = id === 'miau' ? 1 + (Math.random() * 2 - 1) * AUDIO.miauPitchVariance : 1;
     const rate = pitch * spread;
     const volume = AUDIO.volumes[id] * gain;
+    if (!Number.isFinite(rate) || !Number.isFinite(volume)) return; // a bad pitch / gain from some caller: skip the sound, never crash
 
     const files = this.loadedFiles(id);
     if (files.length > 0) {

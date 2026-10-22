@@ -24,13 +24,13 @@ export const AUDIO = {
   volumes: {
     swing: 0.5, hit: 0.6, miau: 0.55, kill: 0.6, hurt: 0.7, pickup: 0.55, bonk: 0.6, caw: 0.5,
     explosion: 0.8, deflect: 0.55, stun: 0.6, bossIntro: 0.8, waveStart: 0.6, victory: 0.7, gameOver: 0.7,
-    rustle: 0.5, thud: 0.7, clank: 0.5, boing: 0.5, knock: 0.6, smash: 0.8, heartbeat: 0.8, blip: 0.35,
+    rustle: 0.5, thud: 0.7, clank: 0.5, boing: 0.5, knock: 0.6, smash: 0.8, heartbeat: 0.8, blip: 0.35, bomberThrow: 0.75,
   } satisfies Record<SoundId, number>,
   /** The same sound can't restart sooner than this (ms). Stops explosions of sound when 10 cats get hit at once. */
   minGapMs: {
     swing: 60, hit: 50, miau: 120, kill: 60, hurt: 150, pickup: 60, bonk: 60, caw: 100,
     explosion: 120, deflect: 80, stun: 300, bossIntro: 500, waveStart: 500, victory: 1000, gameOver: 1000,
-    rustle: 70, thud: 70, clank: 60, boing: 90, knock: 70, smash: 120, heartbeat: 200, blip: 30,
+    rustle: 70, thud: 70, clank: 60, boing: 90, knock: 70, smash: 120, heartbeat: 200, blip: 30, bomberThrow: 150,
   } satisfies Record<SoundId, number>,
 } as const;
 

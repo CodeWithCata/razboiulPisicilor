@@ -1,6 +1,6 @@
 /** @file Score, kills and the saved best (campaign and endless kept apart). */
 import Phaser from 'phaser';
-import { bus, Events, listen, type EnemyKilledPayload, type ScorePayload } from '../core/events';
+import { bus, Events, listen, type CatJailedPayload, type EnemyKilledPayload, type ScorePayload } from '../core/events';
 import type { RunMode } from '../core/run';
 import { loadBest, saveBest } from '../core/storage';
 
@@ -23,6 +23,8 @@ export class ScoreSystem {
         this.kills += 1;
         this.emit();
       }),
+      // A cat left in a bed cage when the wave ended: its bonus, but it is not a kill.
+      listen<CatJailedPayload>(Events.CatJailed, ({ points }) => this.add(points)),
     );
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off.forEach((f) => f()));
     this.emit();

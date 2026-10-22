@@ -52,7 +52,7 @@ const MOODS: Record<CrowdMood, MoodLook> = {
 };
 
 /** What the crowd shouts, and when (`CROWD_LINES` in content/lines.ts has the words). */
-export type ShoutKind = 'cheer' | 'roar' | 'boss' | 'surrender' | 'gloom' | 'boo';
+export type ShoutKind = 'cheer' | 'roar' | 'boss' | 'surrender' | 'gloom' | 'boo' | 'bomber';
 
 /** What the fan throw (systems/FanThrowSystem.ts) asks of the crowd: a fan on the first terrace rows, `minDist`..`maxDist` px from (x, y), that winds up for `windUpMs`. */
 export interface ThrowPick {
@@ -86,7 +86,7 @@ export const CROWD = {
   /** How long a mood takes to settle when the crowd moves INTO it (ms, about a third of the full change). */
   easeMs: { calm: 1800, cheer: 500, roar: 320, gloom: 380, boo: 350 },
   /** How long an event keeps the crowd in a mood before it calms down again (ms). Gloom stays until the run ends. */
-  cheer: { waveStartMs: 3600, lastCatMs: 3200, streakMs: 2800, bossMs: 4200, surrenderMs: 1800, throwMs: 2200 },
+  cheer: { waveStartMs: 3600, lastCatMs: 3200, streakMs: 2800, bossMs: 4200, surrenderMs: 1800, throwMs: 2200, bomberMs: 4200 },
   roar: { waveClearedMs: 5600, bossDefeatedMs: 4200, victoryMs: 60000 },
   /** v147: how long the stands boo when Federer is stunned (ms; a bit longer than her stun). */
   boo: { stunMs: 2400 },
@@ -137,7 +137,11 @@ export const CROWD = {
     color: '#f5c518',
     /** Lift above the fan (px). */
     liftPx: 22,
-    chance: { cheer: 0.45, roar: 0.9, boss: 1, surrender: 0.7, gloom: 1, boo: 1 },
+    /** v170: the name that floats over the first bomber cat (px above her, size, color). */
+    bomberNameLiftPx: 70,
+    bomberNameSize: 34,
+    bomberNameColor: '#ff8a3c',
+    chance: { cheer: 0.45, roar: 0.9, boss: 1, surrender: 0.7, gloom: 1, boo: 1, bomber: 1 },
   },
   /** Dev key Z: how long a forced mood stays before the crowd calms down (ms). Gloom stays until the next press. */
   debugHoldMs: 6000,

@@ -6,7 +6,6 @@ import type { DebugId } from '../config/debug';
 import type { FightReport } from './bossVerdict';
 import type { JokeCategory, JokeChannel } from '../config/jokes';
 import type { AmbientAction, PropKind } from '../config/props';
-import type { Enemy } from '../entities/Enemy';
 
 /**
  * Global event bus. Gameplay code EMITS things that happened ("a cat died"),
@@ -27,19 +26,25 @@ export const Events = {
   EnemyKilled: 'enemy:killed', // EnemyKilledPayload (only when Varu kills it)
   CatBump: 'enemy:bump', // CatBumpPayload (a flung cat slammed into another cat)
   CatPopped: 'enemy:popped', // CatPoppedPayload (a cat that jumped out of a bush or box just landed: it says something cheeky)
-  CatCaged: 'bed:caged', // CatCagedPayload (a flung cat was locked into a bed)
-  CatReleased: 'bed:released', // CatReleasedPayload (the cat got out of the bed: escaped, or the bed broke)
-  BedRearmed: 'bed:rearmed', // BedRearmedPayload (the bed has its pillow back and can catch again)
+  CatCaged: 'bed:caged', // CatCagedPayload (a flung cat was locked in a bed cage: the bed loses its pillow)
+  CatReleased: 'bed:released', // CatReleasedPayload (a caged cat got out: the bed rests, then the pillow comes back)
+  CatJailed: 'bed:jailed', // CatJailedPayload (the wave ended while a cat was still locked in a bed: it is taken away for good, Varu gets the bonus)
+  BedRearmed: 'bed:rearmed', // BedRearmedPayload (the rest is over, the pillow is back and the bed can trap again)
   CatSurrender: 'enemy:surrender', // CatSurrenderPayload (a cat gave up and raised the white flag: its line, the sound, and the HUD's fanfare word)
   LuckySpawn: 'lucky:spawn', // PointPayload (the lucky cat just appeared: gold sparks, a word, the banner, a sound)
   LuckyGone: 'lucky:gone', // PointPayload (she got away: a line and a sound; catching her is a normal EnemyKilled with type 'lucky')
   FanThrow: 'fan:throw', // FanThrowPayload (a fan in the stands let go of something: the whoosh, the crowd cheers)
+  BomberArrived: 'bomber:arrived', // PointPayload (the FIRST bomber cat of the run walks in: the crowd shouts, a sting plays)
+  PetardSwatted: 'petard:swatted', // PointPayload (Varu's belt knocked a bomber's fresh petard back at her: a cheer, a sound)
+  ThrowPetard: 'petard:throw', // ThrowPetardPayload (the bomber cat lobs a petard: FanThrowSystem flies it and sets it off, same as the fans' petards)
   FanLanded: 'fan:landed', // FanLandedPayload (it hit the floor: a gift pops out, or a petard starts to hiss)
   Heartbeat: 'player:heartbeat', // HeartbeatPayload (Varu is low on health: one beat, for the sound and the red edge)
   Explosion: 'fx:explosion', // ExplosionPayload
   Teleport: 'fx:teleport', // TeleportPayload
   SpawnProjectile: 'projectile:spawn', // SpawnProjectilePayload
   ProjectileBlocked: 'projectile:blocked', // PointPayload
+  LightsOut: 'fx:lights-out', // LightsOutPayload (the emo cat turns the lights off / on: Blackout draws the dark, DayNight raises the lamps)
+  ProjectileSmash: 'projectile:smash', // ProjectileSmashPayload (every frame a smashing projectile flies: props, barrels and lamps in its way take the hit)
   WaveStarted: 'wave:started', // WavePayload
   WaveCleared: 'wave:cleared', // WavePayload
   WeatherChanged: 'weather:changed', // WeatherPayload (every wave start says what the weather is for that wave, 'clear' too: fog, rain and the weather curses listen)
@@ -95,6 +100,8 @@ export const Events = {
   CutsceneSkip: 'cutscene:skip', // the player held long enough to skip (overlay -> director)
   CutsceneBlip: 'cutscene:blip', // CutsceneBlipPayload (one typed letter: a tiny voice sound)
   CutsceneSfx: 'cutscene:sfx', // CutsceneSfxPayload (a script asks for a sound)
+  TutorialStart: 'tutorial:start', // GameScene -> HUD: the intro is over, show the first-run tutorial card (the first wave is held back until it ends)
+  TutorialEnd: 'tutorial:end', // HUD -> GameScene: the steps are done or skipped: the first wave may start
   PerfStats: 'perf:stats', // PerfStatsPayload (phones, "Date debug" switch on: fps and walking numbers for ui/PerfPanel.ts)
 } as const;
 
@@ -114,6 +121,15 @@ export interface FanThrowPayload extends PointPayload {
   bad: boolean;
 }
 
+/** A cat lobs a petard. `x` / `y` (the base payload) is where it leaves her paw. */
+export interface ThrowPetardPayload extends PointPayload {
+  /** Where it lands. */
+  toX: number;
+  toY: number;
+  /** The cat that threw it (an Enemy; core cannot import entities). The belt can knock the petard back at her (FAN_THROW.swat). */
+  by?: Phaser.GameObjects.GameObject;
+}
+
 export interface FanLandedPayload extends PointPayload {
   bad: boolean;
 }
@@ -129,20 +145,30 @@ export interface CatPoppedPayload extends PointPayload {
   sleepy: boolean;
 }
 
-/** A flung cat was locked into a bed. x/y is the bed's center. */
+/** A cat was trapped in a bed cage. `bedId` is the bed's id (systems/props decides what it is). x/y is the bed's center. */
 export interface CatCagedPayload extends PointPayload {
-  cat: Enemy;
+  /** The trapped cat (an Enemy; core cannot import entities, so systems cast it). */
+  cat: Phaser.GameObjects.GameObject;
   bedId: number;
 }
 
-/** A caged cat got out. `escaped` false = the bed broke. */
+/** A caged cat got out. `escaped` = it got out by itself (time or hits), false = the bed was destroyed or it was freed some other way. */
 export interface CatReleasedPayload extends PointPayload {
-  cat: Enemy;
+  /** The trapped cat (an Enemy; core cannot import entities, so systems cast it). */
+  cat: Phaser.GameObjects.GameObject;
   bedId: number;
   escaped: boolean;
 }
 
-/** A bed got its pillow back. */
+/** The wave ended with this cat still in a bed cage: it is jailed for good. `points` go to Varu's score (no kill), `pickup` = the bed also drops a pickup. x/y is the bed's center. */
+export interface CatJailedPayload extends PointPayload {
+  type: EnemyType;
+  points: number;
+  pickup: boolean;
+  bedId: number;
+}
+
+/** The bed's rest is over: the pillow is back. */
 export interface BedRearmedPayload extends PointPayload {
   bedId: number;
 }
@@ -340,10 +366,27 @@ export interface SpawnProjectilePayload extends PointPayload {
   speed: number;
   /** A homing heart (see `PROJECTILES.heart.homing`): it follows Varu for a while. */
   homing?: boolean;
+  /** v171: damage to props, barrels and lamps in its way (Federer's ball machines). It breaks what it can and flies on; what survives the hit stops it. 0 / missing = it just ends on them like any ball. */
+  smashDamage?: number;
+}
+
+/** A smashing projectile moved from (prevX, prevY) to (x, y) this frame. Whoever owns something breakable in the way hits it and sets `absorbed` when it survived (the ball is spent). */
+export interface ProjectileSmashPayload {
+  prevX: number;
+  prevY: number;
+  x: number;
+  y: number;
+  radius: number;
+  damage: number;
+  absorbed: boolean;
 }
 
 export interface WavePayload {
   wave: number;
+}
+
+export interface LightsOutPayload {
+  on: boolean;
 }
 
 /** The weather of a wave: exclusive, one per wave. */

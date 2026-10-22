@@ -55,6 +55,10 @@ export interface DebugSources {
   spawnAt: (type: EnemyType, x: number, y: number) => Enemy;
   /** Hide and seek on demand: the cat jumps out of a bush or box near Varu. False when no hideout fits on screen. */
   hide: (type: EnemyType) => boolean;
+  /** Bed cages: lock a cat in the bed nearest to Varu (false = no ready bed), free every caged cat, re-arm every resting bed (both return how many). */
+  cageCat: () => boolean;
+  freeCaged: () => number;
+  rearmBeds: () => number;
   /** Every shot in the air vanishes (a boss duel starts clean). */
   clearShots: () => void;
 }
@@ -269,6 +273,12 @@ export class DebugCheats {
         for (let i = 0; i < COSTLY.overuse.uses; i++) bus.emit(Events.BeltSpin, { x, y, angle: 0 }); // the same event a real spin sends
         return this.done(id);
       }
+      case 'cageCat':
+        return this.done(id, undefined, src.cageCat() ? undefined : 'niciun pat liber');
+      case 'freeCat':
+        return this.done(id, undefined, `×${src.freeCaged()}`);
+      case 'rearmBeds':
+        return this.done(id, undefined, `×${src.rearmBeds()}`);
       case 'crowd':
         src.arena.crowd.debugSet(debugChoice('crowd').value as CrowdMood);
         return this.done(id, undefined, debugChoice('crowd').label);

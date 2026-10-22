@@ -5,6 +5,7 @@ import { Tex } from '../../assets/keys';
 import { ARENA } from '../../config/arena';
 import { KICKABLE, type KickDef, type KickKind } from '../../config/props';
 import type { ArenaQuery } from '../../core/arena';
+import { hyp } from '../../core/hyp';
 
 /** What a kickable tells the system around it. */
 export interface KickHost {
@@ -65,7 +66,7 @@ export class Kickable {
   }
 
   get speed(): number {
-    return Math.hypot(this.vx, this.vy);
+    return hyp(this.vx, this.vy);
   }
 
   /** How far above the floor it is right now (px). */

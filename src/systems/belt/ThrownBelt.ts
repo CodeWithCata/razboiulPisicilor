@@ -172,7 +172,7 @@ export class ThrownBelt {
         proj.crack();
         continue;
       }
-      swatProjectile(proj, this.enemies);
+      swatProjectile(proj, this.enemies, true);
     }
   }
 }

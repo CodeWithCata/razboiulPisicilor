@@ -6,11 +6,12 @@ import { gameClock } from '../core/clock';
 import {
   bus, Events, listen,
   type BallLandedPayload, type BeltFlightPayload, type BeltSweepPayload, type CrowImpactPayload, type ExplosionPayload,
-  type PropDestroyedPayload, type PropHitPayload,
+  type ProjectileSmashPayload, type PropDestroyedPayload, type PropHitPayload,
 } from '../core/events';
 import { segmentTouchesBox, sweepTouchesBox } from '../core/reach';
 import type { Player } from '../entities/Player';
 import type { FloorLamp } from './FloorLamp';
+import { hyp } from '../core/hyp';
 
 const L = DAY_NIGHT.lamp;
 
@@ -35,6 +36,7 @@ export class LampSystem {
       listen(Events.BeltSpin, () => (this.sweepSerial += 1)),
       listen<BeltSweepPayload>(Events.BeltSweep, (p) => this.onSweep(p)),
       listen<BeltFlightPayload>(Events.BeltFlight, (p) => this.onFlight(p)),
+      listen<ProjectileSmashPayload>(Events.ProjectileSmash, (p) => this.onProjectileSmash(p)),
       listen<ExplosionPayload>(Events.Explosion, ({ x, y, radius, fromBoss }) => this.blast(x, y, radius, fromBoss === true)),
       listen<BallLandedPayload>(Events.BallLanded, ({ x, y, radius }) => this.blast(x, y, radius, true)),
       listen<CrowImpactPayload>(Events.CrowImpact, ({ x, y, radius, variant }) => {
@@ -66,6 +68,17 @@ export class LampSystem {
     }
   }
 
+  /** v171: a smashing ball (Federer's ball machine) flies through lamps: each one on its way takes the ball's damage as a boss hit; one that survives stops the ball. */
+  private onProjectileSmash(p: ProjectileSmashPayload): void {
+    for (const lamp of this.lamps) {
+      if (!lamp.hittable || !segmentTouchesBox(p.prevX, p.prevY, p.x, p.y, lamp.box, p.radius)) continue;
+      if (!this.hit(lamp, p.prevX, p.prevY, p.damage, PROP_TUNING.flight.power, true)) {
+        p.absorbed = true;
+        return;
+      }
+    }
+  }
+
   /** A blast breaks every lamp in reach at once. */
   private blast(x: number, y: number, radius: number, byBoss: boolean): void {
     const reach = radius + L.blastSlackPx;
@@ -76,14 +89,15 @@ export class LampSystem {
   }
 
   /** `fromX / fromY`: where the hit came from (the lantern rattles away from it). */
-  private hit(lamp: FloorLamp, fromX: number, fromY: number, damage: number, power: number, byBoss: boolean): void {
+  private hit(lamp: FloorLamp, fromX: number, fromY: number, damage: number, power: number, byBoss: boolean): boolean {
     const dx = lamp.footX - fromX;
     const dy = lamp.footY - fromY;
-    const len = Math.hypot(dx, dy) || 1;
+    const len = hyp(dx, dy) || 1;
     const hitPayload: PropHitPayload = { x: lamp.footX, y: lamp.footY - 50, kind: 'lamp', power, dirX: dx / len, dirY: dy / len, quiet: false };
     bus.emit(Events.PropHit, hitPayload);
-    if (!lamp.hurt(damage)) return;
+    if (!lamp.hurt(damage)) return false;
     const payload: PropDestroyedPayload = { x: lamp.footX, y: lamp.footY - 50, kind: 'lamp', byBoss };
     bus.emit(Events.PropDestroyed, payload);
+    return true;
   }
 }

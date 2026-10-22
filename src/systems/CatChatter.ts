@@ -20,6 +20,8 @@ interface Bubble {
   /** When following: the tail tip's height above the cat's position. */
   lift: number;
   bornAt: number;
+  /** When the cat it followed died or left (game ms); -1 = it is still there. The bubble then pops away fast (`CHATTER.deathPopMs`). */
+  goneAt: number;
   lifeMs: number;
   fadeMs: number;
 }
@@ -90,14 +92,34 @@ export class CatChatter {
     if (!CHATTER.enabled || this.talkingCount() >= CHATTER.maxAtOnce) return;
     if (now - this.lastBumpLineAt < CHATTER.bumpCooldownMs || Math.random() >= CHATTER.bumpChance) return;
     this.lastBumpLineAt = now;
-    this.say(pick(CAT_BUMPED_LINES), null, x, y, now);
+    // The line belongs to the cat that was hit (the payload point is on it): it rides along, and pops away when that cat is killed.
+    const cat = this.catNear(x, y);
+    this.say(pick(CAT_BUMPED_LINES), cat, cat ? cat.x : x, cat ? cat.y : y, now);
   }
 
-  /** A hide-and-seek cat landed after jumping out: a cheeky taunt (a sleepy line if it came out of a bed) above its head, when there is room for another line (it is a one-off moment, so no cooldown). */
+  /** A hide-and-seek cat landed after jumping out: a cheeky taunt (a sleepy line if it came out of a bed) that rides along with that cat (the payload point is just above its head, so the cat is the nearest one), when there is room for another line (it is a one-off moment, so no cooldown). */
   private onPopped({ x, y, sleepy }: CatPoppedPayload): void {
     const now = gameClock.now;
     if (!CHATTER.enabled || this.talkingCount() >= CHATTER.maxAtOnce) return;
-    this.say(pick(sleepy ? HIDEOUT_SLEEPY_TAUNTS : HIDEOUT_TAUNTS), null, x, y, now);
+    const line = pick(sleepy ? HIDEOUT_SLEEPY_TAUNTS : HIDEOUT_TAUNTS);
+    const cat = this.catNear(x, y);
+    if (cat) this.say(line, cat, cat.x, cat.y, now);
+    else this.say(line, null, x, y, now);
+  }
+
+  /** The nearest normal cat to a point (within `CHATTER.popFollowRangePx`), so a bubble started from a point can follow the cat that made it. */
+  private catNear(x: number, y: number): Enemy | null {
+    let best: Enemy | null = null;
+    let bestDist: number = CHATTER.popFollowRangePx;
+    for (const cat of this.enemies.getChildren() as Enemy[]) {
+      if (!cat.active || !cat.alive || cat.isBoss) continue;
+      const d = Phaser.Math.Distance.Between(cat.x, cat.y, x, y);
+      if (d <= bestDist) {
+        best = cat;
+        bestDist = d;
+      }
+    }
+    return best;
   }
 
   /** A boss yells (the payload point is just above its head): a shout bubble that rides along with the boss. */
@@ -118,7 +140,15 @@ export class CatChatter {
     this.add(line, 'talk', cat, x, y, cat ? cat.displayHeight / 2 : 0, now);
   }
 
+  /** Is the spot a bubble points at on the screen right now? */
+  private onScreen(x: number, y: number): boolean {
+    const view = this.scene.cameras.main.worldView;
+    const pad = CHATTER.visiblePadPx;
+    return x >= view.x + pad && x <= view.right - pad && y >= view.y + pad && y <= view.bottom - pad;
+  }
+
   private add(line: string, kind: BubbleKind, cat: Enemy | null, x: number, y: number, lift: number, now: number): void {
+    if (!this.onScreen(cat ? cat.x : x, cat ? cat.y - lift : y)) return; // the speaker is off screen: no bubble at all
     const view = new CatBubble(this.scene, line, kind, CHATTER.look.depth);
     const shout = kind === 'shout';
     const bubble: Bubble = {
@@ -129,36 +159,42 @@ export class CatChatter {
       y,
       lift,
       bornAt: now,
+      goneAt: -1,
       lifeMs: shout ? CHATTER.shout.lifeMs : CHATTER.lifeMs,
       fadeMs: shout ? CHATTER.shout.fadeMs : CHATTER.fadeMs,
     };
     this.bubbles.push(bubble);
-    this.place(bubble, 0);
+    this.place(bubble, 0, now);
   }
 
   private moveBubbles(now: number): void {
     for (let i = this.bubbles.length - 1; i >= 0; i--) {
       const bubble = this.bubbles[i]!;
       const age = now - bubble.bornAt;
-      const catGone = bubble.cat !== null && (!bubble.cat.active || !bubble.cat.alive);
-      if (age >= bubble.lifeMs || !bubble.view.active) {
+      const catGone = bubble.cat !== null && (!bubble.cat.active || !bubble.cat.alive || bubble.cat.caged); // dead, gone, or locked in a bed cage
+      if (catGone) {
+        bubble.cat = null; // the bubble stays where the cat was, but only for a moment
+        bubble.goneAt = now;
+      }
+      if (age >= bubble.lifeMs || !bubble.view.active || (bubble.goneAt >= 0 && now - bubble.goneAt >= CHATTER.deathPopMs)) {
         bubble.view.destroy();
         this.bubbles.splice(i, 1);
         continue;
       }
-      if (catGone) bubble.cat = null; // the bubble stays where the cat was and fades out
-      this.place(bubble, age);
+      this.place(bubble, age, now);
     }
   }
 
-  /** The tail tip sits just above the cat's head (or the spot) and the bubble fades at the end. */
-  private place(bubble: Bubble, age: number): void {
+  /** The tail tip sits just above the cat's head (or the spot) and the bubble pops away (shrinks into the tail tip) at the end, or at once when its cat dies. */
+  private place(bubble: Bubble, age: number, now: number): void {
     const cat = bubble.cat;
     if (cat) {
       bubble.x = cat.x;
       bubble.y = cat.y - bubble.lift;
     }
-    const alpha = Phaser.Math.Clamp((bubble.lifeMs - age) / bubble.fadeMs, 0, 1);
-    bubble.view.place(bubble.x, bubble.y - CHATTER.look.gapAboveHead, alpha, this.scene.cameras.main.worldView);
+    let remaining = Phaser.Math.Clamp((bubble.lifeMs - age) / bubble.fadeMs, 0, 1);
+    if (bubble.goneAt >= 0) remaining = Math.min(remaining, Phaser.Math.Clamp(1 - (now - bubble.goneAt) / CHATTER.deathPopMs, 0, 1)); // its cat is gone: pop away fast
+    bubble.view.setVisible(this.onScreen(bubble.x, bubble.y)); // hidden while the speaker is off screen, back when it returns
+    bubble.view.place(bubble.x, bubble.y - CHATTER.look.gapAboveHead, remaining, this.scene.cameras.main.worldView);
   }
 }

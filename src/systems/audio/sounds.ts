@@ -143,6 +143,13 @@ export const SYNTH: Record<SoundId, Generator> = {
     noise(ctx, out, { start: t + 0.14, dur: 0.08, gain: 0.25, filter: 'highpass', freq: 4500 });
   },
 
+  // The bomber cat's throw: a gruff "hup!", a rising whoosh and the hiss of the fuse.
+  bomberThrow: (ctx, out, t, p) => {
+    tone(ctx, out, { type: 'sawtooth', freq: 230 * p, freqEnd: 120 * p, start: t, dur: 0.16, gain: 0.5, vibratoHz: 30, vibratoDepth: 25 });
+    noise(ctx, out, { start: t + 0.03, dur: 0.3, gain: 0.4, filter: 'bandpass', freq: 700 * p, freqEnd: 2600 * p, q: 1.2 });
+    noise(ctx, out, { start: t + 0.08, dur: 0.4, gain: 0.16, filter: 'highpass', freq: 5000 });
+  },
+
   // A heartbeat, "lub-dub": two soft low thumps, the second a little lighter.
   heartbeat: (ctx, out, t, p) => {
     tone(ctx, out, { type: 'sine', freq: 78 * p, freqEnd: 42 * p, start: t, dur: 0.16, gain: 0.95 });

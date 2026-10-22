@@ -1,16 +1,26 @@
 /** @file The show for props: leaves, chips, fluff, floating words, ambient things (listens to the bus). */
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
+import { BED_CAGE_FX } from '../../config/animation';
 import { ARENA } from '../../config/arena';
 import { BARREL } from '../../config/barrels';
 import { BUSH_STATES, BUSH_VARIANTS, FENCE_SPLINTERS, PROP_AMBIENT, PROP_DEBRIS, PROP_FX, PROP_LOOK, PROP_TUNING, ROCK_CRACKS, SMASH, type FxId } from '../../config/props';
 import { FONT_SFX } from '../../config/style';
-import { BARREL_DESTROY_WORDS, LAMP_DESTROY_WORDS, PROP_AMBIENT_TEXT, PROP_CRACK_WORDS, PROP_DESTROY_WORDS, PROP_WORDS, pick } from '../../content/lines';
+import { BARREL_DESTROY_WORDS, BED_CAGE_WORDS, BED_CAGED_CAT_LINES, BED_ESCAPE_WORDS, BED_REARM_WORDS, LAMP_DESTROY_WORDS, PROP_AMBIENT_TEXT, PROP_CRACK_WORDS, PROP_DESTROY_WORDS, PROP_WORDS, pick } from '../../content/lines';
 import { gameClock } from '../../core/clock';
-import { Events, listen, type PropAmbientPayload, type PropCrackedPayload, type PropDestroyedPayload, type PropHitPayload, type PropThinnedPayload } from '../../core/events';
+import { Events, listen, type BedRearmedPayload, type CatCagedPayload, type CatReleasedPayload, type PropAmbientPayload, type PropCrackedPayload, type PropDestroyedPayload, type PropHitPayload, type PropThinnedPayload } from '../../core/events';
 import type { Effects } from '../Effects';
 
 const PARTICLE_DEPTH = 38;
+
+/** The stand-in for a caged cat (the real one is hidden): bars + lock over the cat, all in one container. */
+interface CageRig {
+  root: Phaser.GameObjects.Container;
+  cat: Phaser.GameObjects.Image;
+  bars: Phaser.GameObjects.Graphics;
+  lock: Phaser.GameObjects.Graphics;
+  miau: Phaser.Time.TimerEvent | null;
+}
 
 /**
  * The show for props: flying leaves, chips, fluff and dust, floating words, and the little things they do on their own
@@ -27,6 +37,8 @@ export class PropFx {
   private readonly debris: Phaser.GameObjects.Image[] = [];
   /** Splinters from fences hit hard; kept apart so they never push the bush and box bits away. */
   private readonly splinters: Phaser.GameObjects.Image[] = [];
+  /** One rig per caged bed (by bed id). */
+  private readonly cages = new Map<number, CageRig>();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -41,8 +53,14 @@ export class PropFx {
       listen<PropDestroyedPayload>(Events.PropDestroyed, (e) => this.onDestroyed(e)),
       listen<PropCrackedPayload>(Events.PropCracked, ({ x, y }) => this.onCrack(x, y)),
       listen<PropThinnedPayload>(Events.PropThinned, (e) => this.onThinned(e)),
+      listen<CatCagedPayload>(Events.CatCaged, (e) => this.onCaged(e)),
+      listen<CatReleasedPayload>(Events.CatReleased, (e) => this.onReleased(e)),
+      listen<BedRearmedPayload>(Events.BedRearmed, (e) => this.onRearmed(e)),
     );
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off.forEach((f) => f()));
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.off.forEach((f) => f());
+      this.cages.clear(); // the scene destroys the objects, tweens and timers itself
+    });
   }
 
   private onHit({ x, y, kind, power, quiet, variant, dirX, dirY }: PropHitPayload): void {
@@ -163,6 +181,137 @@ export class PropFx {
         this.effects.floatText(x, y, pick(PROP_AMBIENT_TEXT.purr), PROP_AMBIENT.purr.color, PROP_AMBIENT.purr.size, FONT_SFX);
         break;
     }
+  }
+
+  /** A cat was locked in: the bars drop and slam shut with a shake, the lock pops on, a word. The cat shows behind the bars and shakes, muffled. */
+  private onCaged({ x, y, cat, bedId }: CatCagedPayload): void {
+    this.dropRig(bedId, false);
+    const C = BED_CAGE_FX;
+    const sprite = cat as Phaser.GameObjects.Sprite;
+    const k = Math.min(1, C.cat.fitW / sprite.displayWidth, C.cat.fitH / sprite.displayHeight);
+    const image = this.scene.add
+      .image(-C.cat.shakePx, 0, sprite.texture.key)
+      .setDisplaySize(sprite.displayWidth * k, sprite.displayHeight * k)
+      .setTint(C.cat.tint)
+      .setAlpha(C.cat.alpha);
+    const bars = this.drawBars().setAlpha(0);
+    bars.y = -C.drop.fromPx;
+    const lock = this.drawLock().setScale(0);
+    const root = this.scene.add.container(x, y + C.box.offsetY, [image, bars, lock]).setDepth(C.depth);
+    const rig: CageRig = { root, cat: image, bars, lock, miau: null };
+    this.cages.set(bedId, rig);
+
+    this.scene.tweens.add({ targets: bars, y: 0, alpha: 1, duration: C.drop.ms, ease: 'Bounce.easeOut' });
+    this.scene.tweens.add({ targets: lock, scale: 1, delay: C.lock.popDelayMs, duration: C.lock.popMs, ease: 'Back.easeOut' });
+    this.scene.tweens.add({ targets: root, x: root.x + C.slam.px, duration: C.slam.ms, yoyo: true, repeat: C.slam.repeats, ease: 'Sine.easeInOut', delay: C.drop.ms * 0.6 });
+    this.scene.tweens.add({ targets: image, x: C.cat.shakePx, angle: C.cat.wobbleDeg, duration: C.cat.shakeMs, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.effects.shake(C.slam.cameraMs, C.slam.cameraIntensity);
+    this.effects.floatText(x, y + C.word.offsetY, pick(BED_CAGE_WORDS), C.word.color, C.word.size, FONT_SFX);
+    this.scheduleMiau(rig, x, y, C.miau.firstMs);
+  }
+
+  /** The cat is out (or the bed broke): the bars lift away, fluff flies (a bigger burst if it escaped by itself). */
+  private onReleased({ x, y, bedId, escaped }: CatReleasedPayload): void {
+    const R = BED_CAGE_FX.release;
+    this.dropRig(bedId, true);
+    this.emitters.get('fluff')?.explode(escaped ? R.fluffEscaped : R.fluff, x, y);
+    if (!escaped) return;
+    this.emitters.get('glint')?.explode(R.glintEscaped, x, y);
+    this.effects.shake(R.shakeMs, R.shakeIntensity);
+    this.effects.floatText(x, y + R.word.offsetY, pick(BED_ESCAPE_WORDS), R.word.color, R.word.size, FONT_SFX);
+  }
+
+  /** The pillow is back: a small pop, and a pillow drops onto the bed, squashes, springs back and fades into the real one. */
+  private onRearmed({ x, y, bedId }: BedRearmedPayload): void {
+    this.dropRig(bedId, false);
+    const A = BED_CAGE_FX.rearm;
+    const restY = y + A.restOffsetY;
+    const pillow = this.drawPillow().setPosition(x, restY - A.startPx).setScale(0.5).setAlpha(0).setDepth(BED_CAGE_FX.depth);
+    this.scene.tweens.add({
+      targets: pillow, y: restY, scale: 1, alpha: 1, duration: A.fallMs, ease: 'Quad.easeIn',
+      onComplete: () => {
+        this.emitters.get('glint')?.explode(A.pop.glint, x, restY);
+        this.emitters.get('fluff')?.explode(A.pop.fluff, x, restY);
+        this.effects.floatText(x, y + A.word.offsetY, pick(BED_REARM_WORDS), A.word.color, A.word.size, FONT_SFX);
+        this.scene.tweens.add({
+          targets: pillow, scaleX: A.squashX, scaleY: A.squashY, duration: A.squashMs, ease: 'Quad.easeOut',
+          onComplete: () => {
+            this.scene.tweens.add({ targets: pillow, scaleX: 1, scaleY: 1, duration: A.springMs, ease: 'Elastic.easeOut' });
+            this.scene.tweens.add({ targets: pillow, y: restY - A.hopPx, duration: A.springMs / 3, yoyo: true, ease: 'Sine.easeOut' });
+            this.scene.tweens.add({ targets: pillow, alpha: 0, delay: A.springMs + A.holdMs, duration: A.fadeMs, onComplete: () => pillow.destroy() });
+          },
+        });
+      },
+    });
+  }
+
+  /** A muffled "miau" from the cage now and then, until the rig is gone. */
+  private scheduleMiau(rig: CageRig, x: number, y: number, delayMs: number): void {
+    const M = BED_CAGE_FX.miau;
+    rig.miau = this.scene.time.delayedCall(delayMs, () => {
+      this.effects.floatText(x, y + M.offsetY, pick(BED_CAGED_CAT_LINES), M.color, M.size, FONT_SFX);
+      this.scheduleMiau(rig, x, y, Phaser.Math.Between(M.everyMs.min, M.everyMs.max));
+    });
+  }
+
+  /** Remove a bed's cage picture. `lift` = the bars rise and fade (the cat got out), otherwise gone at once. */
+  private dropRig(bedId: number, lift: boolean): void {
+    const rig = this.cages.get(bedId);
+    if (!rig) return;
+    this.cages.delete(bedId);
+    rig.miau?.remove(false);
+    this.scene.tweens.killTweensOf([rig.root, rig.cat, rig.bars, rig.lock]);
+    if (!lift) {
+      rig.root.destroy();
+      return;
+    }
+    const R = BED_CAGE_FX.release;
+    this.scene.tweens.add({ targets: rig.root, y: rig.root.y - R.liftPx, alpha: 0, duration: R.liftMs, ease: 'Quad.easeOut', onComplete: () => rig.root.destroy() });
+  }
+
+  /** The bars: rails on top and bottom, thin steel bars between, navy outline like the rest of the art. */
+  private drawBars(): Phaser.GameObjects.Graphics {
+    const { box, bars: B } = BED_CAGE_FX;
+    const g = this.scene.add.graphics();
+    const w = box.halfW * 2;
+    const h = box.halfH * 2;
+    const gap = (w - B.width) / (B.count - 1);
+    g.lineStyle(B.outlinePx, B.outline, 1);
+    for (let i = 0; i < B.count; i++) {
+      const bx = -box.halfW + i * gap;
+      g.fillStyle(B.fill, 1).fillRect(bx, -box.halfH, B.width, h);
+      g.strokeRect(bx, -box.halfH, B.width, h);
+      g.fillStyle(B.light, 1).fillRect(bx + 1, -box.halfH + 3, 1.5, h - 6);
+    }
+    for (const ry of [-box.halfH - B.rail / 2, box.halfH - B.rail / 2]) {
+      g.fillStyle(B.fill, 1).fillRoundedRect(-box.halfW - 3, ry, w + 6, B.rail, 2);
+      g.strokeRoundedRect(-box.halfW - 3, ry, w + 6, B.rail, 2);
+    }
+    return g;
+  }
+
+  /** The padlock on the bottom rail (its origin is the lock's own center, so it pops from there). */
+  private drawLock(): Phaser.GameObjects.Graphics {
+    const { box, bars, lock: L } = BED_CAGE_FX;
+    const g = this.scene.add.graphics().setPosition(0, box.halfH - bars.rail / 2);
+    g.lineStyle(4, bars.outline, 1).beginPath().arc(0, -L.h / 2, L.shackleR, Math.PI, 0).strokePath();
+    g.lineStyle(2, bars.fill, 1).beginPath().arc(0, -L.h / 2, L.shackleR, Math.PI, 0).strokePath();
+    g.fillStyle(L.fill, 1).fillRoundedRect(-L.w / 2, -L.h / 2, L.w, L.h, 3);
+    g.lineStyle(bars.outlinePx, bars.outline, 1).strokeRoundedRect(-L.w / 2, -L.h / 2, L.w, L.h, 3);
+    g.fillStyle(L.keyhole, 1).fillCircle(0, -1, 2).fillRect(-1, -1, 2, 5);
+    return g;
+  }
+
+  /** A plump pillow seen from above: pink oval, darker underside, a seam and two corner tufts. */
+  private drawPillow(): Phaser.GameObjects.Graphics {
+    const P = BED_CAGE_FX.rearm.pillow;
+    const g = this.scene.add.graphics();
+    g.fillStyle(P.shade, 1).fillEllipse(0, 3, P.w, P.h);
+    g.fillStyle(P.fill, 1).fillEllipse(0, 0, P.w - 4, P.h - 6);
+    g.lineStyle(P.outlinePx, P.outline, 1).strokeEllipse(0, 1, P.w, P.h);
+    g.lineStyle(2, P.seam, 1).lineBetween(-P.w * 0.28, -2, P.w * 0.28, -2);
+    g.fillStyle(P.shade, 1).fillCircle(-P.w / 2 + 2, 1, 3).fillCircle(P.w / 2 - 2, 1, 3);
+    return g;
   }
 
   /** A single leaf that comes loose, sways down and fades. */

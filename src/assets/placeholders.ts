@@ -5,10 +5,11 @@ import { Tex } from './keys';
 import { drawBossMafia } from './art/bosses';
 import { drawEmoBack, drawEmoSide, drawFedererFront, drawFedererSide, drawQueenBack, drawQueenSide } from './art/views';
 import { drawBallMachine, drawBossFederer, drawFedererArm, drawFedererFootL, drawFedererFootR, drawFedererRacket, drawFedererTail } from './art/federer';
+import { FX_FLOOD_SIZE, drawFxBubbleEmo, drawFxBubbleQueen, drawFxCarpetPad, drawFxCarpetTile, drawFxDiamond, drawFxDrop, drawFxFlood, drawFxPuddle, drawFxPuff, drawFxRing, drawFxShock } from './art/fx';
 import { drawBarrel, drawBarrelBroken, drawBarrelPuddle } from './art/barrel';
 import { CROW_GOLD, CROW_KAMIKAZE, CROW_NORMAL, POSE_FLAP, POSE_FOLD, POSE_OPEN, drawCrow, drawFeather } from './art/crows';
 import { drawBossQueen, drawQueenCape, drawQueenCrown, drawQueenFootL, drawQueenFootR, drawQueenScepter } from './art/queen';
-import { drawCatFat, drawCatFlying, drawCatFlyingBody, drawWingLeft, drawWingRight, drawCatKamikaze, drawCatLucky, drawCatNinja, drawCatNormal, drawCatTennis, drawTennisArm, drawTennisRacket } from './art/cats';
+import { drawBomberArm, drawCatBomber, drawCatFat, drawCatFlying, drawCatFlyingBody, drawWingLeft, drawWingRight, drawCatKamikaze, drawCatLucky, drawCatNinja, drawCatNormal, drawCatTennis, drawTennisArm, drawTennisRacket } from './art/cats';
 import {
   drawBeltThrown, drawPetard, drawPickupCrochete, drawPickupCigarettes, drawPickupVape, drawPickupGoldenBelt, drawPickupLapte, drawPickupMilkBottle, drawPickupLaser, drawPickupMonster, drawPickupRedBull, drawPickupMystery, drawPickupRoulette, drawPickupSnail, drawPickupDumbbell, drawPickupEmo, drawPickupRusty, drawPickupBig, drawPickupSmoke,
   drawBrokenHeart, drawFireball, drawTennis, drawYarn,
@@ -46,6 +47,8 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.CatWingL, 96, 96, drawWingLeft);
   make(scene, Tex.CatWingR, 96, 96, drawWingRight);
   make(scene, Tex.CatLucky, 96, 96, drawCatLucky);
+  make(scene, Tex.CatBomber, 96, 96, drawCatBomber);
+  make(scene, Tex.CatBomberArm, 96, 96, drawBomberArm);
   make(scene, Tex.CatTennis, 96, 96, drawCatTennis);
   make(scene, Tex.CatTennisArm, 96, 96, drawTennisArm);
   make(scene, Tex.CatTennisRacket, 96, 96, drawTennisRacket);
@@ -132,6 +135,19 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.Feather, 16, 36, drawFeather);
 
   make(scene, Tex.Star, 20, 20, star);
+
+  // Floor and shield effects (v174): puddle, bubble shields, magic ring, shockwave, carpet pad, dust puff, teardrop. See art/fx.ts.
+  make(scene, Tex.FxPuddle, 160, 112, drawFxPuddle);
+  make(scene, Tex.FxFlood, FX_FLOOD_SIZE, FX_FLOOD_SIZE, drawFxFlood);
+  make(scene, Tex.FxBubbleQueen, 256, 256, drawFxBubbleQueen);
+  make(scene, Tex.FxBubbleEmo, 256, 256, drawFxBubbleEmo);
+  make(scene, Tex.FxRing, 256, 256, drawFxRing);
+  make(scene, Tex.FxDiamond, 24, 32, drawFxDiamond);
+  make(scene, Tex.FxShock, 256, 256, drawFxShock);
+  make(scene, Tex.FxCarpetPad, 80, 80, drawFxCarpetPad);
+  make(scene, Tex.FxCarpetTile, 64, 64, drawFxCarpetTile);
+  make(scene, Tex.FxPuff, 64, 64, drawFxPuff);
+  make(scene, Tex.FxDrop, 16, 24, drawFxDrop);
 
   // Mustard barrel decoration: whole (with a cat face), broken, and the puddle that stays. See systems/props/BarrelDecor.ts.
   make(scene, Tex.BarrelWhole, 96, 96, drawBarrel);
