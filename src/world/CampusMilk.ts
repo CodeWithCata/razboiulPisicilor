@@ -1,4 +1,5 @@
 /** @file The milk that fills the "Campus!" lettering on the grass, glyph by glyph, as the waves go by (numbers: CAMPUS_MILK in config/arena.ts). */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { CAMPUS_MILK as M, CAMPUS_TEXT } from '../config/arena';
@@ -33,7 +34,7 @@ export class CampusMilk {
     this.out = scene.textures.createCanvas(MILK_KEY, w, h)!;
     this.ctx = this.out.getContext();
     scene.add
-      .image(CAMPUS_TEXT.x, CAMPUS_TEXT.y, MILK_KEY)
+      .image(CAMPUS_TEXT.x, CAMPUS_TEXT.y, ...texArgs(MILK_KEY))
       .setDepth(M.depth)
       .setScale(CAMPUS_TEXT.width / w);
 

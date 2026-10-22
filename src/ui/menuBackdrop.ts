@@ -1,4 +1,5 @@
 /** @file Static sunburst light rays behind the menu and pause menu. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { GAME } from '../config/balance';
@@ -34,12 +35,12 @@ export function createVignette(scene: Phaser.Scene): Phaser.GameObjects.Image | 
       canvas.refresh();
     }
   }
-  return scene.textures.exists(V.key) ? scene.add.image(0, 0, V.key).setOrigin(0) : null;
+  return scene.textures.exists(V.key) ? scene.add.image(0, 0, ...texArgs(V.key)).setOrigin(0) : null;
 }
 
 /** Bright grass, soft light rays and dark edges: the menu background. */
 export function createMenuBackdrop(scene: Phaser.Scene): void {
-  scene.add.tileSprite(0, 0, GAME.width, GAME.height, Tex.Grass).setOrigin(0);
+  scene.add.tileSprite(0, 0, GAME.width, GAME.height, ...texArgs(Tex.Grass)).setOrigin(0);
   createSunburst(scene);
   createVignette(scene);
 }

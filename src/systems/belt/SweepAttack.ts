@@ -5,6 +5,7 @@ import { FLINCH, GOLD_BELT, MILK_FX } from '../../config/animation';
 import { easeInOutBack } from '../../core/ease';
 import { gameClock } from '../../core/clock';
 import { bus, Events, type BeltSweepPayload } from '../../core/events';
+import { snapshotInto } from '../../core/snapshot';
 import { isSwept, normalizeAngle } from '../../core/sweep';
 import type { Enemy } from '../../entities/Enemy';
 import type { Player } from '../../entities/Player';
@@ -47,6 +48,9 @@ export class SweepAttack {
   private readonly alreadyHit = new Set<Enemy>();
   /** Cats that already flinched in this lap (they flinch once per pass). */
   private readonly warned = new Set<Enemy>();
+  /** Reused copies of the cat and shot lists for the per-frame loops (see `snapshotInto`). */
+  private readonly catScratch: Phaser.GameObjects.GameObject[] = [];
+  private readonly shotScratch: Phaser.GameObjects.GameObject[] = [];
 
   constructor(
     private readonly player: Player,
@@ -142,8 +146,9 @@ export class SweepAttack {
     const damage = def.damage * this.player.damageMultiplier;
 
     // A copy: a cat that dies is removed from the group in the middle of the loop, which would skip the next one.
-    for (const child of this.enemies.getChildren().slice()) {
-      const enemy = child as Enemy;
+    const cats = snapshotInto(this.enemies.getChildren(), this.catScratch);
+    for (let i = 0; i < cats.length; i++) {
+      const enemy = cats[i] as Enemy;
       if (!enemy.active || !enemy.hittable || this.alreadyHit.has(enemy)) continue;
 
       const dist = Phaser.Math.Distance.Between(px, py, enemy.x, enemy.y) - enemy.hitRadius;
@@ -157,6 +162,7 @@ export class SweepAttack {
       this.alreadyHit.add(enemy);
       enemy.takeDamage(damage, px, py, def.knockback); // armor is applied inside takeDamage
     }
+    this.catScratch.length = 0;
     // EnemyHit / EnemyKilled events fire from the enemy, so effects and score react on their own.
   }
 
@@ -172,13 +178,15 @@ export class SweepAttack {
   private swatProjectiles(swept: number): void {
     const px = this.player.x;
     const py = this.player.y;
-    for (const child of this.projectiles.getChildren().slice()) {
-      const proj = child as Projectile;
+    const shots = snapshotInto(this.projectiles.getChildren(), this.shotScratch);
+    for (let i = 0; i < shots.length; i++) {
+      const proj = shots[i] as Projectile;
       if (!proj.active || proj.friendly) continue;
       if (Phaser.Math.Distance.Between(px, py, proj.x, proj.y) > this.range) continue;
       if (!isSwept(Phaser.Math.Angle.Between(px, py, proj.x, proj.y), this.startAngle, swept)) continue;
       swatProjectile(proj, this.enemies);
     }
+    this.shotScratch.length = 0;
   }
 
   /** Turn speed (rad/s) from the last two frames, and the strap bend that follows from it (smoothed, so it never pops). */

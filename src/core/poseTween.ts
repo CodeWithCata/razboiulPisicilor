@@ -26,6 +26,8 @@ interface Move<K extends string> {
 export class PoseTween<K extends string> {
   readonly pose: Record<K, number>;
   private readonly moves: Array<Move<K>> = [];
+  /** Reused copy of `moves` for `update` (a move can splice the list mid-loop). No import: this file must run under plain node. */
+  private readonly scratch: Array<Move<K>> = [];
 
   constructor(neutral: Record<K, number>) {
     this.pose = { ...neutral };
@@ -50,7 +52,11 @@ export class PoseTween<K extends string> {
 
   /** Move time forward by `dtMs`. */
   update(dtMs: number): void {
-    for (const m of [...this.moves]) {
+    const list = this.scratch;
+    list.length = 0;
+    for (let i = 0; i < this.moves.length; i++) list.push(this.moves[i]!);
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i]!;
       if (!this.moves.includes(m)) continue; // a move that started this frame may have replaced it
       if (!m.started) {
         m.delay -= dtMs;
@@ -62,6 +68,7 @@ export class PoseTween<K extends string> {
       this.pose[m.key] = m.from + (m.to - m.from) * EASES[m.ease](k);
       if (k >= 1) this.moves.splice(this.moves.indexOf(m), 1);
     }
+    list.length = 0;
   }
 
   /** A move begins from wherever its number is right now and replaces any running move on the same number. */

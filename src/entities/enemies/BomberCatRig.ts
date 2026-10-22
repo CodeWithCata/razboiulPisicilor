@@ -1,4 +1,5 @@
 /** @file The bomber cat's throwing arm (a loose layer that follows her body and is posed by her throw: raise, cock, whip). Visual only. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { BOMBER_PAW, BOMBER_SHOULDER } from '../../assets/art/cats';
 import { Tex } from '../../assets/keys';
@@ -34,7 +35,7 @@ export class BomberCatRig {
     private readonly scene: Phaser.Scene,
     private readonly owner: Phaser.Physics.Arcade.Sprite,
   ) {
-    this.arm = scene.add.image(owner.x, owner.y, Tex.CatBomberArm).setDepth(RIG.depth).setOrigin(BOMBER_SHOULDER.x / TEX, BOMBER_SHOULDER.y / TEX);
+    this.arm = scene.add.image(owner.x, owner.y, ...texArgs(Tex.CatBomberArm)).setDepth(RIG.depth).setOrigin(BOMBER_SHOULDER.x / TEX, BOMBER_SHOULDER.y / TEX);
     this.paw.x = owner.x;
     this.paw.y = owner.y;
   }

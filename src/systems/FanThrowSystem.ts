@@ -1,4 +1,5 @@
 /** @file The fans (and the bomber cat) throw something into the arena now and then: a gift (a normal pickup) or a bad item (a petard with a burning fuse, or a cursed item that curses Varu if he stands in its ring). Decides WHEN, flies the item and lands it. */
+import { texArgs, texRef } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { PLAY_AREA } from '../config/arena';
@@ -17,6 +18,7 @@ import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { WaveSystem } from './WaveSystem';
 import { hyp } from '../core/hyp';
+import { snapshotInto } from '../core/snapshot';
 
 /** What the system needs from the scene (GameScene hands these over; it only wires). */
 export interface FanThrowSources {
@@ -85,6 +87,9 @@ export class FanThrowSystem {
   private readonly off: Array<() => void> = [];
   /** Petards lying on the floor right now (v170: the belt can knock the cat-thrown ones back). */
   private readonly lying: Lying[] = [];
+  /** Reused copies of `lying` for the belt handlers (see `snapshotInto`): swatting one removes it from `lying` mid-loop. */
+  private readonly sweepScratch: Lying[] = [];
+  private readonly flightScratch: Lying[] = [];
   /** Waves started in this run (an endless run counts from its own first wave) and throws let go so far (the first is always a gift). */
   private runWaves = 0;
   private thrown = 0;
@@ -111,7 +116,7 @@ export class FanThrowSystem {
     private readonly src: FanThrowSources,
   ) {
     this.dust = scene.add
-      .particles(0, 0, Tex.Particle, {
+      .particles(0, 0, texRef(Tex.Particle).key, { frame: texRef(Tex.Particle).frame,
         emitting: false,
         lifespan: { min: 320, max: 620 },
         speed: { min: 30, max: 120 },
@@ -122,7 +127,7 @@ export class FanThrowSystem {
       .setDepth(F.depth.dust);
     const S = F.petard.spark;
     this.sparks = scene.add
-      .particles(0, 0, Tex.Particle, {
+      .particles(0, 0, texRef(Tex.Particle).key, { frame: texRef(Tex.Particle).frame,
         emitting: false,
         lifespan: { min: S.lifeMs.min, max: S.lifeMs.max },
         speed: { min: S.speed.min, max: S.speed.max },
@@ -256,19 +261,25 @@ export class FanThrowSystem {
   private onSweep(p: BeltSweepPayload): void {
     if (this.lying.length === 0) return;
     const reach = p.range + F.swat.hitRadiusPx;
-    for (const l of this.lying.slice()) {
+    const items = snapshotInto(this.lying, this.sweepScratch);
+    for (let i = 0; i < items.length; i++) {
+      const l = items[i]!;
       if (hyp(l.x - p.x, l.y - p.y) > reach) continue;
       if (!isSwept(Math.atan2(l.y - p.y, l.x - p.x), p.startAngle, p.swept)) continue;
       this.swat(l);
     }
+    this.sweepScratch.length = 0;
   }
 
   /** The thrown belt flew from (prevX, prevY) to (x, y) this frame. */
   private onFlight(p: BeltFlightPayload): void {
     if (this.lying.length === 0) return;
-    for (const l of this.lying.slice()) {
+    const items = snapshotInto(this.lying, this.flightScratch);
+    for (let i = 0; i < items.length; i++) {
+      const l = items[i]!;
       if (distToSegment(l.x, l.y, p.prevX, p.prevY, p.x, p.y) <= p.radius + F.swat.hitRadiusPx) this.swat(l);
     }
+    this.flightScratch.length = 0;
   }
 
   /** The belt hit a lying petard: if a cat threw it (and it was not knocked back yet) it flies back to her with a fresh fuse. */
@@ -373,10 +384,10 @@ export class FanThrowSystem {
     const radius = curse ? F.curse.radius : petard ? F.petard.radius : F.gift.ring.radius;
     const ringStart = curse ? F.curse.ring.startScale : petard ? F.petard.ring.startScale : M.ringStartScale;
 
-    const item = scene.add.image(from.x, from.y, look.tex).setDepth(F.depth.item);
+    const item = scene.add.image(from.x, from.y, ...texArgs(look.tex)).setDepth(F.depth.item);
     const base = look.sizePx / Math.max(item.frame.realWidth, item.frame.realHeight);
     item.setScale(base * A.startScale);
-    const shadow = scene.add.image(from.x, from.y, Tex.Shadow).setDepth(F.depth.marker).setAlpha(0);
+    const shadow = scene.add.image(from.x, from.y, ...texArgs(Tex.Shadow)).setDepth(F.depth.marker).setAlpha(0);
     const ring = scene.add
       .circle(to.x, to.y, radius, look.color, ringStyle.fill)
       .setStrokeStyle(3, look.color, ringStyle.stroke)

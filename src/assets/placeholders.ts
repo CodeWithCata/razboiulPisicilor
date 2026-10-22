@@ -16,7 +16,8 @@ import {
 } from './art/items';
 import { drawLampBase, drawLampHead, drawLampStem } from './art/lamp';
 import { drawVaru, drawVaruBelt, drawVaruLegL, drawVaruLegR } from './art/varu';
-import { make, poly } from './paint';
+import { make, makeRepeating, poly } from './paint';
+import { flushPictures } from './atlas';
 
 const NAVY = COLORS.navy;
 
@@ -68,7 +69,7 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   });
 
   // Grass tile; tufts stay clear of the edges so it repeats cleanly.
-  make(scene, Tex.Grass, 128, 128, (g) => {
+  makeRepeating(scene, Tex.Grass, 128, 128, (g) => {
     g.fillStyle(0x5aa05a, 1).fillRect(0, 0, 128, 128);
     g.fillStyle(0x66ad63, 1).fillEllipse(34, 40, 44, 26).fillEllipse(94, 92, 50, 30);
     g.lineStyle(3, 0x468a48, 1);
@@ -145,7 +146,7 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.FxDiamond, 24, 32, drawFxDiamond);
   make(scene, Tex.FxShock, 256, 256, drawFxShock);
   make(scene, Tex.FxCarpetPad, 80, 80, drawFxCarpetPad);
-  make(scene, Tex.FxCarpetTile, 64, 64, drawFxCarpetTile);
+  makeRepeating(scene, Tex.FxCarpetTile, 64, 64, drawFxCarpetTile);
   make(scene, Tex.FxPuff, 64, 64, drawFxPuff);
   make(scene, Tex.FxDrop, 16, 24, drawFxDrop);
 
@@ -208,4 +209,7 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
     g.lineStyle(13, NAVY, 1).strokeCircle(20, 20, 12);
     g.lineStyle(7, 0xe6e6ee, 1).strokeCircle(20, 20, 12);
   });
+
+  // Pack everything queued above into the atlas pages in one go (see assets/atlas.ts).
+  flushPictures();
 }

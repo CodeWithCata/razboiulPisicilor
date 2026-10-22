@@ -4,6 +4,11 @@ import { GAME } from '../config/balance';
 import { HUD } from '../config/hud';
 import { COLORS, FONT, css } from '../config/style';
 
+/** One rounded piece of the bar (was a closure rebuilt on every draw). */
+function pill(g: Phaser.GameObjects.Graphics, x: number, w: number, y: number, h: number, r: number): void {
+  g.fillRoundedRect(x, y, w, h, Math.min(r, w / 2, h / 2));
+}
+
 /**
  * The boss's health (HUD, top center). Slides in when the boss appears and out when it falls.
  * The fill follows the real health smoothly; a pale "just lost" chunk drains after a short hold (like Varu's meter).
@@ -26,6 +31,15 @@ export class BossBar {
   private ghostHoldMs = 0;
   private hitMs = 0;
   private pulseMs = 0;
+  /**
+   * What the last picture was drawn from. The bar's picture depends only on these (and the HUD numbers, which never change):
+   * `draw` skips the redraw while they are all the same, so a steady boss costs nothing per frame.
+   */
+  private paintedFill = Number.NaN;
+  private paintedGhost = Number.NaN;
+  private paintedHitMs = Number.NaN;
+  private paintedPhase2 = false;
+  private paintedPulseMs = Number.NaN;
 
   constructor(private readonly scene: Phaser.Scene) {
     const b = HUD.boss;
@@ -45,6 +59,7 @@ export class BossBar {
     this.active = true;
     this.target = this.fill = this.ghost = Phaser.Math.Clamp(hp / maxHp, 0, 1);
     this.ghostHoldMs = this.hitMs = this.pulseMs = 0;
+    this.paintedFill = Number.NaN; // force one paint for the new boss
     this.name.setText(name);
     this.drawDeco();
     this.box.setVisible(true).setPosition(GAME.width / 2, b.slideFromY).setAlpha(0);
@@ -103,11 +118,25 @@ export class BossBar {
 
   private draw(): void {
     const b = HUD.boss;
+    const phase2 = this.target <= b.lowAt;
+    // Skip the redraw when nothing the picture shows has changed. In phase 2 the pulse changes every frame, so it always redraws there.
+    if (
+      this.fill === this.paintedFill &&
+      this.ghost === this.paintedGhost &&
+      this.hitMs === this.paintedHitMs &&
+      phase2 === this.paintedPhase2 &&
+      (!phase2 || this.pulseMs === this.paintedPulseMs)
+    ) {
+      return;
+    }
+    this.paintedFill = this.fill;
+    this.paintedGhost = this.ghost;
+    this.paintedHitMs = this.hitMs;
+    this.paintedPhase2 = phase2;
+    this.paintedPulseMs = this.pulseMs;
+
     const g = this.bar;
     const left = -b.barW / 2;
-    const rect = (x: number, w: number, y: number = b.barY, h: number = b.barH, r: number = b.radius): void => {
-      g.fillRoundedRect(x, y, w, h, Math.min(r, w / 2, h / 2));
-    };
     g.clear();
 
     // Frame and empty track.
@@ -115,33 +144,32 @@ export class BossBar {
     g.fillRoundedRect(left - b.frame, b.barY - b.frame, b.barW + b.frame * 2, b.barH + b.frame * 2, b.frameRadius);
     g.lineStyle(2, COLORS.gold, 0.6).strokeRoundedRect(left - b.frame, b.barY - b.frame, b.barW + b.frame * 2, b.barH + b.frame * 2, b.frameRadius);
     g.fillStyle(b.trackColor, 1);
-    rect(left, b.barW);
+    pill(g, left, b.barW, b.barY, b.barH, b.radius);
 
     // What was just lost.
     if (this.ghost > this.fill) {
       g.fillStyle(b.ghostColor, 0.9);
-      rect(left, Math.max(b.minW, b.barW * this.ghost));
+      pill(g, left, Math.max(b.minW, b.barW * this.ghost), b.barY, b.barH, b.radius);
     }
 
     // The health itself, with a lighter strip on top and a darker one underneath so it looks chunky.
     if (this.fill > 0.001) {
       const w = Math.max(b.minW, b.barW * this.fill);
-      const phase2 = this.target <= b.lowAt;
       g.fillStyle(phase2 ? b.lowColor : b.color, 1);
-      rect(left, w);
+      pill(g, left, w, b.barY, b.barH, b.radius);
       if (w > 14) {
         g.fillStyle(COLORS.white, 0.3);
-        rect(left + 3, w - 6, b.barY + 2, b.barH * 0.32, b.radius / 2);
+        pill(g, left + 3, w - 6, b.barY + 2, b.barH * 0.32, b.radius / 2);
         g.fillStyle(0x000000, 0.16);
-        rect(left + 3, w - 6, b.barY + b.barH * 0.72, b.barH * 0.22, b.radius / 2);
+        pill(g, left + 3, w - 6, b.barY + b.barH * 0.72, b.barH * 0.22, b.radius / 2);
       }
       if (phase2) {
         g.fillStyle(COLORS.white, b.pulseBright * (0.5 + 0.5 * Math.sin((this.pulseMs / b.pulseMs) * Math.PI * 2)));
-        rect(left, w);
+        pill(g, left, w, b.barY, b.barH, b.radius);
       }
       if (this.hitMs > 0) {
         g.fillStyle(COLORS.white, 0.85 * (this.hitMs / b.hitFlashMs));
-        rect(left, w);
+        pill(g, left, w, b.barY, b.barH, b.radius);
       }
     }
 

@@ -1,4 +1,5 @@
 /** @file Varu wobbling in the middle of the main menu. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { GAME } from '../config/balance';
@@ -9,7 +10,7 @@ export function createMenuVaru(scene: Phaser.Scene): void {
   const S = MENU.stage;
   const x = GAME.width / 2;
   scene.add.ellipse(x, S.centerY + S.shadow.dy, S.shadow.w, S.shadow.h, 0x000000, S.shadow.alpha);
-  const varu = scene.add.image(x, S.centerY, Tex.Varu).setScale(S.varuScale);
+  const varu = scene.add.image(x, S.centerY, ...texArgs(Tex.Varu)).setScale(S.varuScale);
   scene.tweens.add({
     targets: varu,
     angle: { from: -S.varuTiltDeg, to: S.varuTiltDeg },
@@ -28,7 +29,7 @@ export function createCatRing(scene: Phaser.Scene): void {
   const cy = MENU.stage.centerY;
   R.kinds.forEach((key, i) => {
     const angle = R.startAngle + (i / R.kinds.length) * Math.PI * 2;
-    const cat = scene.add.image(0, 0, key).setScale(R.catScale);
+    const cat = scene.add.image(0, 0, ...texArgs(key)).setScale(R.catScale);
     // Sprites face UP, so a quarter turn plus half a turn points the head at the center.
     const place = (radius: number): void => {
       cat.setPosition(cx + Math.cos(angle) * radius * R.xStretch, cy + Math.sin(angle) * radius * R.yStretch);

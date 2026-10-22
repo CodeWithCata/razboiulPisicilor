@@ -30,6 +30,7 @@ import { Fences } from './Fences';
 import { Kickable, type KickHost } from './Kickable';
 import { Prop } from './Prop';
 import { hyp } from '../../core/hyp';
+import { snapshotInto } from '../../core/snapshot';
 
 const T = ARENA.tile;
 
@@ -56,6 +57,10 @@ interface AmbientSpot {
  */
 export class PropSystem implements KickHost {
   private readonly props: Prop[] = [];
+  /** Reused copies of the prop list for the belt and smash handlers (see `snapshotInto`). One list per handler: a nested call never clears another's. */
+  private readonly sweepScratch: Prop[] = [];
+  private readonly flightScratch: Prop[] = [];
+  private readonly smashScratch: Prop[] = [];
   private readonly kickables: Kickable[] = [];
   private readonly propAt = new Map<number, Prop>();
   private fences: Fences | null = null;
@@ -263,13 +268,16 @@ export class PropSystem implements KickHost {
     const reach = p.range + PROP_TUNING.reachSlack;
     const reachSq = (reach + T * 1.5) ** 2;
 
-    for (const prop of this.props.slice()) {
+    const swept = snapshotInto(this.props, this.sweepScratch);
+    for (let i = 0; i < swept.length; i++) {
+      const prop = swept[i]!;
       if (prop.hitKey === key) continue;
       if ((prop.cx - p.x) ** 2 + (prop.cy - p.y) ** 2 > reachSq) continue;
       if (!sweepTouchesBox(p.x, p.y, prop.box, reach, p.startAngle, p.swept)) continue;
       prop.hitKey = key;
       this.hitFrom(prop, p.x, p.y, prop.box, power, (p.spin ? SMASH.player.spin : SMASH.player.swing) * this.player.damageMultiplier);
     }
+    this.sweepScratch.length = 0;
 
     for (const kick of this.kickables) {
       if (kick.sweepKey === key) continue;
@@ -302,11 +310,14 @@ export class PropSystem implements KickHost {
     const now = gameClock.now;
     const { power, cooldownMs } = PROP_TUNING.flight;
 
-    for (const prop of this.props.slice()) {
+    const flown = snapshotInto(this.props, this.flightScratch);
+    for (let i = 0; i < flown.length; i++) {
+      const prop = flown[i]!;
       if (now < prop.readyAt || !segmentTouchesBox(p.prevX, p.prevY, p.x, p.y, prop.box, p.radius)) continue;
       prop.readyAt = now + cooldownMs;
       this.hitFrom(prop, p.prevX, p.prevY, prop.box, power, SMASH.player.flight * this.player.damageMultiplier);
     }
+    this.flightScratch.length = 0;
     for (const kick of this.kickables) {
       if (now < kick.readyAt || !segmentTouchesBox(p.prevX, p.prevY, p.x, p.y, this.kickBox(kick), p.radius)) continue;
       kick.readyAt = now + cooldownMs;
@@ -390,16 +401,31 @@ export class PropSystem implements KickHost {
     const len = hyp(p.x - p.prevX, p.y - p.prevY) || 1;
     const dirX = (p.x - p.prevX) / len;
     const dirY = (p.y - p.prevY) / len;
-    const touched = this.props
-      .filter((prop) => segmentTouchesBox(p.prevX, p.prevY, p.x, p.y, prop.box, p.radius))
-      .sort((a, b) => hyp(a.cx - p.prevX, a.cy - p.prevY) - hyp(b.cx - p.prevX, b.cy - p.prevY));
-    for (const prop of touched) {
+    // The props on the ball's way, nearest first. Built in a reused list; the sort is a plain insertion sort (no closure, stable).
+    const touched = this.smashScratch;
+    for (let i = 0; i < this.props.length; i++) {
+      const prop = this.props[i]!;
+      if (segmentTouchesBox(p.prevX, p.prevY, p.x, p.y, prop.box, p.radius)) touched.push(prop);
+    }
+    for (let k = 1; k < touched.length; k++) {
+      const cur = touched[k]!;
+      const curDist = hyp(cur.cx - p.prevX, cur.cy - p.prevY);
+      let j = k;
+      while (j > 0 && hyp(touched[j - 1]!.cx - p.prevX, touched[j - 1]!.cy - p.prevY) > curDist) {
+        touched[j] = touched[j - 1]!;
+        j--;
+      }
+      touched[j] = cur;
+    }
+    for (let k = 0; k < touched.length; k++) {
+      const prop = touched[k]!;
       this.smash(prop, p.damage, dirX, dirY, true);
       if (this.props.includes(prop)) {
         p.absorbed = true; // it is still standing: the ball stops here
-        return;
+        break;
       }
     }
+    touched.length = 0;
   }
 
   /** A yarn or a broken heart ended on a wall: whatever stands there feels the knock. */

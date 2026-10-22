@@ -1,4 +1,5 @@
 /** @file The queen's red carpet attack as a real carpet: it rolls out over a band of floor during the warning (`rollCarpet`) and slams down solid when it strikes (`carpetStrike`). Plush red with a diamond pattern and gold trim. Visual only. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { CARPET_FX as FX } from '../config/animation';
@@ -16,7 +17,7 @@ function build(scene: Phaser.Scene, r: Band, depth: number, withRoll: boolean) {
   const w = r.x2 - r.x1;
   const h = r.y2 - r.y1;
   const horizontal = w >= h;
-  const body = scene.add.tileSprite(r.x1, r.y1, w, h, Tex.FxCarpetTile).setOrigin(0).setDepth(depth);
+  const body = scene.add.tileSprite(r.x1, r.y1, w, h, ...texArgs(Tex.FxCarpetTile)).setOrigin(0).setDepth(depth);
   const navy = [scene.add.rectangle(r.x1, r.y1, 10, 10, FX.navy).setOrigin(0).setDepth(depth + 0.01), scene.add.rectangle(r.x1, r.y1, 10, 10, FX.navy).setOrigin(0).setDepth(depth + 0.01)];
   const gold = [scene.add.rectangle(r.x1, r.y1, 10, 10, FX.gold).setOrigin(0).setDepth(depth + 0.02), scene.add.rectangle(r.x1, r.y1, 10, 10, FX.gold).setOrigin(0).setDepth(depth + 0.02)];
   const roll = withRoll ? scene.add.rectangle(r.x1, r.y1, 10, 10, FX.rollColor).setOrigin(0).setStrokeStyle(3, FX.navy, 1).setDepth(depth + 0.03) : null;

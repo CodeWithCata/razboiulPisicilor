@@ -1,4 +1,5 @@
 /** @file The emo cat's tear puddles: the scream, the rain and his crying leave them on the floor, and the scream also floods the whole ring around him; Varu walks slower while he stands in water, it dries up. Each is a flat cartoon puddle picture that splashes when it lands, wobbles and ripples. Visual + a speed factor on Varu. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { FX_FLOOD_W, FX_PUDDLE_W } from '../../assets/art/fx';
 import { Tex } from '../../assets/keys';
@@ -75,7 +76,7 @@ export class TearPuddles {
     this.flood?.obj.destroy();
     const now = gameClock.now;
     const fit = (radius * 2) / FX_FLOOD_W;
-    const obj = this.scene.add.image(x, y, Tex.FxFlood).setAlpha(0).setDepth(F.depth).setScale(fit * 0.15);
+    const obj = this.scene.add.image(x, y, ...texArgs(Tex.FxFlood)).setAlpha(0).setDepth(F.depth).setScale(fit * 0.15);
     this.scene.tweens.add({ targets: obj, scale: fit, duration: F.growMs, ease: 'Quad.easeOut' });
     this.scene.tweens.add({ targets: obj, alpha: F.alpha, duration: F.growMs * 0.6, ease: 'Sine.easeOut' });
     this.flood = { obj, x, y, radius, until: now + F.lifeMs, rippleAt: now + F.growMs + between(F.rippleEveryMs) };
@@ -86,7 +87,7 @@ export class TearPuddles {
   private floodRim(x: number, y: number, radius: number): void {
     for (let i = 0; i < F.rimDrops; i++) {
       const a = (i / F.rimDrops) * Math.PI * 2 + Math.random() * 0.3;
-      const drop = this.scene.add.image(x, y, Tex.FxDrop).setTint(P.dropColor).setDisplaySize(7, 11).setDepth(P.depth + 0.02).setAlpha(0);
+      const drop = this.scene.add.image(x, y, ...texArgs(Tex.FxDrop)).setTint(P.dropColor).setDisplaySize(7, 11).setDepth(P.depth + 0.02).setAlpha(0);
       const edgeX = x + Math.cos(a) * radius * 0.96;
       const edgeY = y + Math.sin(a) * radius * 0.96;
       this.scene.tweens.add({
@@ -119,7 +120,7 @@ export class TearPuddles {
     const now = gameClock.now;
     const fit = (P.radius * 2 * P.artGrow) / FX_PUDDLE_W;
     const obj = this.scene.add
-      .image(x, y, Tex.FxPuddle)
+      .image(x, y, ...texArgs(Tex.FxPuddle))
       .setFlipX(Math.random() < 0.5)
       .setAlpha(P.alpha)
       .setDepth(P.depth)
@@ -135,7 +136,7 @@ export class TearPuddles {
     for (let i = 0; i < P.splashDrops; i++) {
       const a = (i / P.splashDrops) * Math.PI * 2 + Math.random() * 0.8;
       const d = P.splashPx * (0.6 + Math.random() * 0.6);
-      const drop = this.scene.add.image(x, y, Tex.FxDrop).setTint(P.dropColor).setDisplaySize(7, 11).setDepth(P.depth + 0.02);
+      const drop = this.scene.add.image(x, y, ...texArgs(Tex.FxDrop)).setTint(P.dropColor).setDisplaySize(7, 11).setDepth(P.depth + 0.02);
       const topX = x + Math.cos(a) * d;
       const topY = y + Math.sin(a) * d * 0.6 - 16;
       this.scene.tweens.add({

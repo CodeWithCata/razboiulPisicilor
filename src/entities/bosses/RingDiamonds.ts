@@ -1,4 +1,5 @@
 /** @file A row of small gold diamonds that circle a floor ring and flip like glints (the queen's spin ring and her hovering scepter). Visual only. */
+import { texArgs } from '../../assets/atlas';
 import type Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { QUEEN_RIG } from '../../config/animation';
@@ -9,7 +10,7 @@ export class RingDiamonds {
   private readonly items: Phaser.GameObjects.Image[] = [];
 
   constructor(scene: Phaser.Scene, count: number, private readonly heightPx: number, depth: number) {
-    for (let i = 0; i < count; i++) this.items.push(scene.add.image(0, 0, Tex.FxDiamond).setDepth(depth).setVisible(false));
+    for (let i = 0; i < count; i++) this.items.push(scene.add.image(0, 0, ...texArgs(Tex.FxDiamond)).setDepth(depth).setVisible(false));
   }
 
   setVisible(on: boolean): void {

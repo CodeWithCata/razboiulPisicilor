@@ -1,4 +1,5 @@
 /** @file The dialogue box: a cream card with the speaker's picture and name, a typewriter, and a bobbing "tap" arrow. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { photoKey } from '../../assets/keys';
 import { GAME } from '../../config/balance';
@@ -100,7 +101,7 @@ export class DialogueBox {
     const pt = b.portrait;
     if (key !== undefined) {
       const cx = left ? pt.inset + pt.size / 2 : this.width - pt.inset - pt.size / 2;
-      const img = this.scene.add.image(cx, pt.overlap, key).setOrigin(0.5, 1);
+      const img = this.scene.add.image(cx, pt.overlap, ...texArgs(key)).setOrigin(0.5, 1);
       img.setScale(pt.size / Math.max(img.frame.realWidth, img.frame.realHeight));
       this.root.addAt(img, 0); // first in the container = behind the card: the box overflows the character's feet
       this.portrait = img;

@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { WEATHER } from '../config/weather';
 import { GAME } from '../config/balance';
 import { Events, listen, type WeatherPayload } from '../core/events';
+import { hasPicture, queuePainted, texArgs } from '../assets/atlas';
 
 interface Streak {
   x: number;
@@ -56,7 +57,7 @@ export class Rain {
       const len = Phaser.Math.Between(S.lengthMin, S.lengthMax);
       const shape = streakShape(len, S.slantPx, S.lengthMax, S.width);
       const img = scene.add
-        .image(0, 0, streakKey(len))
+        .image(0, 0, ...texArgs(streakKey(len)))
         .setOrigin(0)
         .setScrollFactor(0)
         .setDepth(this.cfg.depth + 0.1)
@@ -83,13 +84,12 @@ export class Rain {
     const S = this.cfg.streaks;
     for (let len = S.lengthMin; len <= S.lengthMax; len += 1) {
       const key = streakKey(len);
-      if (scene.textures.exists(key)) continue;
+      if (hasPicture(scene, key)) continue;
       const { w, h, pad, dx } = streakShape(len, S.slantPx, S.lengthMax, S.width);
-      const g = scene.make.graphics({}, false);
-      g.lineStyle(S.width, S.color, S.alpha);
-      g.lineBetween(pad, pad, pad + dx, pad + len);
-      g.generateTexture(key, w, h);
-      g.destroy();
+      queuePainted(scene, key, w, h, (g) => {
+        g.lineStyle(S.width, S.color, S.alpha);
+        g.lineBetween(pad, pad, pad + dx, pad + len);
+      });
     }
   }
 

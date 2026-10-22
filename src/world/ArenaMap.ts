@@ -1,4 +1,5 @@
 /** @file Loads the Tiled arena map, builds the solid grid and the visual layers, reads spawns and living-prop spots. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { bus, Events } from '../core/events';
@@ -40,11 +41,11 @@ export class ArenaMap {
 
   constructor(private readonly scene: Phaser.Scene) {
     // The grass is a repeating backdrop under everything; the map only adds floors, fences and props on top.
-    scene.add.tileSprite(0, 0, WORLD.width, WORLD.height, Tex.Grass).setOrigin(0).setDepth(ARENA.depth.grass);
+    scene.add.tileSprite(0, 0, WORLD.width, WORLD.height, ...texArgs(Tex.Grass)).setOrigin(0).setDepth(ARENA.depth.grass);
     this.crowd = new StandsCrowd(scene, buildStands(scene)); // the stands outside the fence (drawn in code, see world/Stands.ts) and the fans' life
     // The "Campus!" lettering lies on the grass, under the floor and the props. Skipped if its image is missing.
     if (scene.textures.exists(Tex.CampusText)) {
-      const text = scene.add.image(CAMPUS_TEXT.x, CAMPUS_TEXT.y, Tex.CampusText).setDepth(ARENA.depth.campus);
+      const text = scene.add.image(CAMPUS_TEXT.x, CAMPUS_TEXT.y, ...texArgs(Tex.CampusText)).setDepth(ARENA.depth.campus);
       text.setScale(CAMPUS_TEXT.width / text.width);
       new CampusMilk(scene); // fills the letters with milk as the waves go by
     }

@@ -1,4 +1,5 @@
 /** @file One retractable street lamp: by day it is gone, at night a pole grows out of the floor with the lantern on top, dust puffs and the light comes on. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { DAY_NIGHT } from '../config/dayNight';
@@ -43,12 +44,12 @@ export class FloorLamp {
     private readonly obstacles: Obstacles,
   ) {
     const d = L.floorDepth;
-    this.shadow = scene.add.image(x + 5, y + 3, Tex.Shadow).setDepth(d + 0.02); // the same soft shadow the barrels have
-    this.base = scene.add.image(x, y, Tex.LampBase).setOrigin(0.5, L.base.originY).setDisplaySize(L.base.w, L.base.h).setDepth(d + 0.08);
-    this.stem = scene.add.image(x, y, Tex.LampStem).setOrigin(0.5, 1).setDepth(d + 0.1);
-    this.head = scene.add.image(x, y, Tex.LampHead).setOrigin(0.5, L.head.originY).setDepth(d + 0.2);
+    this.shadow = scene.add.image(x + 5, y + 3, ...texArgs(Tex.Shadow)).setDepth(d + 0.02); // the same soft shadow the barrels have
+    this.base = scene.add.image(x, y, ...texArgs(Tex.LampBase)).setOrigin(0.5, L.base.originY).setDisplaySize(L.base.w, L.base.h).setDepth(d + 0.08);
+    this.stem = scene.add.image(x, y, ...texArgs(Tex.LampStem)).setOrigin(0.5, 1).setDepth(d + 0.1);
+    this.head = scene.add.image(x, y, ...texArgs(Tex.LampHead)).setOrigin(0.5, L.head.originY).setDepth(d + 0.2);
     this.lens = scene.add.ellipse(x, y, L.lens.w, L.lens.h, L.lens.color).setDepth(d + 0.25);
-    this.glow = this.glowKey ? scene.add.image(x, y - 8, this.glowKey).setDisplaySize(L.glowRadius * 2, L.glowRadius * 2).setDepth(L.glowDepth).setAlpha(0) : null;
+    this.glow = this.glowKey ? scene.add.image(x, y - 8, ...texArgs(this.glowKey)).setDisplaySize(L.glowRadius * 2, L.glowRadius * 2).setDepth(L.glowDepth).setAlpha(0) : null;
     this.place(); // starts hidden
   }
 
@@ -124,22 +125,22 @@ export class FloorLamp {
     const flash = scene.add.circle(gx, gy, 9, S.flashColor, 0.95).setDepth(S.depthAir);
     scene.tweens.add({ targets: flash, scale: 3.4, alpha: 0, duration: S.flashMs, ease: 'Quad.easeOut', onComplete: () => flash.destroy() });
     if (this.glowKey) {
-      const pop = scene.add.image(gx, gy, this.glowKey).setDisplaySize(L.glowRadius, L.glowRadius).setDepth(L.glowDepth).setAlpha(0.9);
+      const pop = scene.add.image(gx, gy, ...texArgs(this.glowKey)).setDisplaySize(L.glowRadius, L.glowRadius).setDepth(L.glowDepth).setAlpha(0.9);
       const w = pop.displayWidth;
       scene.tweens.add({ targets: pop, displayWidth: w * 2.2, displayHeight: w * 2.2, alpha: 0, duration: S.glowPopMs, ease: 'Quad.easeOut', onComplete: () => pop.destroy() });
     }
 
     // The pole snaps at the foot and falls over, then fades.
-    const pole = scene.add.image(this.x, this.y, Tex.LampStem).setOrigin(0.5, 1).setScale(this.stem.scaleX, this.stem.scaleY).setDepth(d + 0.1);
+    const pole = scene.add.image(this.x, this.y, ...texArgs(Tex.LampStem)).setOrigin(0.5, 1).setScale(this.stem.scaleX, this.stem.scaleY).setDepth(d + 0.1);
     scene.tweens.add({ targets: pole, angle: side * S.toppleDeg, duration: S.toppleMs, ease: 'Cubic.easeIn' });
     scene.tweens.add({ targets: pole, alpha: 0, delay: S.toppleMs, duration: S.toppleFadeMs, onComplete: () => pole.destroy() });
     scene.time.delayedCall(S.toppleMs * 0.9, () => this.puff()); // dust where it hits the floor
-    const foot = scene.add.image(this.x, this.y, Tex.LampBase).setOrigin(0.5, L.base.originY).setDisplaySize(this.base.displayWidth, this.base.displayHeight).setDepth(d + 0.08);
+    const foot = scene.add.image(this.x, this.y, ...texArgs(Tex.LampBase)).setOrigin(0.5, L.base.originY).setDisplaySize(this.base.displayWidth, this.base.displayHeight).setDepth(d + 0.08);
     scene.tweens.add({ targets: foot, alpha: 0, delay: S.toppleMs, duration: S.toppleFadeMs, onComplete: () => foot.destroy() }); // the foot stays until the pole is down
 
     // The roof of the lantern (the top part of its picture) drops, bounces and tips over, then fades.
     const roof = scene.add
-      .image(this.head.x, this.head.y, Tex.LampHead)
+      .image(this.head.x, this.head.y, ...texArgs(Tex.LampHead))
       .setOrigin(0.5, L.head.originY)
       .setDisplaySize(this.head.displayWidth, this.head.displayHeight)
       .setCrop(0, 0, 44, 27)

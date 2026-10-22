@@ -1,4 +1,5 @@
 /** @file Lights out (every boss, at low health): a dark sheet over the arena with soft circles of light round Varu, the bosses and the lit street lamps. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
 import { LIGHTS_OUT } from '../config/bosses';
@@ -52,7 +53,7 @@ export class Blackout {
     if (canvas && ctx) {
       this.canvas = canvas;
       this.ctx = ctx;
-      this.image = scene.add.image(-C.marginPx, -C.marginPx, KEY).setOrigin(0).setScrollFactor(0).setDepth(C.depth).setAlpha(0).setVisible(false);
+      this.image = scene.add.image(-C.marginPx, -C.marginPx, ...texArgs(KEY)).setOrigin(0).setScrollFactor(0).setDepth(C.depth).setAlpha(0).setVisible(false);
     }
     const off = listen<LightsOutPayload>(Events.LightsOut, ({ on }) => {
       this.target = on ? 1 : 0;

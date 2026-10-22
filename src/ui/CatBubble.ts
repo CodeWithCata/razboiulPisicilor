@@ -28,6 +28,11 @@ export class CatBubble {
   private shift = Number.NaN;
   /** True once the exit has started: the pop / idle tweens are gone and `place` drives the scale. */
   private leaving = false;
+  /** The trailing dots, one per `BUBBLE.tail.dots` entry: positions rewritten on each shift change (radius fixed), never re-allocated. */
+  private readonly dots: { x: number; y: number; r: number }[];
+  /** Whole-cloud half sizes (outline included). The bumps never change after construction, so these are measured once. */
+  private readonly halfW: number;
+  private readonly halfH: number;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -46,6 +51,10 @@ export class CatBubble {
     this.eb = (this.text.height / 2) * BUBBLE.fit + BUBBLE.padY;
     this.bump = Phaser.Math.Clamp(this.eb * C.radiusShare, C.minRadius, C.maxRadius);
     this.buildBumps();
+    const border = K.border;
+    this.halfW = this.bumps.reduce((m, b) => Math.max(m, Math.abs(b.x) + b.r + border * b.ink), this.ea);
+    this.halfH = this.bumps.reduce((m, b) => Math.max(m, Math.abs(b.y) + b.r + border * b.ink), this.eb);
+    this.dots = BUBBLE.tail.dots.map((d) => ({ x: 0, y: 0, r: d.r }));
     this.art = scene.add.graphics();
     this.root = scene.add.container(0, 0, [this.art, this.text]).setDepth(depth);
     this.draw(0);
@@ -64,20 +73,9 @@ export class CatBubble {
     return this.root.active;
   }
 
-  /** Whole cloud, outline included: measured from the real bumps, so the tail puffs sit right against the lowest bump (no gap). */
-  private get halfWidth(): number {
-    const border = BUBBLE.kinds[this.kind].border;
-    return this.bumps.reduce((m, b) => Math.max(m, Math.abs(b.x) + b.r + border * b.ink), this.ea);
-  }
-
-  private get halfHeight(): number {
-    const border = BUBBLE.kinds[this.kind].border;
-    return this.bumps.reduce((m, b) => Math.max(m, Math.abs(b.y) + b.r + border * b.ink), this.eb);
-  }
-
   /** Height of the cloud plus the dots: the room the bubble needs above the speaker. */
   get totalHeight(): number {
-    return this.halfHeight * 2 + BUBBLE.tail.length;
+    return this.halfH * 2 + BUBBLE.tail.length;
   }
 
   /**
@@ -93,8 +91,8 @@ export class CatBubble {
     let shift = side * T.sideways;
     if (view) {
       const pad = BUBBLE.screenPadPx;
-      const lo = view.x + pad + this.halfWidth;
-      const hi = view.right - pad - this.halfWidth;
+      const lo = view.x + pad + this.halfW;
+      const hi = view.right - pad - this.halfW;
       shift = lo > hi ? view.centerX - x : Phaser.Math.Clamp(x + shift, lo, hi) - x;
       tipY = Math.max(y, view.y + pad + this.totalHeight); // the cloud never goes off the top
     }
@@ -185,13 +183,18 @@ export class CatBubble {
     const T = BUBBLE.tail;
     const C = BUBBLE.cloud;
     const cx = shift;
-    const cy = -(T.length + this.halfHeight);
+    const cy = -(T.length + this.halfH);
     const g = this.art;
     g.clear();
 
     // Dots lie on the slanted line from the tip up to the cloud (leaning toward the cloud's side).
     const lean = Phaser.Math.Clamp(shift, -this.ea * T.leanMax, this.ea * T.leanMax);
-    const dots = T.dots.map((d) => ({ x: (lean * d.up) / T.length, y: -d.up, r: d.r }));
+    const dots = this.dots;
+    for (let i = 0; i < dots.length; i++) {
+      const up = T.dots[i]!.up;
+      dots[i]!.x = (lean * up) / T.length;
+      dots[i]!.y = -up;
+    }
 
     // Cel shading: the cream is pulled toward the light by this much (so the shade shows on the far side).
     const k = C.shadeInset;

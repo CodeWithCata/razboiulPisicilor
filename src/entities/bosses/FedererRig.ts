@@ -1,4 +1,5 @@
 /** @file Pisica Federer's moving parts (racket arm + wrist, tail, hopping feet, dribbled / tossed ball, racket swoosh, phase 2 aura) that follow her body and are posed by her attacks. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { FEDERER_BALL_HAND, FEDERER_PAW, FEDERER_RACKET_HEAD, FEDERER_SHOULDER, FEDERER_TAIL_ROOT } from '../../assets/art/federer';
 import { Tex, type TexKey } from '../../assets/keys';
@@ -6,6 +7,7 @@ import { FEDERER_RIG as RIG } from '../../config/animation';
 import { COLORS } from '../../config/style';
 import type { BossLook } from './BossViews';
 import { hyp } from '../../core/hyp';
+import { snapshotInto } from '../../core/snapshot';
 
 /** Texture size and center of every Federer layer (they are all drawn on the same 128x128 canvas). */
 const TEX = 128;
@@ -52,10 +54,17 @@ interface Move {
   started: boolean;
 }
 
+/** Puts one loose-layer picture: position, angle, scale, alpha and visibility. A plain function (no closure is made per frame). */
+function placeLayer(img: Phaser.GameObjects.Image, x: number, y: number, rot: number, scx: number, scy: number, alpha: number, visible: boolean): void {
+  img.setPosition(x, y).setRotation(rot).setScale(scx, scy).setAlpha(alpha).setVisible(visible);
+}
+
 export class FedererRig {
   readonly pose: FedererPose = { ...NEUTRAL };
 
   private readonly moves: Move[] = [];
+  /** Reused copy of `moves` for `advanceMoves` (see `snapshotInto`). */
+  private readonly moveScratch: Move[] = [];
   private readonly tail: Phaser.GameObjects.Image;
   private readonly footL: Phaser.GameObjects.Image;
   private readonly footR: Phaser.GameObjects.Image;
@@ -90,7 +99,7 @@ export class FedererRig {
     private readonly scene: Phaser.Scene,
     private readonly owner: Phaser.Physics.Arcade.Sprite,
   ) {
-    const make = (key: TexKey, depth: number): Phaser.GameObjects.Image => scene.add.image(owner.x, owner.y, key).setDepth(depth);
+    const make = (key: TexKey, depth: number): Phaser.GameObjects.Image => scene.add.image(owner.x, owner.y, ...texArgs(key)).setDepth(depth);
     this.tail = make(Tex.BossFedererTail, RIG.depth.tail).setOrigin(FEDERER_TAIL_ROOT.x / TEX, FEDERER_TAIL_ROOT.y / TEX);
     this.footL = make(Tex.BossFedererFootL, RIG.depth.foot);
     this.footR = make(Tex.BossFedererFootR, RIG.depth.foot);
@@ -141,7 +150,9 @@ export class FedererRig {
   }
 
   private advanceMoves(dt: number): void {
-    for (const m of [...this.moves]) {
+    const list = snapshotInto(this.moves, this.moveScratch);
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i]!;
       if (!this.moves.includes(m)) continue; // a move that started this frame may have replaced it
       if (!m.started) {
         m.delay -= dt;
@@ -153,6 +164,7 @@ export class FedererRig {
       this.pose[m.key] = m.from + (m.to - m.from) * EASES[m.ease](k);
       if (k >= 1) this.moves.splice(this.moves.indexOf(m), 1);
     }
+    this.moveScratch.length = 0;
   }
 
   /** Jump a pose number to a value at once and forget every move on it (a hit ball is gone the same instant). */
@@ -190,7 +202,7 @@ export class FedererRig {
     if (this.destroyed) return;
     const B = RIG.broken;
     const at = this.head;
-    const broken = this.scene.add.image(at.x, at.y, Tex.BossFedererRacket).setDepth(50).setRotation(this.racket.rotation).setScale(this.racket.scaleX, this.racket.scaleY);
+    const broken = this.scene.add.image(at.x, at.y, ...texArgs(Tex.BossFedererRacket)).setDepth(50).setRotation(this.racket.rotation).setScale(this.racket.scaleX, this.racket.scaleY);
     const a = Math.random() * Math.PI * 2;
     this.scene.tweens.add({
       targets: broken, x: at.x + Math.cos(a) * B.flyPx, y: at.y + Math.sin(a) * B.flyPx - 40, angle: broken.angle + B.spinDeg, alpha: 0,
@@ -233,7 +245,7 @@ export class FedererRig {
   dropBall(): void {
     if (this.pose.ballShow < 0.3) return;
     const at = this.ballPoint(this.tmp);
-    const loose = this.scene.add.image(at.x, at.y, Tex.Tennis).setDepth(RIG.depth.ball).setDisplaySize(RIG.ball.sizePx, RIG.ball.sizePx);
+    const loose = this.scene.add.image(at.x, at.y, ...texArgs(Tex.Tennis)).setDepth(RIG.depth.ball).setDisplaySize(RIG.ball.sizePx, RIG.ball.sizePx);
     const sideways = (Math.random() < 0.5 ? -1 : 1) * (24 + Math.random() * 20);
     this.scene.tweens.add({ targets: loose, x: loose.x + sideways, angle: sideways * 12, duration: RIG.drop.lifeMs, ease: 'Sine.easeOut' });
     this.scene.tweens.add({ targets: loose, y: loose.y - RIG.drop.hopPx, duration: RIG.drop.ms, ease: 'Quad.easeOut', yoyo: true, repeat: 1 });
@@ -268,7 +280,7 @@ export class FedererRig {
     for (let i = 0; i < H.stars; i++) {
       const a = (i / H.stars) * Math.PI * 2 + Math.random() * 0.5;
       const reach = H.starReachPx * (0.6 + Math.random() * 0.6);
-      const star = this.scene.add.image(x, y, Tex.Star).setDisplaySize(14, 14).setDepth(60);
+      const star = this.scene.add.image(x, y, ...texArgs(Tex.Star)).setDisplaySize(14, 14).setDepth(60);
       this.scene.tweens.add({
         targets: star, x: x + Math.cos(a) * reach, y: y + Math.sin(a) * reach, angle: 200, alpha: 0,
         duration: H.starMs, ease: 'Cubic.easeOut', onComplete: () => star.destroy(),
@@ -323,24 +335,21 @@ export class FedererRig {
     const r = o.rotation;
     const sx = o.scaleX;
     const sy = o.scaleY;
-    const place = (img: Phaser.GameObjects.Image, x: number, y: number, rot: number, scx: number, scy: number): void => {
-      img.setPosition(x, y).setRotation(rot).setScale(scx, scy).setAlpha(o.alpha).setVisible(o.visible);
-    };
 
     // Feet step forward and back in turn while she walks, and hop on their toes (a tennis ready stance) while she waits.
     const hopRate = this.fury ? RIG.feet.hopRatePhase2 : RIG.feet.hopRate;
     const hop = Math.sin(this.clock * hopRate) * RIG.feet.hopPx * (1 - this.moveAmt);
     const swing = step * RIG.feet.swing;
     const foot = this.world(0, swing + hop, this.tmp);
-    place(this.footL, foot.x, foot.y, r, sx, sy);
+    placeLayer(this.footL, foot.x, foot.y, r, sx, sy, o.alpha, o.visible);
     const foot2 = this.world(0, -swing - hop, this.tmp);
-    place(this.footR, foot2.x, foot2.y, r, sx, sy);
+    placeLayer(this.footR, foot2.x, foot2.y, r, sx, sy, o.alpha, o.visible);
 
     // Tail: slow wag, swings with her steps, streams out behind her in a dash.
     const wag = Math.sin(this.clock * RIG.tail.idleRate) * RIG.tail.idleDeg * (1 - 0.5 * this.moveAmt);
     const tailDeg = this.pose.tailDeg + wag + step * RIG.tail.walkDeg;
     const root = this.world(FEDERER_TAIL_ROOT.x - HALF, FEDERER_TAIL_ROOT.y - HALF, this.tmp);
-    place(this.tail, root.x, root.y, r + toRad(tailDeg), sx, sy * (1 + this.pose.tailStretch * RIG.tail.stretchY));
+    placeLayer(this.tail, root.x, root.y, r + toRad(tailDeg), sx, sy * (1 + this.pose.tailStretch * RIG.tail.stretchY), o.alpha, o.visible);
 
     // Racket arm: turns around her shoulder; the racket turns on its own around her paw (the wrist).
     this.twirlMs = Math.max(0, this.twirlMs - dt);
@@ -348,7 +357,7 @@ export class FedererRig {
     const armDeg = this.pose.armDeg + this.flick * RIG.swat.armDeg + Math.sin(this.clock * RIG.arm.idleRate) * RIG.arm.idleDeg + step * RIG.arm.walkDeg;
     const wristDeg = this.pose.wristDeg + this.flick * RIG.swat.wristDeg + Math.sin(this.clock * RIG.arm.wristIdleRate) * RIG.arm.wristIdleDeg + spin;
     const shoulder = this.world(FEDERER_SHOULDER.x - HALF, FEDERER_SHOULDER.y - HALF, this.tmp);
-    place(this.arm, shoulder.x, shoulder.y, r + toRad(armDeg), sx, sy);
+    placeLayer(this.arm, shoulder.x, shoulder.y, r + toRad(armDeg), sx, sy, o.alpha, o.visible);
 
     // The paw and the racket head, worked out on the texture (turned around the shoulder, then around the paw), then moved into the world.
     const a = toRad(armDeg);
@@ -358,7 +367,7 @@ export class FedererRig {
     const pawX = FEDERER_SHOULDER.x - HALF + pawVx * Math.cos(a) - pawVy * Math.sin(a);
     const pawY = FEDERER_SHOULDER.y - HALF + pawVx * Math.sin(a) + pawVy * Math.cos(a);
     const paw = this.world(pawX, pawY, this.tmp);
-    place(this.racket, paw.x, paw.y, r + w, sx, sy);
+    placeLayer(this.racket, paw.x, paw.y, r + w, sx, sy, o.alpha, o.visible);
     const headVx = FEDERER_RACKET_HEAD.x - FEDERER_PAW.x;
     const headVy = FEDERER_RACKET_HEAD.y - FEDERER_PAW.y;
     this.world(pawX + headVx * Math.cos(w) - headVy * Math.sin(w), pawY + headVx * Math.sin(w) + headVy * Math.cos(w), this.head);

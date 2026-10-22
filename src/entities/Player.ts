@@ -1,4 +1,5 @@
 /** @file Varu: movement, aim, damage, belt visuals, walk / smoke-break / energy back flip animation, power-up multipliers. */
+import { texArgs, texRef } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { PLAYER } from '../config/balance';
@@ -112,11 +113,11 @@ export class Player extends Actor {
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, Tex.Varu, { maxHp: PLAYER.maxHp, size: PLAYER.size, hitRadius: PLAYER.hitRadius });
-    this.legL = scene.add.image(x, y, Tex.VaruLegL).setDepth(19);
-    this.legR = scene.add.image(x, y, Tex.VaruLegR).setDepth(19);
-    this.heldBelt = scene.add.image(x, y, Tex.VaruBelt).setDepth(21);
-    this.flipBody = scene.add.image(x, y, Tex.Varu).setDepth(20).setVisible(false);
-    this.smoke = scene.add.particles(0, 0, Tex.Particle, {
+    this.legL = scene.add.image(x, y, ...texArgs(Tex.VaruLegL)).setDepth(19);
+    this.legR = scene.add.image(x, y, ...texArgs(Tex.VaruLegR)).setDepth(19);
+    this.heldBelt = scene.add.image(x, y, ...texArgs(Tex.VaruBelt)).setDepth(21);
+    this.flipBody = scene.add.image(x, y, ...texArgs(Tex.Varu)).setDepth(20).setVisible(false);
+    this.smoke = scene.add.particles(0, 0, texRef(Tex.Particle).key, { frame: texRef(Tex.Particle).frame,
       emitting: false,
       lifespan: CIG_SMOKE.lifespanMs,
       speed: CIG_SMOKE.speed,
@@ -125,8 +126,8 @@ export class Player extends Actor {
       alpha: CIG_SMOKE.alpha,
       tint: [...CIG_SMOKE.tint],
     }).setDepth(22);
-    this.ember = scene.add.image(x, y, Tex.Particle).setTint(SMOKE_BREAK.ember.tint).setDepth(23).setVisible(false);
-    this.goo = scene.add.particles(0, 0, Tex.MilkDrop, {
+    this.ember = scene.add.image(x, y, ...texArgs(Tex.Particle)).setTint(SMOKE_BREAK.ember.tint).setDepth(23).setVisible(false);
+    this.goo = scene.add.particles(0, 0, texRef(Tex.MilkDrop).key, { frame: texRef(Tex.MilkDrop).frame,
       emitting: false,
       gravityY: MILK_FX.gravity * GOLD_BELT.drops.gravityMult,
       lifespan: GOLD_BELT.held.lifespanMs,
@@ -135,7 +136,7 @@ export class Player extends Actor {
       alpha: GOLD_BELT.held.alpha,
       tint: [...GOLD_BELT.goo],
     }).setDepth(22);
-    this.gooBurst = scene.add.particles(0, 0, Tex.MilkDrop, {
+    this.gooBurst = scene.add.particles(0, 0, texRef(Tex.MilkDrop).key, { frame: texRef(Tex.MilkDrop).frame,
       emitting: false,
       gravityY: MILK_FX.gravity * GOLD_BELT.drops.gravityMult,
       lifespan: GOLD_BELT.flourish.lifespanMs,
@@ -303,7 +304,7 @@ export class Player extends Actor {
     this.flipMs = 0;
     this.flipGhostMs = 0;
     this.flipLanded = false;
-    this.flipBody.setTexture(this.texture.key); // the pose he has right now
+    this.flipBody.setTexture(...texArgs(this.frame.name)); // the pose he has right now
   }
 
   /** Moves the flip on one frame and works out where its parts are (`flipPose`). Runs BEFORE the body is shown or hidden, so the last frame is never empty. `delta` is game ms. */
@@ -356,7 +357,7 @@ export class Player extends Actor {
     const G = ENERGY_FLIP.ghost;
     const pose = this.flipPose;
     const ghost = this.scene.add
-      .image(pose.x, pose.y, this.flipBody.texture.key)
+      .image(pose.x, pose.y, ...texArgs(this.flipBody.frame.name))
       .setRotation(pose.rot)
       .setScale(pose.sx, pose.sy)
       .setDepth(G.depth)
@@ -425,7 +426,7 @@ export class Player extends Actor {
     if (frame !== this.bodyFrame || this.emo !== this.bodyEmo) {
       this.bodyFrame = frame;
       this.bodyEmo = this.emo;
-      this.setTexture((this.emo ? EMO_BODY_FRAMES : BODY_FRAMES)[frame]); // emo: the hood is up, except during the drag
+      this.setTexture(...texArgs((this.emo ? EMO_BODY_FRAMES : BODY_FRAMES)[frame])); // emo: the hood is up, except during the drag
     }
 
     // The tip glows brighter and pulses while the cigarette is at his mouth.
@@ -449,7 +450,7 @@ export class Player extends Actor {
         const angle = this.facing.angle() + Phaser.Math.FloatBetween(-e.spreadRad, e.spreadRad);
         const dist = Phaser.Math.FloatBetween(e.distance.min, e.distance.max);
         const puff = this.scene.add
-          .image(mouth.x, mouth.y, Tex.Particle)
+          .image(mouth.x, mouth.y, ...texArgs(Tex.Particle))
           .setDepth(22)
           .setTint(e.tint[Phaser.Math.Between(0, e.tint.length - 1)])
           .setAlpha(e.alpha.start)
@@ -571,7 +572,7 @@ export class Player extends Actor {
     const size = Phaser.Math.Between(cfg.sizePx.min, cfg.sizePx.max);
     const color = Phaser.Utils.Array.GetRandom([...cfg.colors]);
     const flake = this.scene.add
-      .image(x, y, Tex.Chip)
+      .image(x, y, ...texArgs(Tex.Chip))
       .setDisplaySize(size * cfg.popScale, size * cfg.popScale)
       .setTint(color)
       .setDepth(cfg.depth)
@@ -601,7 +602,7 @@ export class Player extends Actor {
     const x = this.x + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
     const y = this.y + cfg.offsetY * this.sizeNow + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
     const size = Phaser.Math.Between(cfg.sizePx.min, cfg.sizePx.max);
-    const heart = this.scene.add.image(x, y, Tex.Heart).setDisplaySize(size, size).setDepth(cfg.depth).setAlpha(cfg.alpha).setAngle(Phaser.Math.FloatBetween(cfg.tiltDeg.min, cfg.tiltDeg.max));
+    const heart = this.scene.add.image(x, y, ...texArgs(Tex.Heart)).setDisplaySize(size, size).setDepth(cfg.depth).setAlpha(cfg.alpha).setAngle(Phaser.Math.FloatBetween(cfg.tiltDeg.min, cfg.tiltDeg.max));
     const full = heart.scaleX; // the scale that gives the displayed size
     heart.setScale(full * 0.4);
     const life = Phaser.Math.Between(cfg.lifeMs.min, cfg.lifeMs.max);
@@ -656,7 +657,7 @@ export class Player extends Actor {
     const gold = GOLD_BELT.enabled && this.goldenBelt;
     if (gold !== this.beltIsGold) {
       this.beltIsGold = gold;
-      this.heldBelt.setTexture(gold ? Tex.VaruBeltGold : Tex.VaruBelt);
+      this.heldBelt.setTexture(...texArgs(gold ? Tex.VaruBeltGold : Tex.VaruBelt));
     }
     if (!gold || !this.beltInHand || !this.alive) return;
     this.gooTimer += delta;
@@ -688,11 +689,8 @@ export class Player extends Actor {
     const fx = Math.sin(r);
     const fy = -Math.cos(r); // local "up" in world space
     const swing = this.legSwing * k;
-    const place = (leg: Phaser.GameObjects.Image, off: number): void => {
-      leg.setPosition(this.x + fx * off, this.y + fy * off).setRotation(r).setScale(k).setAlpha(this.alpha).setVisible(this.visible);
-    };
-    place(this.legL, swing);
-    place(this.legR, -swing);
+    this.legL.setPosition(this.x + fx * swing, this.y + fy * swing).setRotation(r).setScale(k).setAlpha(this.alpha).setVisible(this.visible);
+    this.legR.setPosition(this.x - fx * swing, this.y - fy * swing).setRotation(r).setScale(k).setAlpha(this.alpha).setVisible(this.visible);
     this.heldBelt
       .setPosition(this.x, this.y).setRotation(r + this.beltTilt).setScale(k).setAlpha(this.alpha)
       .setVisible(this.visible && this.beltInHand);

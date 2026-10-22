@@ -37,6 +37,8 @@ export class SurrenderSystem {
   private waveKills = 0;
   /** The current wave may still roll (not rolled yet, and it is allowed to). */
   private canRoll = false;
+  /** Reused list of the cats that could give up, rebuilt each frame while the roll is pending (no array per frame). */
+  private readonly aliveScratch: Enemy[] = [];
 
   constructor(
     scene: Phaser.Scene,
@@ -72,16 +74,21 @@ export class SurrenderSystem {
     if (this.waveKills < SURRENDER.minKills) return;
     if (player.hp < player.maxHp * SURRENDER.minVaruHpFraction) return; // never while Varu is dying
 
-    const cats = this.aliveCats();
-    if (cats.length === 0 || cats.length > SURRENDER.maxAlive) return;
-    if (cats.some((cat) => cat.isBoss || !cat.hittable)) return; // not while a cat is mid-teleport (ninja)
+    const cats = this.fillAliveCats(this.aliveScratch);
+    // Not while a boss is among them, a cat is mid-teleport (ninja), or there are too many (or none).
+    const crowdOk = cats.length > 0 && cats.length <= SURRENDER.maxAlive && !this.hasBlockingCat(cats);
+    if (crowdOk) {
+      this.canRoll = false; // the one roll of this wave, win or lose
+      if (Math.random() < SURRENDER.chance) this.giveUp(cats, waves.wave);
+    }
+    this.aliveScratch.length = 0;
+  }
 
-    this.canRoll = false; // the one roll of this wave, win or lose
-    if (Math.random() >= SURRENDER.chance) return;
-
+  /** The cats give up for this run's surrender: counted, the wave remembered, the score added. */
+  private giveUp(cats: Enemy[], wave: number): void {
     this.count += 1;
-    this.lastWave = waves.wave;
-    for (const cat of cats) cat.surrender(this.exitFor(cat));
+    this.lastWave = wave;
+    for (let i = 0; i < cats.length; i++) cats[i]!.surrender(this.exitFor(cats[i]!));
     this.src.addScore(SURRENDER.score);
   }
 
@@ -95,8 +102,25 @@ export class SurrenderSystem {
     }
   }
 
+  /** The cats that can still give up, copied into `out` (the caller reuses it). */
+  private fillAliveCats(out: Enemy[]): Enemy[] {
+    out.length = 0;
+    const group = this.src.enemies.getChildren() as Enemy[];
+    for (let i = 0; i < group.length; i++) {
+      const cat = group[i]!;
+      if (cat.active && cat.alive && !cat.surrendering && !cat.isBonus) out.push(cat);
+    }
+    return out;
+  }
+
   private aliveCats(): Enemy[] {
-    return (this.src.enemies.getChildren() as Enemy[]).filter((cat) => cat.active && cat.alive && !cat.surrendering && !cat.isBonus);
+    return this.fillAliveCats([]);
+  }
+
+  /** True if a boss or a cat mid-teleport (ninja) is in `cats`: then nobody gives up. */
+  private hasBlockingCat(cats: Enemy[]): boolean {
+    for (let i = 0; i < cats.length; i++) if (cats[i]!.isBoss || !cats[i]!.hittable) return true;
+    return false;
   }
 
   /** The nearest enemy spawn point; without any, the nearest world edge (a little inside it). */

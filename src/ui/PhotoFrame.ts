@@ -1,4 +1,5 @@
 /** @file Polaroid-style card for a friend photo (or a "FOTO" silhouette) with a caption. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { photoKey, Tex, type PhotoId } from '../assets/keys';
 import { PHOTO_FRAME } from '../config/jokes';
@@ -40,7 +41,7 @@ export function createPhotoFrame(scene: Phaser.Scene, id: PhotoId, { x, y, size,
 
   const card = scene.add.rectangle(0, 0, width, height, COLORS.cream).setStrokeStyle(4, COLORS.navy);
   const backdrop = scene.add.rectangle(0, photoY, size, size, 0x14182b);
-  const picture = scene.add.image(0, photoY, real ? photoKey(id) : Tex.PhotoPlaceholder);
+  const picture = scene.add.image(0, photoY, ...texArgs(real ? photoKey(id) : Tex.PhotoPlaceholder));
   picture.setScale(size / Math.max(picture.frame.realWidth, picture.frame.realHeight));
 
   const parts: Phaser.GameObjects.GameObject[] = [card, backdrop, picture, caption];

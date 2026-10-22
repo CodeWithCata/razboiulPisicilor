@@ -1,4 +1,5 @@
 /** @file Ending screen after the final boss: hidden message, endless-mode unlock, again / menu input. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { GAME } from '../config/balance';
@@ -36,13 +37,13 @@ export class VictoryScene extends Phaser.Scene {
     const text = (y: number, str: string, size: number, color = '#ffffff', stroke = 7) =>
       this.add.text(width / 2, y, str, { fontFamily: FONT, fontSize: `${size}px`, color, stroke: '#1b2340', strokeThickness: stroke, align: 'center' }).setOrigin(0.5);
 
-    this.add.tileSprite(0, 0, width, height, Tex.Grass).setOrigin(0).setAlpha(0.7);
+    this.add.tileSprite(0, 0, width, height, ...texArgs(Tex.Grass)).setOrigin(0).setAlpha(0.7);
     this.add.rectangle(0, 0, width, height, 0x000000, 0.35).setOrigin(0);
 
     const title = text(130, ENDING_TITLE, 96, '#f5c518', 14);
     this.tweens.add({ targets: title, scale: { from: 0.5, to: 1 }, duration: 500, ease: 'Back.easeOut' });
 
-    const varu = this.add.image(width / 2, 300, Tex.Varu).setScale(1.5);
+    const varu = this.add.image(width / 2, 300, ...texArgs(Tex.Varu)).setScale(1.5);
     this.tweens.add({ targets: varu, angle: { from: -10, to: 10 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     // The group photo for the ending (real picture via PHOTO_MANIFEST, otherwise a "FOTO" silhouette).

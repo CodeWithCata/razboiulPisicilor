@@ -1,4 +1,5 @@
 /** @file Milk / goo particle emitters for the belt trail, splash and spin. */
+import { texRef } from '../../assets/atlas';
 import type Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { GOLD_BELT, MILK_FX } from '../../config/animation';
@@ -31,7 +32,7 @@ export function createDrops(scene: Phaser.Scene, look: DropLook, gold: boolean, 
   const life = gold ? d.lifeMult : 1;
   const size = gold ? d.scaleMult : 1;
   return scene.add
-    .particles(0, 0, Tex.MilkDrop, {
+    .particles(0, 0, texRef(Tex.MilkDrop).key, { frame: texRef(Tex.MilkDrop).frame,
       emitting: false,
       gravityY: MILK_FX.gravity * (gold ? d.gravityMult : 1),
       lifespan: { min: look.lifespanMs.min * life, max: look.lifespanMs.max * life },
@@ -48,7 +49,7 @@ export function createPuddles(scene: Phaser.Scene, gold: boolean): Emitter {
   const life = gold ? GOLD_BELT.drops.lifeMult : 1;
   const p = MILK_FX.puddle;
   return scene.add
-    .particles(0, 0, Tex.MilkPuddle, {
+    .particles(0, 0, texRef(Tex.MilkPuddle).key, { frame: texRef(Tex.MilkPuddle).frame,
       emitting: false,
       lifespan: { min: p.lifespanMs.min * life, max: p.lifespanMs.max * life },
       speed: 0,

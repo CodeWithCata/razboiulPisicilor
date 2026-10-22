@@ -1,4 +1,5 @@
 /** @file The rare gold leaf a bush may drop: sparkles, tiny heal when Varu steps on it. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { GOLD_LEAF } from '../../config/props';
@@ -69,7 +70,7 @@ export class GoldLeafSystem {
     const spot = this.arena.nearestOpen(x + Phaser.Math.Between(-18, 18), y + GOLD_LEAF.fallPx, 12);
     const ms = Phaser.Math.Between(GOLD_LEAF.fallMs.min, GOLD_LEAF.fallMs.max);
     const leaf = this.scene.add
-      .image(x, y, Tex.Leaf)
+      .image(x, y, ...texArgs(Tex.Leaf))
       .setTint(GOLD_LEAF.tint)
       .setScale(GOLD_LEAF.scale)
       .setDepth(GOLD_LEAF.depth)
@@ -97,7 +98,7 @@ export class GoldLeafSystem {
     this.effects.floatText(leaf.x, leaf.y + GOLD_LEAF.word.offsetY, `+${GOLD_LEAF.heal}`, GOLD_LEAF.word.color, GOLD_LEAF.word.size, FONT_SFX);
     for (let i = 0; i < 5; i++) {
       const angle = (i / 5) * Math.PI * 2 + Math.random();
-      const star = this.scene.add.image(leaf.x, leaf.y, Tex.Star).setTint(GOLD_LEAF.tint).setScale(0.5).setDepth(GOLD_LEAF.depth + 30);
+      const star = this.scene.add.image(leaf.x, leaf.y, ...texArgs(Tex.Star)).setTint(GOLD_LEAF.tint).setScale(0.5).setDepth(GOLD_LEAF.depth + 30);
       this.scene.tweens.add({
         targets: star, x: leaf.x + Math.cos(angle) * 34, y: leaf.y + Math.sin(angle) * 30, alpha: 0, scale: 0.1, angle: 120,
         duration: 420, ease: 'Cubic.easeOut', onComplete: () => star.destroy(),
@@ -107,7 +108,7 @@ export class GoldLeafSystem {
   }
 
   private twinkle(x: number, y: number): void {
-    const star = this.scene.add.image(x, y, Tex.Star).setTint(0xfff3a0).setScale(0).setDepth(GOLD_LEAF.depth + 1);
+    const star = this.scene.add.image(x, y, ...texArgs(Tex.Star)).setTint(0xfff3a0).setScale(0).setDepth(GOLD_LEAF.depth + 1);
     this.scene.tweens.add({ targets: star, scale: 0.45, angle: 90, duration: 220, yoyo: true, ease: 'Sine.easeOut', onComplete: () => star.destroy() });
   }
 }

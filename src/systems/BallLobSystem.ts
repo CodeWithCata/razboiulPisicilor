@@ -1,4 +1,5 @@
 /** @file The tennis cat's ball rain: balls soar up from her racket, hang out of sight, then fall on spots marked by a growing shadow and a ring, bounce and fade (like the crows, but they hurt Varu). */
+import { texArgs, texRef } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { BALL_LOB as L } from '../config/animation';
@@ -20,7 +21,7 @@ export class BallLobSystem {
 
   constructor(private readonly scene: Phaser.Scene) {
     this.fuzz = scene.add
-      .particles(0, 0, Tex.Particle, {
+      .particles(0, 0, texRef(Tex.Particle).key, { frame: texRef(Tex.Particle).frame,
         emitting: false,
         lifespan: { min: 350, max: 650 },
         speed: { min: 50, max: 190 },
@@ -30,7 +31,7 @@ export class BallLobSystem {
       })
       .setDepth(L.depth.fuzz);
     this.dust = scene.add
-      .particles(0, 0, Tex.Particle, {
+      .particles(0, 0, texRef(Tex.Particle).key, { frame: texRef(Tex.Particle).frame,
         emitting: false,
         lifespan: { min: 320, max: 620 },
         speed: { min: 30, max: 120 },
@@ -56,10 +57,10 @@ export class BallLobSystem {
     const total = L.riseMs + L.hangMs + L.fallMs;
     const fallStart = L.riseMs + L.hangMs;
 
-    const ball = scene.add.image(p.x, p.y, Tex.Tennis).setDepth(L.depth.ball);
+    const ball = scene.add.image(p.x, p.y, ...texArgs(Tex.Tennis)).setDepth(L.depth.ball);
     const base = L.sizePx / ball.frame.realWidth;
     ball.setScale(base);
-    const shadow = scene.add.image(p.toX, p.toY, Tex.Shadow).setDepth(L.depth.marker).setAlpha(0);
+    const shadow = scene.add.image(p.toX, p.toY, ...texArgs(Tex.Shadow)).setDepth(L.depth.marker).setAlpha(0);
     const ring = scene.add
       .circle(p.toX, p.toY, p.radius, L.ring.color, L.ring.fill)
       .setStrokeStyle(3, L.ring.color, L.ring.stroke)

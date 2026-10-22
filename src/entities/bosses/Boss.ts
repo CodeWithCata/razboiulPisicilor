@@ -1,4 +1,5 @@
 /** @file Boss state machine: intro -> idle -> telegraph -> active -> recover, phase 2, stun. Subclasses define attacks. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../../assets/keys';
 import { clampToArena } from '../../core/arena';
@@ -135,7 +136,7 @@ export abstract class Boss extends Enemy {
     const next = lookFor(heading, this.lookNow);
     const left = next === 'side' ? Math.cos(heading) < 0 : false;
     if (next === this.lookNow && left === this.lookLeft) return;
-    if (next !== this.lookNow) this.setTexture(looks[next]);
+    if (next !== this.lookNow) this.setTexture(...texArgs(looks[next]));
     this.lookNow = next;
     this.lookLeft = left;
     this.setFlipX(left);
@@ -385,7 +386,7 @@ export abstract class Boss extends Enemy {
     this.onStunned();
     if (this.stunStars.length === 0) {
       for (let i = 0; i < 3; i++) {
-        this.stunStars.push(this.scene.add.image(this.x, this.y, Tex.Star).setDisplaySize(22, 22).setDepth(60));
+        this.stunStars.push(this.scene.add.image(this.x, this.y, ...texArgs(Tex.Star)).setDisplaySize(22, 22).setDepth(60));
       }
     }
     const stunned: BossStunnedPayload = { x: this.x, y: this.y, boss: this.bossKey };

@@ -1,4 +1,5 @@
 /** @file The Crow Rain power-up: crows drop with a growing shadow, land and bonk nearby cats. */
+import { texArgs, texRef } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { CROW_FALL } from '../config/animation';
@@ -47,7 +48,7 @@ export class CrowRainSystem {
   ) {
     const feather = (tint: number[]): Phaser.GameObjects.Particles.ParticleEmitter =>
       scene.add
-        .particles(0, 0, Tex.Feather, {
+        .particles(0, 0, texRef(Tex.Feather).key, { frame: texRef(Tex.Feather).frame,
           emitting: false,
           lifespan: { min: 650, max: 1100 },
           speed: { min: 14, max: 70 },
@@ -64,7 +65,7 @@ export class CrowRainSystem {
       miss: feather(FEATHER_TINT.miss),
     };
     this.dust = scene.add
-      .particles(0, 0, Tex.Particle, {
+      .particles(0, 0, texRef(Tex.Particle).key, { frame: texRef(Tex.Particle).frame,
         emitting: false,
         lifespan: { min: 380, max: 700 },
         speed: { min: 40, max: 150 },
@@ -138,7 +139,7 @@ export class CrowRainSystem {
     const radius = CROW_RAIN.variants[variant].radius;
     const frames = FRAMES[variant];
 
-    const shadow = this.scene.add.image(x, y, Tex.Shadow).setDepth(6).setAlpha(0.4);
+    const shadow = this.scene.add.image(x, y, ...texArgs(Tex.Shadow)).setDepth(6).setAlpha(0.4);
     const ring =
       radius > 0
         ? this.scene.add.circle(x, y, radius, 0xff4d4d, 0.08).setStrokeStyle(3, 0xff4d4d, 0.55).setDepth(6).setAlpha(0)
@@ -149,7 +150,7 @@ export class CrowRainSystem {
     const sx = x + side * fall.fromSide;
     const sy = y - fall.fromAbove;
     const heading = Math.atan2(y - sy, x - sx) - Math.PI / 2; // the picture dives head-down
-    const crow = this.scene.add.image(sx, sy, frames.open).setDepth(50).setAlpha(0).setRotation(heading);
+    const crow = this.scene.add.image(sx, sy, ...texArgs(frames.open)).setDepth(50).setAlpha(0).setRotation(heading);
     const base = size / Math.max(crow.frame.realWidth, crow.frame.realHeight);
     crow.setScale(base * fall.startScale);
 
@@ -175,7 +176,7 @@ export class CrowRainSystem {
         const want = t >= fall.tuckAt ? frames.fold : Math.floor(elapsed / fall.flapMs) % 2 === 0 ? frames.open : frames.flap;
         if (want !== wings) {
           wings = want;
-          crow.setTexture(want);
+          crow.setTexture(...texArgs(want));
         }
 
         if (t < 0.9 && elapsed >= nextFeatherAt) {
@@ -198,7 +199,7 @@ export class CrowRainSystem {
   private impact(variant: CrowVariant, x: number, y: number, radius: number, crow: Phaser.GameObjects.Image, base: number, frames: CrowFrames): void {
     const impact: CrowImpactPayload = { x, y, variant, radius };
     const sq = CROW_FALL.squash;
-    crow.setPosition(x, y).setTexture(frames.fold).setAlpha(1).setScale(base);
+    crow.setPosition(x, y).setTexture(...texArgs(frames.fold)).setAlpha(1).setScale(base);
     this.dust.explode(CROW_FALL.dust.count, x, y);
     this.feathers[variant].explode(variant === 'miss' ? 5 : 9, x, y);
 

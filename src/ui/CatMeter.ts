@@ -41,6 +41,16 @@ export class CatMeter {
   private blinkUntil = 0;
   private nextBlinkAt = 0;
   private clock = 0;
+  /**
+   * What the last paint showed. `update` repaints only when one of these changed, or when the face is animated (see `needsPaint`).
+   * A steady, healthy Varu therefore costs no redraw per frame.
+   */
+  private paintedFill = Number.NaN;
+  private paintedGhost = Number.NaN;
+  private paintedMood: Mood | null = null;
+  private paintedBlinking = false;
+  private paintedHurtMs = Number.NaN;
+  private paintedHealMs = Number.NaN;
 
   constructor(scene: Phaser.Scene) {
     this.bar = scene.add.graphics();
@@ -90,7 +100,29 @@ export class CatMeter {
       this.blinkUntil = this.clock + C.blink.holdMs;
       this.nextBlinkAt = this.blinkUntil + this.randomBlinkGap();
     }
-    this.draw();
+    if (this.needsPaint()) this.draw();
+  }
+
+  private isBlinking(): boolean {
+    return this.clock < this.blinkUntil;
+  }
+
+  /**
+   * Whether the picture changed since the last paint. A scared face always repaints (its pulse and heartbeat follow the clock),
+   * and so does a face still being hit or healed (it shakes and shrinks or pops every frame). Otherwise only the values that
+   * `draw` reads matter: the bar fill and the pale chunk, the mood, the blink, and the hit / heal timers as they run down to 0.
+   */
+  private needsPaint(): boolean {
+    const mood = this.mood();
+    if (mood === 'scared' || this.hurtMs > 0 || this.healMs > 0) return true;
+    return (
+      this.fill !== this.paintedFill ||
+      this.ghost !== this.paintedGhost ||
+      mood !== this.paintedMood ||
+      this.isBlinking() !== this.paintedBlinking ||
+      this.hurtMs !== this.paintedHurtMs ||
+      this.healMs !== this.paintedHealMs
+    );
   }
 
   private ease(from: number, to: number, perMs: number, delta: number): number {
@@ -115,6 +147,12 @@ export class CatMeter {
     const heal = this.healMs / C.heal.ms;
     const mood = this.mood();
     const shake = hurt > 0 ? Phaser.Math.FloatBetween(-C.hurt.shakePx, C.hurt.shakePx) * hurt : 0;
+    this.paintedFill = this.fill;
+    this.paintedGhost = this.ghost;
+    this.paintedMood = mood;
+    this.paintedBlinking = this.isBlinking();
+    this.paintedHurtMs = this.hurtMs;
+    this.paintedHealMs = this.healMs;
 
     g.clear();
     g.setScale(C.scale * (1 - C.hurt.shrink * hurt + C.heal.grow * Math.sin(heal * Math.PI)));

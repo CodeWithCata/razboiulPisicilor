@@ -3,6 +3,7 @@ import type Phaser from 'phaser';
 import { drawCatFan, type FanLook, type FanPose } from '../assets/art/cats';
 import { NAVY, sparkle } from '../assets/art/shapes';
 import { poly } from '../assets/paint';
+import { flushPictures, hasPicture, queuePainted, texArgs, texRef } from '../assets/atlas';
 import { ARENA, PLAY_AREA, WORLD } from '../config/arena';
 import { STANDS } from '../config/stands';
 import { ringPosition } from './standsRing';
@@ -461,7 +462,7 @@ function paintBunting(pen: Pen): void {
  * each window of the world: the full-height left and right strips, and the top and bottom strips between them. Every window
  * draws the same world geometry shifted, so the seams between sides line up exactly.
  */
-function bakeBowl(scene: Phaser.Scene, fs: readonly Frame[], boxes: Map<Side, Box[]>): void {
+function bakeBowl(scene: Phaser.Scene, fs: readonly Frame[], boxes: Map<Side, Box[]>, pieces: StandsPiece[]): void {
   const A = PLAY_AREA;
   const windows: Array<{ key: string; x: number; y: number; w: number; h: number }> = [
     { key: 'stands:bowl:left', x: 0, y: 0, w: A.left, h: WORLD.height },
@@ -472,8 +473,7 @@ function bakeBowl(scene: Phaser.Scene, fs: readonly Frame[], boxes: Map<Side, Bo
   const clipTo = octagon();
   for (const win of windows) {
     if (win.w <= 0 || win.h <= 0) continue;
-    if (!scene.textures.exists(win.key)) {
-      const g = scene.make.graphics({}, false);
+    if (!hasPicture(scene, win.key)) queuePainted(scene, win.key, win.w, win.h, (g) => {
       const pen = new Pen(g, win.x, win.y);
       // Back to front: barrier, terraces (all outlines after all fills so seams stay clean), walls, aisles, extras.
       for (const f of fs) paintBarrier(pen, f, clipTo);
@@ -488,15 +488,13 @@ function bakeBowl(scene: Phaser.Scene, fs: readonly Frame[], boxes: Map<Side, Bo
         for (const b of bx) paintBoxFloor(pen, b);
       });
       paintBunting(pen);
-      g.generateTexture(win.key, win.w, win.h);
-      g.destroy();
-    }
-    scene.add.image(win.x, win.y, win.key).setOrigin(0).setDepth(DEPTH.base);
+    });
+    pieces.push({ image: scene.add.image(win.x, win.y, ...texArgs(win.key)).setOrigin(0).setDepth(DEPTH.base), culled: false });
   }
 }
 
 /** The front of a balcony box: a railing along the front, and a striped roof with a scalloped edge over its back half. Baked small, on its own. */
-function bakeBoxFront(scene: Phaser.Scene, b: Box, index: number): void {
+function bakeBoxFront(scene: Phaser.Scene, b: Box, index: number, pieces: StandsPiece[]): void {
   const f = b.frame;
   const key = `stands:box:${f.side}:${index}`;
   const u0 = b.u - b.span / 2;
@@ -504,8 +502,7 @@ function bakeBoxFront(scene: Phaser.Scene, b: Box, index: number): void {
   const roofD = b.front + STANDS.box.roofFromFront; // the roof's front edge
   const pad = STANDS.box.scallop + 8;
   const win = zoneRect(f, u0 - 8, u1 + 8, b.front - pad, f.depth);
-  if (!scene.textures.exists(key)) {
-    const g = scene.make.graphics({}, false);
+  if (!hasPicture(scene, key)) queuePainted(scene, key, win.w, win.h, (g) => {
     const pen = new Pen(g, win.x, win.y);
     const stripes = STANDS.colors.awnings[b.style % STANDS.colors.awnings.length]!;
     const sw = STANDS.box.stripePx;
@@ -536,20 +533,14 @@ function bakeBoxFront(scene: Phaser.Scene, b: Box, index: number): void {
       const [px, py] = f.at(u, b.front + 2);
       pen.circle(px, py, 3.2, STANDS.colors.rail, 1.6);
     }
-    g.generateTexture(key, Math.ceil(win.w), Math.ceil(win.h));
-    g.destroy();
-  }
-  scene.add.image(win.x, win.y, key).setOrigin(0).setDepth(DEPTH.roofs);
+  });
+  pieces.push({ image: scene.add.image(win.x, win.y, ...texArgs(key)).setOrigin(0).setDepth(DEPTH.roofs), culled: false });
 }
 
 /* ---------------------------------------------------------------- the fans */
 
 /** The three pictures of every look, in the order the crowd uses them: arms down, arms up (A), arms up (B). */
 const POSES: readonly FanPose[] = ['idle', 'cheerA', 'cheerB'];
-const ATLAS_KEY = 'stands:fans';
-const ATLAS_COLS = 8;
-/** Set when packing the atlas failed once: the fans then keep their loose textures and the packing is not tried again. */
-let atlasFailed = false;
 
 /** Where one picture of a fan is: a texture, and a frame name when the texture is the atlas. */
 export interface FanFrame {
@@ -559,8 +550,8 @@ export interface FanFrame {
 /** The three pictures of one look: arms down, arms up (A), arms up (B). */
 export type FanFrames = readonly [FanFrame, FanFrame, FanFrame];
 
-const looseKey = (look: number, pose: FanPose): string => `${FAN_KEY}${look}:${pose}`;
-const frameName = (look: number, pose: FanPose): string => `${look}:${pose}`;
+/** The atlas key of one picture of a fan (also its frame name). */
+const fanKey = (look: number, pose: FanPose): string => `${FAN_KEY}${look}:${pose}`;
 
 interface FanVariant {
   /** Index into STANDS.fans (and into the returned `looks`). */
@@ -570,72 +561,21 @@ interface FanVariant {
   vip: boolean;
 }
 
-/** Draws one picture of one look into a texture of its own (skipped when it exists already). */
-function paintFan(scene: Phaser.Scene, index: number, pose: FanPose): void {
-  const key = looseKey(index, pose);
-  if (scene.textures.exists(key)) return;
+/** Queues one picture of one look for the atlas (packed with the other pictures). */
+function queueFan(scene: Phaser.Scene, index: number, pose: FanPose): void {
   const fan = STANDS.fans[index]!;
-  const g = scene.make.graphics({}, false);
   const look: FanLook = { fur: fan.fur, dark: fan.dark, inner: fan.inner, outfit: fan.outfit, eyes: fan.eyes ?? 'happy' };
   if (fan.colors) look.colors = fan.colors;
   if (fan.flag !== undefined) look.flag = fan.flag;
-  drawCatFan(g, look, pose);
-  g.generateTexture(key, FAN_TEX, FAN_TEX);
-  g.destroy();
+  queuePainted(scene, fanKey(index, pose), FAN_TEX, FAN_TEX, (g) => drawCatFan(g, look, pose));
 }
 
-/** True when the atlas texture exists and holds every picture. */
-function atlasReady(scene: Phaser.Scene, count: number): boolean {
-  if (!scene.textures.exists(ATLAS_KEY)) return false;
-  const atlas = scene.textures.get(ATLAS_KEY);
-  for (let i = 0; i < count; i++) for (const pose of POSES) if (!atlas.has(frameName(i, pose))) return false;
-  return true;
-}
-
-/**
- * Copies every loose fan picture into ONE atlas texture, so all the fans share a texture and the renderer never swaps it. Returns false
- * (and leaves the loose textures alone) if anything goes wrong, for example when a generated texture is not a canvas.
- */
-function packAtlas(scene: Phaser.Scene, count: number): boolean {
-  const rows = Math.ceil((count * POSES.length) / ATLAS_COLS);
-  const canvas = scene.textures.createCanvas(ATLAS_KEY, ATLAS_COLS * FAN_TEX, rows * FAN_TEX);
-  if (!canvas) return false;
-  try {
-    const ctx = canvas.getContext();
-    let n = 0;
-    for (let i = 0; i < count; i++) {
-      for (const pose of POSES) {
-        const source: unknown = scene.textures.get(looseKey(i, pose)).getSourceImage();
-        if (!(source instanceof HTMLCanvasElement)) throw new Error(`fan texture ${looseKey(i, pose)} is not a canvas`);
-        const x = (n % ATLAS_COLS) * FAN_TEX;
-        const y = Math.floor(n / ATLAS_COLS) * FAN_TEX;
-        ctx.drawImage(source, x, y);
-        canvas.add(frameName(i, pose), 0, x, y, FAN_TEX, FAN_TEX);
-        n += 1;
-      }
-    }
-    canvas.refresh();
-    return true;
-  } catch (error) {
-    console.warn('[stands] could not pack the fan atlas, the fans keep their own textures.', error);
-    scene.textures.remove(ATLAS_KEY);
-    return false;
-  }
-}
-
-/** Bakes the three pictures of every fan look (fur color + outfit) into one atlas. Returns the looks with their weights, and where each picture is. */
+/** Bakes the three pictures of every fan look (fur color + outfit) into the atlas. Returns the looks with their weights, and where each picture is. */
 function bakeFans(scene: Phaser.Scene): { variants: FanVariant[]; looks: FanFrames[] } {
   const count = STANDS.fans.length;
-  let packed = atlasReady(scene, count);
-  if (!packed) {
-    for (let i = 0; i < count; i++) for (const pose of POSES) paintFan(scene, i, pose);
-    if (!atlasFailed) {
-      packed = packAtlas(scene, count);
-      atlasFailed = !packed;
-    }
-    if (packed) for (let i = 0; i < count; i++) for (const pose of POSES) scene.textures.remove(looseKey(i, pose)); // the atlas has them now
-  }
-  const at = (i: number, pose: FanPose): FanFrame => (packed ? { key: ATLAS_KEY, frame: frameName(i, pose) } : { key: looseKey(i, pose) });
+  for (let i = 0; i < count; i++) for (const pose of POSES) queueFan(scene, i, pose);
+  flushPictures();
+  const at = (i: number, pose: FanPose): FanFrame => texRef(fanKey(i, pose));
   const variants = STANDS.fans.map((fan, i): FanVariant => ({ look: i, weight: fan.weight, vip: fan.vip === true }));
   const looks = STANDS.fans.map((_fan, i): FanFrames => [at(i, 'idle'), at(i, 'cheerA'), at(i, 'cheerB')]);
   return { variants, looks };
@@ -696,6 +636,8 @@ function fanSpots(fs: readonly Frame[], boxes: Map<Side, Box[]>, variants: reado
 /** One fan on the stands. The crowd (world/StandsCrowd.ts) moves its sprite around the `base` numbers. */
 export interface StandsFan {
   sprite: Phaser.GameObjects.Image;
+  /** True while the fan is hidden for being off screen (world/StandsCrowd.ts `cull`). Only the picture is hidden: nothing else reads it. */
+  culled: boolean;
   side: Side;
   /** Terrace row counted from the fence (0 = the one at the fence); -1 = a VIP in a balcony box. */
   tier: number;
@@ -715,8 +657,15 @@ export interface StandsFan {
 }
 
 /** What `buildStands` gives back: every fan, and the three pictures of every look. */
+/** One big still picture of the stands (a bowl window or a box front, origin top left). Hidden by `StandsCrowd.cull` while it is off screen. */
+export interface StandsPiece {
+  image: Phaser.GameObjects.Image;
+  culled: boolean;
+}
+
 export interface StandsBuild {
   fans: StandsFan[];
+  pieces: StandsPiece[];
   looks: FanFrames[];
 }
 
@@ -729,7 +678,8 @@ export interface StandsBuild {
 export function buildStands(scene: Phaser.Scene): StandsBuild {
   const fs = frames();
   const boxes = new Map<Side, Box[]>(fs.map((f) => [f.side, boxesOf(f)]));
-  bakeBowl(scene, fs, boxes);
+  const pieces: StandsPiece[] = [];
+  bakeBowl(scene, fs, boxes, pieces);
   const { variants, looks } = bakeFans(scene);
   const fans: StandsFan[] = [];
   for (const spot of fanSpots(fs, boxes, variants)) {
@@ -740,6 +690,7 @@ export function buildStands(scene: Phaser.Scene): StandsBuild {
     const sprite = scene.add.image(spot.x, spot.y, first.key, first.frame).setRotation(rot).setScale(scale).setDepth(DEPTH.fans);
     fans.push({
       sprite,
+      culled: false,
       side: spot.side,
       tier: spot.tier,
       look: spot.variant.look,
@@ -753,6 +704,6 @@ export function buildStands(scene: Phaser.Scene): StandsBuild {
       fwdY: -Math.cos(facing),
     });
   }
-  for (const f of fs) (boxes.get(f.side) ?? []).forEach((b, i) => bakeBoxFront(scene, b, i));
-  return { fans, looks };
+  for (const f of fs) (boxes.get(f.side) ?? []).forEach((b, i) => bakeBoxFront(scene, b, i, pieces));
+  return { fans, pieces, looks };
 }

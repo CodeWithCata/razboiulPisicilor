@@ -1,9 +1,11 @@
 /** @file The emo cat's sadness: slump and sob poses, teardrops from his eyes, sighs, a little rain cloud that follows him and drizzles on his head, and the soap bubble he hides in. Visual only. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { FX_BUBBLE_R } from '../../assets/art/fx';
 import { Tex } from '../../assets/keys';
 import { EMO_RIG as RIG } from '../../config/animation';
 import type { BossLook } from './BossViews';
+import { snapshotInto } from '../../core/snapshot';
 
 const IDLE_SPEED = 12; // px/s: below this he counts as standing still
 const toRad = Phaser.Math.DegToRad;
@@ -59,6 +61,8 @@ export class EmoRig {
   tiltDeg = 0;
 
   private readonly moves: Move[] = [];
+  /** Reused copy of `moves` for `advanceMoves` (see `snapshotInto`). */
+  private readonly moveScratch: Move[] = [];
   private readonly drops: Drop[] = [];
   private readonly cloud: Phaser.GameObjects.Container;
   private readonly puffs: Phaser.GameObjects.Arc[] = [];
@@ -149,7 +153,9 @@ export class EmoRig {
   }
 
   private advanceMoves(dt: number): void {
-    for (const m of [...this.moves]) {
+    const list = snapshotInto(this.moves, this.moveScratch);
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i]!;
       if (!this.moves.includes(m)) continue; // a move that started this frame may have replaced it
       if (!m.started) {
         m.delay -= dt;
@@ -161,6 +167,7 @@ export class EmoRig {
       this.pose[m.key] = m.from + (m.to - m.from) * EASES[m.ease](k);
       if (k >= 1) this.moves.splice(this.moves.indexOf(m), 1);
     }
+    this.moveScratch.length = 0;
   }
 
   /** Back to the slumped, quietly crying pose. */
@@ -194,7 +201,7 @@ export class EmoRig {
     const b = RIG.cloud.hideBubble;
     const fit = b.radius / FX_BUBBLE_R;
     this.bubbleBornAt = this.clock;
-    this.bubble = this.scene.add.image(this.owner.x, this.owner.y, Tex.FxBubbleEmo).setAlpha(b.alpha).setDepth(b.depth).setScale(fit * 0.3);
+    this.bubble = this.scene.add.image(this.owner.x, this.owner.y, ...texArgs(Tex.FxBubbleEmo)).setAlpha(b.alpha).setDepth(b.depth).setScale(fit * 0.3);
     this.scene.tweens.add({ targets: this.bubble, scale: fit, duration: 220, ease: 'Back.easeOut' });
   }
 
@@ -232,7 +239,7 @@ export class EmoRig {
     this.to({ squash: 0, tiltDeg: 0 }, s.backMs, 'inOut', s.sinkMs + 250);
     const mouth = this.mouthSpot();
     const at = this.world(mouth.x, mouth.y, this.tmp);
-    const puff = this.scene.add.image(at.x, at.y, Tex.Smoke).setDepth(RIG.tear.depth).setTint(s.puffColor).setAlpha(s.puffAlpha).setScale(0.25);
+    const puff = this.scene.add.image(at.x, at.y, ...texArgs(Tex.Smoke)).setDepth(RIG.tear.depth).setTint(s.puffColor).setAlpha(s.puffAlpha).setScale(0.25);
     this.scene.tweens.add({
       targets: puff, x: at.x - 26 + Math.random() * 12, y: at.y - 34, scale: 0.85, alpha: 0, duration: s.puffMs, ease: 'Sine.easeOut',
       onComplete: () => puff.destroy(),
@@ -315,7 +322,7 @@ export class EmoRig {
   private addDrop(x: number, y: number, vx: number, vy: number, lifeMs: number, colorIndex: number, gravity: number): void {
     const t = RIG.tear;
     const g = gravity > 0 ? gravity : t.gravity;
-    const e = this.scene.add.image(x, y, Tex.FxDrop).setTint(t.colors[colorIndex % t.colors.length]).setDisplaySize(t.w, t.h).setDepth(t.depth);
+    const e = this.scene.add.image(x, y, ...texArgs(Tex.FxDrop)).setTint(t.colors[colorIndex % t.colors.length]).setDisplaySize(t.w, t.h).setDepth(t.depth);
     this.drops.push({ obj: e, vx, vy, gravity: g, life: lifeMs, max: lifeMs });
   }
 
@@ -345,7 +352,7 @@ export class EmoRig {
     this.rainIn -= dt;
     if (this.rainIn <= 0 && o.visible) {
       this.rainIn = c.rain.everyMs / ((this.storm ? c.stormRainMult : 1) * (1 + (c.gloomRainMult - 1) * this.gloom));
-      const e = this.scene.add.image(this.cloudX + (Math.random() * 2 - 1) * c.rain.jitter, this.cloudY + 16, Tex.FxDrop).setTint(c.rain.color).setDisplaySize(c.rain.w, c.rain.h).setDepth(RIG.tear.depth);
+      const e = this.scene.add.image(this.cloudX + (Math.random() * 2 - 1) * c.rain.jitter, this.cloudY + 16, ...texArgs(Tex.FxDrop)).setTint(c.rain.color).setDisplaySize(c.rain.w, c.rain.h).setDepth(RIG.tear.depth);
       this.drops.push({ obj: e, vx: 0, vy: c.rain.speed, gravity: 0.0001, life: c.rain.lifeMs, max: c.rain.lifeMs });
     }
 
@@ -403,7 +410,7 @@ export class EmoRig {
       for (let i = 0; i < RIG.death.tears; i++) {
         const a = (i / RIG.death.tears) * Math.PI * 2 + Math.random() * 0.4;
         const reach = 50 + Math.random() * 70;
-        const e = this.scene.add.image(from.x, from.y, Tex.FxDrop).setTint(RIG.tear.colors[i % RIG.tear.colors.length]).setDisplaySize(RIG.tear.w + 2, RIG.tear.h + 3).setDepth(RIG.tear.depth);
+        const e = this.scene.add.image(from.x, from.y, ...texArgs(Tex.FxDrop)).setTint(RIG.tear.colors[i % RIG.tear.colors.length]).setDisplaySize(RIG.tear.w + 2, RIG.tear.h + 3).setDepth(RIG.tear.depth);
         this.scene.tweens.add({
           targets: e, x: from.x + Math.cos(a) * reach, y: from.y + Math.sin(a) * reach + 26, alpha: 0, rotation: toRad(Math.cos(a) * 90),
           duration: 700 + Math.random() * 300, ease: 'Cubic.easeOut', onComplete: () => e.destroy(),

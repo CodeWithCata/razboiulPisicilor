@@ -1,4 +1,5 @@
 /** @file Game over screen: score, kills, wave, best; again / menu input. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { GAME } from '../config/balance';
@@ -40,7 +41,7 @@ export class GameOverScene extends Phaser.Scene {
     const text = (y: number, str: string, size: number, color = '#ffffff', stroke = 7) =>
       this.add.text(width / 2, y, str, { fontFamily: FONT, fontSize: `${size}px`, color, stroke: '#1b2340', strokeThickness: stroke, align: 'center' }).setOrigin(0.5);
 
-    this.add.tileSprite(0, 0, width, height, Tex.Grass).setOrigin(0).setAlpha(0.45);
+    this.add.tileSprite(0, 0, width, height, ...texArgs(Tex.Grass)).setOrigin(0).setAlpha(0.45);
     this.add.rectangle(0, 0, width, height, 0x000000, 0.55).setOrigin(0);
 
     const title = text(150, GAME_OVER_TITLE, 88, '#fff3d6', 12);

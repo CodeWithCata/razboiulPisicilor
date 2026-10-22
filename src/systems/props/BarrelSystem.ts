@@ -1,4 +1,5 @@
 /** @file Mustard barrels: scattered on random open floor, broken by the belt, blasts and bosses; the puddle they leave slows Varu and walking cats. */
+import { texArgs, texRef } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { WORLD } from '../../config/arena';
@@ -22,6 +23,7 @@ import type { Player } from '../../entities/Player';
 import type { Effects } from '../Effects';
 import type { Obstacle, Obstacles } from './Obstacles';
 import { hyp } from '../../core/hyp';
+import { snapshotInto } from '../../core/snapshot';
 
 /** One barrel standing in the arena. */
 interface Barrel {
@@ -66,6 +68,11 @@ interface Puddle {
 export class BarrelSystem {
   private readonly barrels: Barrel[] = [];
   private readonly puddles: Puddle[] = [];
+  /** Reused copies of the barrel list for the per-frame loops (see `snapshotInto`). One list per loop, so a nested call never clears another's. */
+  private readonly catScratch: Barrel[] = [];
+  private readonly sweepScratch: Barrel[] = [];
+  private readonly flightScratch: Barrel[] = [];
+  private readonly smashScratch: Barrel[] = [];
   private readonly goo: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly off: Array<() => void> = [];
   private sweepSerial = 0;
@@ -85,7 +92,7 @@ export class BarrelSystem {
   ) {
     const g = BARREL.puddle.goo;
     this.goo = scene.add
-      .particles(0, 0, Tex.Particle, {
+      .particles(0, 0, texRef(Tex.Particle).key, { frame: texRef(Tex.Particle).frame,
         emitting: false,
         lifespan: { ...g.lifespanMs },
         speed: { ...g.speed },
@@ -148,13 +155,16 @@ export class BarrelSystem {
     for (const child of this.enemies.getChildren()) {
       const cat = child as Enemy;
       if (!cat.active || cat.flies || !cat.alive) continue;
-      for (const barrel of this.barrels.slice()) {
+      const barrels = snapshotInto(this.barrels, this.catScratch);
+      for (let i = 0; i < barrels.length; i++) {
+        const barrel = barrels[i]!;
         const b = barrel.box;
         const nx = Phaser.Math.Clamp(cat.x, b.x, b.x + b.w);
         const ny = Phaser.Math.Clamp(cat.y, b.y, b.y + b.h);
         if (Phaser.Math.Distance.Between(cat.x, cat.y, nx, ny) > cat.hitRadius + BARREL.catBreakSlackPx) continue;
         this.hit(barrel, cat.x, cat.y, barrel.hp, 1, false);
       }
+      this.catScratch.length = 0;
     }
   }
 
@@ -218,10 +228,10 @@ export class BarrelSystem {
     if (!spot) return;
     const { scale, originY, depth, shadow, hitbox, solid } = BARREL;
     const shade = this.scene.add
-      .image(spot.x, spot.y + shadow.offsetY, Tex.Shadow)
+      .image(spot.x, spot.y + shadow.offsetY, ...texArgs(Tex.Shadow))
       .setDisplaySize(shadow.width, shadow.height)
       .setDepth(depth - shadow.depthGap);
-    const sprite = this.scene.add.image(spot.x, spot.y, Tex.BarrelWhole).setOrigin(0.5, originY).setScale(scale).setDepth(depth);
+    const sprite = this.scene.add.image(spot.x, spot.y, ...texArgs(Tex.BarrelWhole)).setOrigin(0.5, originY).setScale(scale).setDepth(depth);
     this.barrels.push({
       x: spot.x,
       y: spot.y,
@@ -286,33 +296,42 @@ export class BarrelSystem {
     const reach = p.range + PROP_TUNING.reachSlack;
     const damage = (p.spin ? SMASH.player.spin : SMASH.player.swing) * this.player.damageMultiplier;
     const power = p.spin ? PROP_TUNING.sweep.spin : PROP_TUNING.sweep.swing;
-    for (const barrel of this.barrels.slice()) {
+    const swept = snapshotInto(this.barrels, this.sweepScratch);
+    for (let i = 0; i < swept.length; i++) {
+      const barrel = swept[i]!;
       if (barrel.hitKey === key) continue;
       if (!sweepTouchesBox(p.x, p.y, barrel.box, reach, p.startAngle, p.swept)) continue;
       barrel.hitKey = key;
       this.hit(barrel, p.x, p.y, damage, power);
     }
+    this.sweepScratch.length = 0;
   }
 
   private onFlight(p: BeltFlightPayload): void {
     const now = gameClock.now;
-    for (const barrel of this.barrels.slice()) {
+    const flown = snapshotInto(this.barrels, this.flightScratch);
+    for (let i = 0; i < flown.length; i++) {
+      const barrel = flown[i]!;
       if (now < barrel.readyAt || !segmentTouchesBox(p.prevX, p.prevY, p.x, p.y, barrel.box, p.radius)) continue;
       barrel.readyAt = now + BARREL.flightCooldownMs;
       this.hit(barrel, p.prevX, p.prevY, SMASH.player.flight * this.player.damageMultiplier, PROP_TUNING.flight.power);
     }
+    this.flightScratch.length = 0;
   }
 
   /** v171: a smashing ball (Federer's ball machine) flies through barrels: each one on its way takes the ball's damage as a boss hit; one that survives stops the ball. */
   private onProjectileSmash(p: ProjectileSmashPayload): void {
-    for (const barrel of this.barrels.slice()) {
+    const smashed = snapshotInto(this.barrels, this.smashScratch);
+    for (let i = 0; i < smashed.length; i++) {
+      const barrel = smashed[i]!;
       if (!segmentTouchesBox(p.prevX, p.prevY, p.x, p.y, barrel.box, p.radius)) continue;
       this.hit(barrel, p.prevX, p.prevY, p.damage, PROP_TUNING.flight.power, true);
       if (this.barrels.includes(barrel)) {
         p.absorbed = true;
-        return;
+        break;
       }
     }
+    this.smashScratch.length = 0;
   }
 
   /** A blast breaks every barrel in reach at once. */
@@ -366,7 +385,7 @@ export class BarrelSystem {
 
     // The burst picture pops for a moment and fades; the puddle grows underneath it and stays.
     const b = BARREL.burst;
-    const burst = this.scene.add.image(x, y, Tex.BarrelBroken).setOrigin(0.5, BARREL.originY).setScale(BARREL.scale).setDepth(BARREL.depth + 0.1);
+    const burst = this.scene.add.image(x, y, ...texArgs(Tex.BarrelBroken)).setOrigin(0.5, BARREL.originY).setScale(BARREL.scale).setDepth(BARREL.depth + 0.1);
     this.scene.tweens.add({ targets: burst, scale: BARREL.scale * b.popScale, duration: b.ms, ease: 'Quad.easeOut' });
     this.scene.tweens.add({ targets: burst, alpha: 0, delay: b.fadeDelayMs, duration: b.ms - b.fadeDelayMs, onComplete: () => burst.destroy() });
     this.addPuddle(x, y + BARREL.puddle.offsetY);
@@ -375,7 +394,7 @@ export class BarrelSystem {
 
   private addPuddle(x: number, y: number): void {
     const p = BARREL.puddle;
-    const sprite = this.scene.add.image(x, y, Tex.BarrelPuddle).setOrigin(0.5, p.centerY).setScale(0.2).setDepth(p.depth);
+    const sprite = this.scene.add.image(x, y, ...texArgs(Tex.BarrelPuddle)).setOrigin(0.5, p.centerY).setScale(0.2).setDepth(p.depth);
     this.scene.tweens.add({ targets: sprite, scale: p.scale, duration: p.growMs, ease: 'Back.easeOut' });
     this.puddles.push({ x, y, sprite, bornAt: gameClock.now, dryAt: gameClock.now + p.lifeMs, drying: false });
     // Too many on the floor: the oldest ones that are not already drying go now.

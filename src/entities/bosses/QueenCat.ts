@@ -1,4 +1,5 @@
 /** @file Mid boss Regina Pisicilor: royal guard + shield, charges (with rush follow-ups), scepter spin, scepter throw, red carpet. Three tiers: phase 1, phase 2, RAGE. Her loose parts are animated by QueenRig. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { FX_PAD_R, FX_RING_R } from '../../assets/art/fx';
 import { QUEEN_GEMS } from '../../assets/art/queen';
@@ -605,7 +606,7 @@ export class QueenCat extends Boss {
     this.trailNextAt = time + QUEEN.trail.everyMs;
     const T = QUEEN.trail;
     const fit = T.radius / FX_PAD_R;
-    const gfx = this.scene.add.image(this.x, this.y, Tex.FxCarpetPad).setDepth(6).setAngle(Math.random() * 360).setScale(fit * 0.4).setAlpha(T.alpha);
+    const gfx = this.scene.add.image(this.x, this.y, ...texArgs(Tex.FxCarpetPad)).setDepth(6).setAngle(Math.random() * 360).setScale(fit * 0.4).setAlpha(T.alpha);
     this.scene.tweens.add({ targets: gfx, scale: fit, duration: T.popMs, ease: 'Back.easeOut' });
     this.trail.push({ x: this.x, y: this.y, until: time + this.pick(QUEEN.trail.lifeMs), gfx });
   }
@@ -670,7 +671,7 @@ export class QueenCat extends Boss {
     const S = QUEEN.scepter;
     const far = clampToArena(this.x + Math.cos(this.throwAngle) * S.range, this.y + Math.sin(this.throwAngle) * S.range, 50);
     this.scepterImg = this.scene.add
-      .image(this.x, this.y, Tex.BossQueenScepter)
+      .image(this.x, this.y, ...texArgs(Tex.BossQueenScepter))
       .setOrigin(SCEPTER_CENTER.x / TEX, SCEPTER_CENTER.y / TEX)
       .setDepth(30)
       .setScale(Math.abs(this.scaleX) * S.scale)
@@ -751,7 +752,7 @@ export class QueenCat extends Boss {
     f.elapsed = 0;
     if (leg === 'hover') {
       const fit = QUEEN.scepter.hoverRadius / FX_RING_R;
-      const ring = this.scene.add.image(f.x, f.y, Tex.FxRing).setDepth(7).setAlpha(QUEEN.scepter.ringAlpha).setScale(fit * 0.3);
+      const ring = this.scene.add.image(f.x, f.y, ...texArgs(Tex.FxRing)).setDepth(7).setAlpha(QUEEN.scepter.ringAlpha).setScale(fit * 0.3);
       this.scene.tweens.add({ targets: ring, scale: fit, duration: 200, ease: 'Back.easeOut' });
       this.scepterRing = ring;
       this.scepterDiamonds = new RingDiamonds(this.scene, RING.diamonds.hoverCount, RING.diamonds.hoverH, 8);

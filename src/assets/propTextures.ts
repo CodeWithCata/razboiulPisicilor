@@ -4,6 +4,7 @@ import { ARENA, OBJECTS, TILES, objectTiles, type ObjectName } from '../config/a
 import { COLORS } from '../config/style';
 import { BUSH_VARIANTS } from '../config/props';
 import { Tex } from './keys';
+import { flushPictures, placedAt, queueDrawn, queuePainted } from './atlas';
 
 /**
  * The arena props (bush, rock, box, ...) are tiles in the Tiled map, and a tile cannot wobble.
@@ -25,17 +26,14 @@ const CRACKS: ReadonlyArray<ReadonlyArray<ReadonlyArray<readonly [number, number
 
 function bakeCracks(scene: Phaser.Scene): boolean {
   for (let stage = 1; stage <= CRACKS.length; stage++) {
-    const key = crackKey(stage);
-    if (scene.textures.exists(key)) continue;
-    const g = scene.make.graphics({}, false);
-    g.lineStyle(3, COLORS.navy, 0.9);
-    for (const lines of CRACKS.slice(0, stage)) {
-      for (const line of lines) {
-        for (let i = 1; i < line.length; i++) g.lineBetween(line[i - 1]![0], line[i - 1]![1], line[i]![0], line[i]![1]);
+    queuePainted(scene, crackKey(stage), T * 2, T * 2, (g) => {
+      g.lineStyle(3, COLORS.navy, 0.9);
+      for (const lines of CRACKS.slice(0, stage)) {
+        for (const line of lines) {
+          for (let i = 1; i < line.length; i++) g.lineBetween(line[i - 1]![0], line[i - 1]![1], line[i]![0], line[i]![1]);
+        }
       }
-    }
-    g.generateTexture(key, T * 2, T * 2);
-    g.destroy();
+    });
   }
   return true;
 }
@@ -64,17 +62,13 @@ function tileOrigin(id: number): { x: number; y: number } {
   };
 }
 
-function bake(scene: Phaser.Scene, source: CanvasImageSource, key: string, w: number, h: number, parts: readonly Part[]): boolean {
-  if (scene.textures.exists(key)) return true;
-  const canvas = scene.textures.createCanvas(key, w, h);
-  if (!canvas) return false;
-  const ctx = canvas.getContext();
-  for (const { id, dx, dy } of parts) {
-    const from = tileOrigin(id);
-    ctx.drawImage(source, from.x, from.y, T, T, dx, dy, T, T);
-  }
-  canvas.refresh();
-  return true;
+function bake(scene: Phaser.Scene, source: CanvasImageSource, key: string, w: number, h: number, parts: readonly Part[]): void {
+  queueDrawn(scene, key, w, h, (ctx, x, y) => {
+    for (const { id, dx, dy } of parts) {
+      const from = tileOrigin(id);
+      ctx.drawImage(source, from.x, from.y, T, T, x + dx, y + dy, T, T);
+    }
+  });
 }
 
 /** Call once the tileset is loaded (the map builder does). Safe to call again: finished textures are kept. Returns false if anything failed. */
@@ -85,16 +79,18 @@ export function bakePropTextures(scene: Phaser.Scene): boolean {
 
   for (const name of Object.keys(OBJECTS) as ObjectName[]) {
     const [tl, tr, bl, br] = objectTiles(OBJECTS[name]);
-    ok = bake(scene, source, propKey(name), T * 2, T * 2, [
+    bake(scene, source, propKey(name), T * 2, T * 2, [
       { id: tl, dx: 0, dy: 0 },
       { id: tr, dx: T, dy: 0 },
       { id: bl, dx: 0, dy: T },
       { id: br, dx: T, dy: T },
-    ]) && ok;
+    ]);
   }
   ok = bakeBushVariants(scene) && ok;
-  for (const id of SINGLE_TILES) ok = bake(scene, source, tileKey(id), T, T, [{ id, dx: 0, dy: 0 }]) && ok;
-  return bakeCracks(scene) && ok;
+  for (const id of SINGLE_TILES) bake(scene, source, tileKey(id), T, T, [{ id, dx: 0, dy: 0 }]);
+  ok = bakeCracks(scene) && ok;
+  flushPictures();
+  return ok;
 }
 
 /** Rotates the hue of a plain RGB color (all 0..255) by `deg`, scaling its saturation by `sat`. */
@@ -120,28 +116,26 @@ function turnHue(r: number, g: number, b: number, deg: number, sat: number): [nu
  * clearly colored) is turned, so the navy outline, the brown stems and the shadow tones stay as they are.
  */
 function bakeBushVariants(scene: Phaser.Scene): boolean {
-  const plain = scene.textures.get(propKey('bush')).getSourceImage() as unknown as CanvasImageSource;
-  let ok = true;
+  const plainKey = propKey('bush');
   BUSH_VARIANTS.forEach((variant, index) => {
     if (index === 0 || variant.hueShift === 0) return;
-    const key = bushKey(index);
-    if (scene.textures.exists(key)) return;
-    const canvas = scene.textures.createCanvas(key, T * 2, T * 2);
-    if (!canvas) { ok = false; return; }
-    const ctx = canvas.getContext();
-    ctx.drawImage(plain, 0, 0);
-    const image = ctx.getImageData(0, 0, T * 2, T * 2);
-    const px = image.data;
-    for (let i = 0; i < px.length; i += 4) {
-      if (px[i + 3]! < 8) continue;
-      const r = px[i]!, g = px[i + 1]!, b = px[i + 2]!;
-      const max = Math.max(r, g, b), min = Math.min(r, g, b);
-      if (max === 0 || (max - min) / max < 0.2 || g < r || g < b) continue; // not foliage green
-      const [nr, ng, nb] = turnHue(r, g, b, variant.hueShift, variant.saturation);
-      px[i] = nr; px[i + 1] = ng; px[i + 2] = nb;
-    }
-    ctx.putImageData(image, 0, 0);
-    canvas.refresh();
+    queueDrawn(scene, bushKey(index), T * 2, T * 2, (ctx, x, y) => {
+      // Copy the plain bush out of its atlas page (it is queued before this one), then turn its foliage.
+      const at = placedAt(plainKey);
+      const page = at ? scene.textures.get(at.page).getSourceImage() as HTMLCanvasElement : null;
+      if (!at || !page) return;
+      const image = page.getContext('2d')!.getImageData(at.x, at.y, T * 2, T * 2);
+      const px = image.data;
+      for (let i = 0; i < px.length; i += 4) {
+        if (px[i + 3]! < 8) continue;
+        const r = px[i]!, g = px[i + 1]!, b = px[i + 2]!;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        if (max === 0 || (max - min) / max < 0.2 || g < r || g < b) continue; // not foliage green
+        const [nr, ng, nb] = turnHue(r, g, b, variant.hueShift, variant.saturation);
+        px[i] = nr; px[i + 1] = ng; px[i + 2] = nb;
+      }
+      ctx.putImageData(image, x, y);
+    });
   });
-  return ok;
+  return true;
 }

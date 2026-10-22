@@ -1,4 +1,5 @@
 /** @file The tennis cat's moving parts (racket arm, racket, tossed ball) that follow her body and are posed by her serve: toss, swing, pop. Visual only. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { TENNIS_BALL_HAND, TENNIS_PAW, TENNIS_RACKET_HEAD, TENNIS_SHOULDER } from '../../assets/art/cats';
 import { Tex, type TexKey } from '../../assets/keys';
@@ -16,6 +17,11 @@ const toRad = Phaser.Math.DegToRad;
  * negative = across the front), `squash` and `tiltDeg` are read by the body, `ballLift` is how high the ball is tossed (game px), `ballShow` 0 = no ball, 1 = in her paw.
  */
 type TennisPoseKey = 'armDeg' | 'wristDeg' | 'squash' | 'tiltDeg' | 'ballLift' | 'ballShow';
+
+/** Puts one loose-layer picture: position, angle, scale, alpha and visibility. A plain function (no closure is made per frame). */
+function placeLayer(img: Phaser.GameObjects.Image, x: number, y: number, rot: number, scx: number, scy: number, alpha: number, visible: boolean): void {
+  img.setPosition(x, y).setRotation(rot).setScale(scx, scy).setAlpha(alpha).setVisible(visible);
+}
 
 export class TennisCatRig {
   private readonly tween = new PoseTween<TennisPoseKey>(POSE.ready);
@@ -36,7 +42,7 @@ export class TennisCatRig {
     private readonly scene: Phaser.Scene,
     private readonly owner: Phaser.Physics.Arcade.Sprite,
   ) {
-    const make = (key: TexKey, depth: number): Phaser.GameObjects.Image => scene.add.image(owner.x, owner.y, key).setDepth(depth);
+    const make = (key: TexKey, depth: number): Phaser.GameObjects.Image => scene.add.image(owner.x, owner.y, ...texArgs(key)).setDepth(depth);
     this.racket = make(Tex.CatTennisRacket, RIG.depth.racket).setOrigin(TENNIS_PAW.x / TEX, TENNIS_PAW.y / TEX);
     this.arm = make(Tex.CatTennisArm, RIG.depth.arm).setOrigin(TENNIS_SHOULDER.x / TEX, TENNIS_SHOULDER.y / TEX);
     this.ball = make(Tex.Tennis, RIG.depth.ball);
@@ -103,7 +109,7 @@ export class TennisCatRig {
     for (let i = 0; i < H.stars; i++) {
       const a = (i / H.stars) * Math.PI * 2 + Math.random() * 0.6;
       const reach = H.starReachPx * (0.6 + Math.random() * 0.6);
-      const star = this.scene.add.image(x, y, Tex.Star).setDisplaySize(H.starSizePx, H.starSizePx).setDepth(60);
+      const star = this.scene.add.image(x, y, ...texArgs(Tex.Star)).setDisplaySize(H.starSizePx, H.starSizePx).setDepth(60);
       this.scene.tweens.add({
         targets: star, x: x + Math.cos(a) * reach, y: y + Math.sin(a) * reach, angle: 200, alpha: 0,
         duration: H.starMs, ease: 'Cubic.easeOut', onComplete: () => star.destroy(),
@@ -141,15 +147,12 @@ export class TennisCatRig {
     const step = Math.sin(this.phase) * this.moveAmt;
 
     const r = o.rotation;
-    const place = (img: Phaser.GameObjects.Image, x: number, y: number, rot: number): void => {
-      img.setPosition(x, y).setRotation(rot).setScale(o.scaleX, o.scaleY).setAlpha(o.alpha).setVisible(o.visible);
-    };
 
     // Racket arm: turns around her shoulder; the racket turns on its own around her paw (the wrist).
     const armDeg = pose.armDeg + Math.sin(this.clock * RIG.arm.idleRate) * RIG.arm.idleDeg + step * RIG.arm.walkDeg;
     const wristDeg = pose.wristDeg + Math.sin(this.clock * RIG.arm.wristIdleRate) * RIG.arm.wristIdleDeg;
     const shoulder = this.world(TENNIS_SHOULDER.x - HALF, TENNIS_SHOULDER.y - HALF, this.tmp);
-    place(this.arm, shoulder.x, shoulder.y, r + toRad(armDeg));
+    placeLayer(this.arm, shoulder.x, shoulder.y, r + toRad(armDeg), o.scaleX, o.scaleY, o.alpha, o.visible);
 
     // The paw and the racket head, worked out on the texture (turned around the shoulder, then around the paw), then moved into the world.
     const a = toRad(armDeg);
@@ -159,7 +162,7 @@ export class TennisCatRig {
     const pawX = TENNIS_SHOULDER.x - HALF + pawVx * Math.cos(a) - pawVy * Math.sin(a);
     const pawY = TENNIS_SHOULDER.y - HALF + pawVx * Math.sin(a) + pawVy * Math.cos(a);
     const paw = this.world(pawX, pawY, this.tmp);
-    place(this.racket, paw.x, paw.y, r + w);
+    placeLayer(this.racket, paw.x, paw.y, r + w, o.scaleX, o.scaleY, o.alpha, o.visible);
     const headVx = TENNIS_RACKET_HEAD.x - TENNIS_PAW.x;
     const headVy = TENNIS_RACKET_HEAD.y - TENNIS_PAW.y;
     this.world(pawX + headVx * Math.cos(w) - headVy * Math.sin(w), pawY + headVx * Math.sin(w) + headVy * Math.cos(w), this.head);

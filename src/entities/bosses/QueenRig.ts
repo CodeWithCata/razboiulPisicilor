@@ -1,4 +1,5 @@
 /** @file Regina Pisicilor's moving parts (cape, feet, crown, scepter arm, glow, sparkles, dizzy stars) that follow her body and are posed by her attacks. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { FX_BUBBLE_R, FX_RING_R, FX_SHOCK_R } from '../../assets/art/fx';
 import { QUEEN_CROWN_BASE, QUEEN_GEMS, QUEEN_SHOULDER } from '../../assets/art/queen';
@@ -7,6 +8,7 @@ import { QUEEN_RIG as RIG } from '../../config/animation';
 import type { BossLook } from './BossViews';
 import { RingDiamonds } from './RingDiamonds';
 import { hyp } from '../../core/hyp';
+import { snapshotInto } from '../../core/snapshot';
 
 /** Texture size and center of every Queen layer (they are all drawn on the same 128x128 canvas). */
 const TEX = 128;
@@ -51,10 +53,17 @@ interface Move {
   started: boolean;
 }
 
+/** Puts one loose-layer picture: position, angle, scale, alpha and visibility. A plain function (no closure is made per frame). */
+function placeLayer(img: Phaser.GameObjects.Image, x: number, y: number, rot: number, scx: number, scy: number, alpha: number, visible: boolean): void {
+  img.setPosition(x, y).setRotation(rot).setScale(scx, scy).setAlpha(alpha).setVisible(visible);
+}
+
 export class QueenRig {
   readonly pose: QueenPose = { ...NEUTRAL };
 
   private readonly moves: Move[] = [];
+  /** Reused copy of `moves` for `advanceMoves` (see `snapshotInto`). */
+  private readonly moveScratch: Move[] = [];
   private readonly cape: Phaser.GameObjects.Image;
   private readonly footL: Phaser.GameObjects.Image;
   private readonly footR: Phaser.GameObjects.Image;
@@ -94,7 +103,7 @@ export class QueenRig {
     private readonly scene: Phaser.Scene,
     private readonly owner: Phaser.Physics.Arcade.Sprite,
   ) {
-    const make = (key: TexKey, depth: number): Phaser.GameObjects.Image => scene.add.image(owner.x, owner.y, key).setDepth(depth);
+    const make = (key: TexKey, depth: number): Phaser.GameObjects.Image => scene.add.image(owner.x, owner.y, ...texArgs(key)).setDepth(depth);
     this.cape = make(Tex.BossQueenCape, RIG.depth.cape);
     this.footL = make(Tex.BossQueenFootL, RIG.depth.foot);
     this.footR = make(Tex.BossQueenFootR, RIG.depth.foot);
@@ -106,10 +115,10 @@ export class QueenRig {
     this.glowCrown = glow();
     this.glowScepter = glow();
     this.aura = scene.add.circle(owner.x, owner.y, RIG.aura.sizePx / 2, RIG.aura.color, 0).setDepth(RIG.depth.aura).setVisible(false);
-    this.ring = scene.add.image(owner.x, owner.y, Tex.FxRing).setAlpha(RIG.ring.alpha).setDepth(RIG.depth.aura + 1).setVisible(false);
+    this.ring = scene.add.image(owner.x, owner.y, ...texArgs(Tex.FxRing)).setAlpha(RIG.ring.alpha).setDepth(RIG.depth.aura + 1).setVisible(false);
     this.diamonds = new RingDiamonds(scene, RIG.ring.diamonds.count, RIG.ring.diamonds.h, RIG.depth.aura + 2);
     this.shield = scene.add
-      .image(owner.x, owner.y, Tex.FxBubbleQueen)
+      .image(owner.x, owner.y, ...texArgs(Tex.FxBubbleQueen))
       .setScale(RIG.shield.radius / FX_BUBBLE_R)
       .setDepth(RIG.depth.glow + 1)
       .setVisible(false);
@@ -143,7 +152,9 @@ export class QueenRig {
   }
 
   private advanceMoves(dt: number): void {
-    for (const m of [...this.moves]) {
+    const list = snapshotInto(this.moves, this.moveScratch);
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i]!;
       if (!this.moves.includes(m)) continue; // a move that started this frame may have replaced it
       if (!m.started) {
         m.delay -= dt;
@@ -155,6 +166,7 @@ export class QueenRig {
       this.pose[m.key] = m.from + (m.to - m.from) * EASES[m.ease](k);
       if (k >= 1) this.moves.splice(this.moves.indexOf(m), 1);
     }
+    this.moveScratch.length = 0;
   }
 
   /** Back to the relaxed pose; also stops the dust, the ring and the dizziness. */
@@ -208,7 +220,7 @@ export class QueenRig {
     this.clearDizzy();
     this.dizzyMs = ms;
     for (let i = 0; i < RIG.dizzy.stars; i++) {
-      this.dizzyStars.push(this.scene.add.image(this.owner.x, this.owner.y, Tex.Star).setDisplaySize(22, 22).setDepth(60));
+      this.dizzyStars.push(this.scene.add.image(this.owner.x, this.owner.y, ...texArgs(Tex.Star)).setDisplaySize(22, 22).setDepth(60));
     }
     this.to({ scepterDeg: RIG.dizzy.scepterDroopDeg, scepterScale: 1, glow: 0 }, 300, 'out');
   }
@@ -223,7 +235,7 @@ export class QueenRig {
 
   /** A ring that races out of her and fades: the decree, the end of a spin. */
   pulse(radius: number, color: number = RIG.ring.color): void {
-    const ring = this.scene.add.image(this.owner.x, this.owner.y, Tex.FxShock).setTint(color).setDepth(44).setScale(12 / FX_SHOCK_R);
+    const ring = this.scene.add.image(this.owner.x, this.owner.y, ...texArgs(Tex.FxShock)).setTint(color).setDepth(44).setScale(12 / FX_SHOCK_R);
     this.scene.tweens.add({
       targets: ring, scale: radius / FX_SHOCK_R, alpha: 0, duration: RIG.burst.lifeMs, ease: 'Cubic.easeOut',
       onComplete: () => ring.destroy(),
@@ -238,7 +250,7 @@ export class QueenRig {
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + Math.random() * 0.4;
       const reach = RIG.burst.reachPx * (0.6 + Math.random() * 0.6);
-      const star = this.scene.add.image(x, y, Tex.Star).setDisplaySize(18, 18).setDepth(60);
+      const star = this.scene.add.image(x, y, ...texArgs(Tex.Star)).setDisplaySize(18, 18).setDepth(60);
       this.scene.tweens.add({
         targets: star, x: x + Math.cos(a) * reach, y: y + Math.sin(a) * reach, angle: 220, alpha: 0,
         duration: RIG.burst.lifeMs, ease: 'Cubic.easeOut', onComplete: () => star.destroy(),
@@ -303,16 +315,13 @@ export class QueenRig {
     const r = o.rotation;
     const sx = o.scaleX;
     const sy = o.scaleY;
-    const place = (img: Phaser.GameObjects.Image, x: number, y: number, rot: number, scx: number, scy: number): void => {
-      img.setPosition(x, y).setRotation(rot).setScale(scx, scy).setAlpha(o.alpha).setVisible(o.visible);
-    };
 
     // Feet step forward and back in turn, like Varu's legs.
     const swing = step * RIG.feet.swing;
     const foot = this.world(0, swing, this.tmp);
-    place(this.footL, foot.x, foot.y, r, sx, sy);
+    placeLayer(this.footL, foot.x, foot.y, r, sx, sy, o.alpha, o.visible);
     const foot2 = this.world(0, -swing, this.tmp);
-    place(this.footR, foot2.x, foot2.y, r, sx, sy);
+    placeLayer(this.footR, foot2.x, foot2.y, r, sx, sy, o.alpha, o.visible);
 
     // The cape lags behind her movement and sways with her steps; `capeFlare` stretches it out.
     let lagX = -body.velocity.x * RIG.cape.lagPerSpeed;
@@ -323,19 +332,19 @@ export class QueenRig {
       lagY = (lagY / lag) * RIG.cape.maxLagPx;
     }
     const flare = this.pose.capeFlare;
-    place(this.cape, o.x + lagX, o.y + lagY, r - toRad(step * RIG.cape.swayDeg), sx * (1 + flare * RIG.cape.flareX), sy * (1 + flare * RIG.cape.flareY));
+    placeLayer(this.cape, o.x + lagX, o.y + lagY, r - toRad(step * RIG.cape.swayDeg), sx * (1 + flare * RIG.cape.flareX), sy * (1 + flare * RIG.cape.flareY), o.alpha, o.visible);
 
     // Crown: hops with her steps, tilts with them, wobbles when dizzy.
     const lift = this.pose.crownLift + Math.abs(step) * RIG.crown.bobPx;
     let tilt = this.pose.crownTiltDeg + step * RIG.crown.tiltDeg + Math.sin(this.clock * RIG.crown.idleRate) * RIG.crown.idleTiltDeg;
     if (dizzy) tilt += Math.sin(this.clock * RIG.dizzy.crownRate) * RIG.dizzy.crownTiltDeg;
     const base = this.world(QUEEN_CROWN_BASE.x - HALF, QUEEN_CROWN_BASE.y - HALF - lift, this.tmp);
-    place(this.crown, base.x, base.y, r + toRad(tilt), sx, sy);
+    placeLayer(this.crown, base.x, base.y, r + toRad(tilt), sx, sy, o.alpha, o.visible);
 
     // Scepter arm: turns around her shoulder, with a slow idle sway.
     this.scepterDeg = this.pose.scepterDeg + Math.sin(this.clock * RIG.scepter.idleRate) * RIG.scepter.idleDeg + step * RIG.scepter.walkDeg;
     const shoulder = this.world(QUEEN_SHOULDER.x - HALF, QUEEN_SHOULDER.y - HALF, this.tmp);
-    place(this.scepter, shoulder.x, shoulder.y, r + toRad(this.scepterDeg), sx * this.pose.scepterScale, sy * this.pose.scepterScale);
+    placeLayer(this.scepter, shoulder.x, shoulder.y, r + toRad(this.scepterDeg), sx * this.pose.scepterScale, sy * this.pose.scepterScale, o.alpha, o.visible);
 
     if (this.look !== 'front') for (const img of [this.cape, this.footL, this.footR]) img.setVisible(false);
     if (this.look === 'side') for (const img of [this.crown, this.scepter]) img.setVisible(false);
@@ -380,7 +389,7 @@ export class QueenRig {
     if (this.dustIn > 0) return;
     this.dustIn = RIG.dust.everyMs;
     const at = this.world((Math.random() - 0.5) * 30, RIG.dust.behindPx, this.tmp);
-    const puff = this.scene.add.image(at.x, at.y, Tex.FxPuff).setTint(RIG.dust.color).setAlpha(RIG.dust.alpha).setDepth(8).setScale(RIG.dust.startScale).setAngle(Math.random() * 360);
+    const puff = this.scene.add.image(at.x, at.y, ...texArgs(Tex.FxPuff)).setTint(RIG.dust.color).setAlpha(RIG.dust.alpha).setDepth(8).setScale(RIG.dust.startScale).setAngle(Math.random() * 360);
     this.scene.tweens.add({
       targets: puff, scale: RIG.dust.endScale, alpha: 0, angle: puff.angle + (Math.random() < 0.5 ? -1 : 1) * RIG.dust.spinDeg, duration: RIG.dust.lifeMs, ease: 'Cubic.easeOut',
       onComplete: () => puff.destroy(),
@@ -394,7 +403,7 @@ export class QueenRig {
     const S = RIG.shield;
     this.shieldSparkleIn = S.sparkleEveryMs * (0.6 + Math.random() * 0.8);
     const a = Math.random() * Math.PI * 2;
-    const star = this.scene.add.image(o.x + Math.cos(a) * S.radius, o.y + Math.sin(a) * S.radius, Tex.Star).setDisplaySize(S.sparkleSizePx, S.sparkleSizePx).setDepth(RIG.depth.glow + 2).setScale(0.2);
+    const star = this.scene.add.image(o.x + Math.cos(a) * S.radius, o.y + Math.sin(a) * S.radius, ...texArgs(Tex.Star)).setDisplaySize(S.sparkleSizePx, S.sparkleSizePx).setDepth(RIG.depth.glow + 2).setScale(0.2);
     this.scene.tweens.add({
       targets: star, scale: 1, angle: 90, alpha: 0, duration: S.sparkleLifeMs, ease: 'Cubic.easeOut',
       onComplete: () => star.destroy(),
@@ -409,7 +418,7 @@ export class QueenRig {
     this.sparkleIn = min + Math.random() * (max - min);
     const at = this.sparkleOnCrown ? this.crownGem(this.tmp) : this.scepterGem(this.tmp);
     this.sparkleOnCrown = !this.sparkleOnCrown;
-    const star = this.scene.add.image(at.x, at.y, Tex.Star).setDisplaySize(RIG.sparkle.sizePx, RIG.sparkle.sizePx).setDepth(60).setScale(0.2);
+    const star = this.scene.add.image(at.x, at.y, ...texArgs(Tex.Star)).setDisplaySize(RIG.sparkle.sizePx, RIG.sparkle.sizePx).setDepth(60).setScale(0.2);
     this.scene.tweens.add({
       targets: star, scale: 1, angle: 90, alpha: 0, duration: RIG.sparkle.lifeMs, ease: 'Cubic.easeOut',
       onComplete: () => star.destroy(),

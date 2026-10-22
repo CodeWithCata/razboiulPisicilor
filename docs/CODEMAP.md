@@ -91,7 +91,7 @@ The living arena: springy props, fences, kickable cans / ball, gold leaf, destru
 - Obstacles.ts - Solid things that are not map tiles (mustard barrels, street lamps): a still physics body Varu and walking cats bump into, plus a blocker in the solid grid. Exports: Obstacle, Obstacles
 - Prop.ts (~200 lines) - One 2x2 arena object as a sprite on springs: lean, squash, shove, hop, idle sway, damage, break away. Exports: Prop
 - PropFx.ts (~400 lines) - The show for props: leaves, chips, fluff, floating words, ambient things (listens to the bus). Exports: PropFx
-- PropSystem.ts (~750 lines) - The living arena: creates props, reacts to belt / projectiles / walking / bosses, hide-and-seek, destruction. Exports: PropSystem
+- PropSystem.ts (~800 lines) - The living arena: creates props, reacts to belt / projectiles / walking / bosses, hide-and-seek, destruction. Exports: PropSystem
 - Spring.ts - A damped spring that pulls `value` back to 0. Exports: Spring
 
 ## systems/audio/
@@ -114,7 +114,7 @@ Touch controls for phones and tablets.
 
 - AutoAim.ts - Nearest-cat aim + auto-swing helper for touch (only used when the pause-menu switch is on). Exports: AimTarget, AutoAimSources, AutoAim
 - TouchInput.ts (~250 lines) - Touch controls: floating move stick + big attack button; implements InputSource. Exports: StickView, TouchInput
-- TouchOverlay.ts - Draws the touch stick, attack button and pause button. Visuals only; logic is in TouchInput. Exports: TouchOverlay
+- TouchOverlay.ts (~200 lines) - Draws the touch stick, attack button and pause button. Visuals only; logic is in TouchInput. Exports: TouchOverlay
 - touchPictures.ts - Pictures of the touch controls (stick, knob, attack and pause buttons, the attack arm, the laser zone), baked once into textures. Exports: TOUCH_TEX, bakeTouchButtons, LaserZoneLayout, bakeLaserZone
 
 ## world/
@@ -123,8 +123,8 @@ The Tiled arena map, the solid grid gameplay queries, spawn points, prop layout.
 - ArenaMap.ts (~250 lines) - Loads the Tiled arena map, builds the solid grid and the visual layers, reads spawns and living-prop spots. Exports: ArenaMap
 - CampusMilk.ts - The milk that fills the "Campus!" lettering on the grass, glyph by glyph, as the waves go by (numbers: CAMPUS_MILK in config/arena.ts). Exports: CampusMilk
 - SolidGrid.ts - Which tiles are solid, as a plain grid (implements ArenaQuery). No Phaser. Exports: SolidGrid, NO_OBSTACLES
-- Stands.ts (~750 lines) - Draws the stands outside the fence: a bowl of terraces with an ad barrier, aisles, balcony boxes, bunting and cat fans (returned for world/StandsCrowd.ts to animate). Built once in ArenaMap. Exports: Side, FanFrame, FanFrames, StandsFan, StandsBuild, buildStands
-- StandsCrowd.ts (~500 lines) - Brings the stand fans to life: idle sway and fidgets, moods (calm / cheer / roar / gloom / boo), La Ola, arms-up frames, confetti, shouts and the fan that throws something. Visual only, real time. Exports: CrowdHooks, StandsCrowd
+- Stands.ts (~700 lines) - Draws the stands outside the fence: a bowl of terraces with an ad barrier, aisles, balcony boxes, bunting and cat fans (returned for world/StandsCrowd.ts to animate). Built once in ArenaMap. Exports: Side, FanFrame, FanFrames, StandsFan, StandsPiece, StandsBuild, buildStands
+- StandsCrowd.ts (~550 lines) - Brings the stand fans to life: idle sway and fidgets, moods (calm / cheer / roar / gloom / boo), La Ola, arms-up frames, confetti, shouts and the fan that throws something. Visual only, real time. Exports: CrowdHooks, StandsCrowd
 - propLayout.ts - Finds the 2x2 props, cans, ball and fences in the map tiles. Pure numbers, no Phaser. Exports: TileRead, ObjectSpot, DecorSpot, PropLayout, isVerticalFence, readPropLayout
 - spawns.ts - Reads player / enemy / boss spawn points from Tiled objects and picks safe enemy spots. Pure logic. Exports: SpawnObject, ArenaSpawns, parseSpawns, pickEnemySpawn
 - standsRing.ts - Where a point of the stands is along the ring round the fence (0 to RING_LENGTH, clockwise from the top left corner). Pure numbers, no Phaser. Exports: RING_LENGTH, ringPosition
@@ -138,7 +138,7 @@ HUD and menu pieces (Phaser objects). `ui/pause/` = pause rows, `ui/debug/` = de
 - BossLabPanel.ts - Dev-only boss lab panel: the live numbers of the duel (time per mode, attack table, verdict) or the scoreboard of all bosses. Tab cycles hidden / live / scoreboard. Exports: BossLabPanel
 - BuffBadges.ts - Round badges for active power-ups: a ring that drains clockwise, seconds left underneath. Exports: BuffBadges
 - CatBubble.ts (~250 lines) - A cream thought-cloud bubble for a cat that talks in the arena: puffy inked edge, cel shading, shine and hatch ticks, two dots trailing to the speaker, jelly pop out of the tail tip, stays inside the screen. Exports: CatBubble
-- CatMeter.ts (~350 lines) - Varu's health meter: cat face (mood) + heart + health bar. Exports: CatMeter
+- CatMeter.ts (~400 lines) - Varu's health meter: cat face (mood) + heart + health bar. Exports: CatMeter
 - ControlsHint.ts - Keyboard controls reminder at the bottom, with a keycap button that hides it. Exports: ControlsHint
 - DebugPanel.ts (~200 lines) - Dev-only cheat sheet card (dev build): keys, toggles, live numbers. Exports: DebugPanel
 - IntroVideo.ts (~350 lines) - DOM video player for the opening clips (backstory + intro): preloads the next clip, "Sari peste" button, never hangs. Exports: shouldPlayIntro, unlockIntroVideo, IntroHandle, playIntroVideos
@@ -174,6 +174,7 @@ NUMBERS ONLY (no magic numbers in code). `balance.ts` = all gameplay. Layout and
 
 - animation.ts (~800 lines) - Procedural animation numbers (cat sway / squash / flap, Varu walk, smoke break, milk and crow FX, golden belt, rust flakes off the rusty belt, blasts). Exports: ANIM, VARU_ANIM, CIG_SMOKE, MILK_FX, MILK_TRAIL, ZLook, ENERGY_TRAIL, EMO_FX, RUST_FX, ENERGY_FLIP, CROW_FALL, SMOKE_BREAK_ON, SMOKE_BREAK, GOLD_BELT, KAMIKAZE_BLAST, NINJA_POOF, QUEEN_RIG, QUEEN_POSES, QUEEN_POSE_MS, EMO_RIG, EMO_POSES, EMO_POSE_MS, FEDERER_RIG, FEDERER_POSES, FEDERER_POSE_MS, BALL_LOB, FIREBALL_FX, TENNIS_RETURN_FX, BALL_FX, FLINCH, IDLE_HABITS, BED_CAGE_FX, CARPET_FX
 - arena.ts - Arena (Tiled map) numbers and tile ids. Exports: ARENA, WORLD, PLAY_AREA, CAMERA, CAMPUS_TEXT, CAMPUS_MILK, TILES, OBJECTS, ObjectName, objectTiles, SOLID_TILES, SPAWN_KINDS, ARENA_RULES
+- atlas.ts - Numbers for the texture atlas (assets/atlas.ts): page size and the gap between pictures. Exports: ATLAS
 - audio.ts - Audio numbers: volumes and the generated music tracks (TRACKS). Exports: AUDIO, TrackDef, TRACKS
 - balance.ts (~500 lines) - ALL gameplay numbers (player, belt, enemies, bosses, waves timing, pickups, buffs, laser, crow rain) and the live GAME size getters. Exports: GAME_BASE_WIDTH, GAME_BASE_HEIGHT, bindGameSize, GAME, shiftRight, shiftDown, PLAYER, BeltAttackId, BELT, BELT_SPIN, BELT_THROW, EnemyStats, ENEMIES, EnemyType, BOSS_TYPES, BossType, isBossType, NINJA, KAMIKAZE, FLYER, TENNIS, PINBALL, SURRENDER, LUCKY, ProjectileStats, PROJECTILES, ProjectileKind, WAVE_TIMING, PickupKind, BAD_PICKUPS, BadKind, GoodPrize, isBadPickup, MysteryPrize, BuffKind, BuffStats, BUFFS, SMOKE_FREEZE, PICKUPS, PICKUP_SPAWN, MYSTERY, LASER, CrowVariant, CROW_RAIN
 - barrels.ts - Mustard barrel numbers: how many, size, hits to break, the burst, the puddle and how much it slows (systems/props/BarrelSystem.ts). Exports: BARREL
@@ -186,6 +187,7 @@ NUMBERS ONLY (no magic numbers in code). `balance.ts` = all gameplay. Layout and
 - chatter.ts - Cat chatter numbers: how often a cat says something, how long its speech bubble stays, where it sits. The bubble's own look is `config/bubble.ts`. No Phaser. Exports: CHATTER
 - clock.ts - The game clock (core/clock.ts) counts only the time the game is really running. Exports: CLOCK
 - crowd.ts - Numbers for the stand crowd's life (world/StandsCrowd.ts): idle sway, moods, La Ola, arms-up frames, confetti, shouts. No Phaser. Exports: CrowdMood, MoodLook, MOOD_KEYS, ShoutKind, ThrowPick, ThrowSpot, CROWD
+- culling.ts - Numbers for hiding off-screen pictures (the stands fans now; actors later): the margin kept around the camera view. Exports: CULL
 - curses.ts - Bad luck (ghinion) numbers: the curse cooldown, the wave ramp, mercy, and which cat hit gives which curse. No Phaser. Exports: CURSE, CAT_HIT_CURSES, WEATHER_CURSE, MARTI_13, COSTLY
 - cutscene.ts - Cutscene numbers: cinema bars, dialogue box, typewriter, skip, camera, walking and emotes. No Phaser. Exports: CUTSCENE
 - dayNight.ts - Day-night numbers: the sky tint keyframes, how fast it changes, and the lamps that rise out of the floor and light up at night. No Phaser. Exports: DAY_NIGHT
@@ -265,11 +267,12 @@ Small helpers with no gameplay rules: event bus, game clock, storage, viewport, 
 ## assets/
 Texture / sound keys, manifests for real files, and the generators for code-drawn placeholders.
 
+- atlas.ts - Texture atlas: packs code-drawn pictures into a few shared canvas pages (one Phaser texture per page, one frame per picture). Ask texArgs(key) / texRef(key) for what to show. Exports: TexRef, Draw, Painter, Placed, hasPicture, queueDrawn, queuePainted, flushPictures, texRef, texArgs, placedAt
 - audioKeys.ts - Every sound effect id. Exports: SOUND_IDS, SoundId, MUSIC_IDS, MusicId, sfxKey, musicKey
 - audioManifest.ts - Where real sound / music files are listed to replace the synthesized placeholders (empty = all placeholders). Exports: AUDIO_MANIFEST, MUSIC_MANIFEST
 - keys.ts - Every texture key in the game. Exports: Tex, TexKey, PHOTO_IDS, PhotoId, photoKey
 - manifest.ts - Where real image / photo files are listed to replace the code-drawn placeholders (only the scene is real art so far). Exports: IMAGE_MANIFEST, PHOTO_MANIFEST
-- paint.ts - Helpers for placeholder textures: `make` (draw once, only if no real image loaded) and `poly` (Phaser 4 needs Vector2 lists). Exports: Painter, make, poly
+- paint.ts - Helpers for placeholder textures: `make` (queued into the atlas, skipped if a real image is loaded), `makeRepeating` (its own texture, for a tileSprite) and `poly` (Phaser 4 needs Vector2 lists). Exports: make, makeRepeating, poly
 - placeholders.ts (~200 lines) - Generates every placeholder texture at boot (calls the art/ drawers + small shapes), skipping keys that loaded a real image. Exports: generatePlaceholders
 - propTextures.ts - Cuts each arena prop out of the tileset into its own texture and draws the rock-crack overlays (used by systems/props/). Exports: propKey, bushKey, crackKey, tileKey, bakePropTextures
 
@@ -296,7 +299,7 @@ One file per group of code-drawn art (Varu, cats, bosses, crows, items) + the sh
 - BallMachines.ts - Federer's three ball launchers (two on the left edge, one on the right): they glide to follow Varu's height at an angle and fire one at a time, in turn; now and then the left pair fires together (crossfire), and in the rage they glide faster. Exports: BallMachines
 - Boss.ts (~550 lines) - Boss state machine: intro -> idle -> telegraph -> active -> recover, phase 2, stun. Subclasses define attacks. Exports: BossAttack, BossMode, Boss
 - BossViews.ts - Which drawing a boss shows (front, back or side) for the way it faces; a little hysteresis so it never flickers on a diagonal. Pure logic, no Phaser. Exports: BossLook, BossLooks, lookFor
-- EmoRig.ts (~400 lines) - The emo cat's sadness: slump and sob poses, teardrops from his eyes, sighs, a little rain cloud that follows him and drizzles on his head, and the soap bubble he hides in. Visual only. Exports: EmoPose, EmoEase, EmoRig
+- EmoRig.ts (~450 lines) - The emo cat's sadness: slump and sob poses, teardrops from his eyes, sighs, a little rain cloud that follows him and drizzles on his head, and the soap bubble he hides in. Visual only. Exports: EmoPose, EmoEase, EmoRig
 - FedererBudget.ts - Counts the things Federer controls that can hurt Varu right now (her attack, the ball machine, her tennis ball boys) so there are never more than FEDERER.maxDamageSources at once. Plain data, no Phaser. Exports: DamageSource, FedererBudget
 - FedererHabits.ts - Federer's memory of the last seconds of Varu (how far he stays, how many balls he swats) and the attack-weight shifts it gives (never more than +-FEDERER.habits.maxShift). Plain data, no Phaser. Exports: HabitShifts, NEUTRAL_SHIFTS, FedererHabits
 - FedererRig.ts (~450 lines) - Pisica Federer's moving parts (racket arm + wrist, tail, hopping feet, dribbled / tossed ball, racket swoosh, phase 2 aura) that follow her body and are posed by her attacks. Exports: FedererPose, FedererEase, FedererRig

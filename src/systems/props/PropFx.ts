@@ -1,4 +1,5 @@
 /** @file The show for props: leaves, chips, fluff, floating words, ambient things (listens to the bus). */
+import { texArgs, texRef } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { BED_CAGE_FX } from '../../config/animation';
@@ -117,7 +118,7 @@ export class PropFx {
     for (let i = 0; i < def.count; i++) {
       const spread = SMASH.debrisSpreadPx;
       const bit = this.scene.add
-        .image(x, y, def.tex)
+        .image(x, y, ...texArgs(def.tex))
         .setDepth(ARENA.depth.decor + 0.2)
         .setTint(Phaser.Utils.Array.GetRandom([...tints]))
         .setAngle(Phaser.Math.Between(0, 360))
@@ -138,7 +139,7 @@ export class PropFx {
       const dist = Phaser.Math.Between(S.throwPx.min, S.throwPx.max);
       const side = Phaser.Math.Between(-S.sidewaysPx, S.sidewaysPx) * 0.3;
       const sliver = this.scene.add
-        .image(x, y, Tex.Chip)
+        .image(x, y, ...texArgs(Tex.Chip))
         .setDepth(ARENA.depth.decor + 0.2)
         .setTint(Phaser.Utils.Array.GetRandom([...S.tint]))
         .setAngle(Phaser.Math.Between(0, 180))
@@ -190,7 +191,7 @@ export class PropFx {
     const sprite = cat as Phaser.GameObjects.Sprite;
     const k = Math.min(1, C.cat.fitW / sprite.displayWidth, C.cat.fitH / sprite.displayHeight);
     const image = this.scene.add
-      .image(-C.cat.shakePx, 0, sprite.texture.key)
+      .image(-C.cat.shakePx, 0, ...texArgs(sprite.frame.name))
       .setDisplaySize(sprite.displayWidth * k, sprite.displayHeight * k)
       .setTint(C.cat.tint)
       .setAlpha(C.cat.alpha);
@@ -319,7 +320,7 @@ export class PropFx {
     const cfg = PROP_AMBIENT.leaf;
     const ms = Phaser.Math.Between(cfg.ms.min, cfg.ms.max);
     const leaf = this.scene.add
-      .image(x + Phaser.Math.Between(-24, 24), y + Phaser.Math.Between(-20, 4), Tex.Leaf)
+      .image(x + Phaser.Math.Between(-24, 24), y + Phaser.Math.Between(-20, 4), ...texArgs(Tex.Leaf))
       .setDepth(cfg.depth)
       .setScale(cfg.scale)
       .setAngle(Phaser.Math.Between(0, 360))
@@ -336,7 +337,7 @@ export class PropFx {
   /** A twinkle: a small star that pops in and out. */
   private glint(x: number, y: number): void {
     const cfg = PROP_AMBIENT.glint;
-    const star = this.scene.add.image(x, y, Tex.Star).setDepth(cfg.depth).setScale(0);
+    const star = this.scene.add.image(x, y, ...texArgs(Tex.Star)).setDepth(cfg.depth).setScale(0);
     this.scene.tweens.add({
       targets: star, scale: cfg.scale, angle: 90, duration: cfg.ms, yoyo: true, ease: 'Sine.easeOut',
       onComplete: () => star.destroy(),
@@ -363,7 +364,7 @@ export class PropFx {
   private makeEmitter(id: FxId, tint: readonly number[] = PROP_FX[id].tint): Phaser.GameObjects.Particles.ParticleEmitter {
     const def = PROP_FX[id];
     return this.scene.add
-      .particles(0, 0, def.tex, {
+      .particles(0, 0, texRef(def.tex).key, { frame: texRef(def.tex).frame,
         emitting: false,
         lifespan: { ...def.lifespan },
         speed: { ...def.speed },

@@ -1,6 +1,7 @@
 /** @file Entry point: starts PWA + font loading, then creates the Phaser game (Scale.EXPAND, 1280x720 base) and registers all scenes. */
 import Phaser from 'phaser';
 import { bindGameSize, GAME_BASE_HEIGHT, GAME_BASE_WIDTH } from './config/balance';
+import { PERF } from './config/perf';
 import { usesTouchControls } from './core/device';
 import { loadGameFont } from './core/fonts';
 import { initPwa, markBootSuccess } from './core/pwa';
@@ -42,6 +43,8 @@ const game = new Phaser.Game({
   // fullscreenTarget: go fullscreen with #game ITSELF. Without it Phaser wraps the canvas in a new div and fullscreens that, but keeps
   // measuring #game (inset by the notch / home bar), so the canvas stayed smaller than the screen and the rest showed black.
   scale: { mode: Phaser.Scale.EXPAND, autoCenter: Phaser.Scale.CENTER_BOTH, fullscreenTarget: 'game' },
+  // WebGL context settings (MSAA etc.): numbers in config/perf.ts so they can be switched for a speed test.
+  render: { antialiasGL: PERF.render.antialiasGL },
   // fixedStep off: physics moves things by the real time of each frame. With the default (60 fixed steps a second) a 90 or 120 Hz
   // phone shows Varu moving only every second frame, which looks choppy, and uneven when the refresh rate wanders.
   physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, fixedStep: false } },

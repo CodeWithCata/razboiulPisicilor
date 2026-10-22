@@ -1,6 +1,7 @@
 /** @file Pictures of the touch controls (stick, knob, attack and pause buttons, the attack arm, the laser zone), baked once into textures. */
 import Phaser from 'phaser';
 import { drawBeltArm } from '../../assets/art/beltArm';
+import { hasPicture, queuePainted, type Painter } from '../../assets/atlas';
 import { GAME } from '../../config/balance';
 import { COLORS } from '../../config/style';
 import { TOUCH } from '../../config/touch';
@@ -24,10 +25,16 @@ export const TOUCH_TEX = {
 /** The attack arm is baked at 1:1 (this many px square, its center in the middle) and scaled on screen (the one exception to "no scaling"). */
 const ICON_PX = 128;
 
-type Paint = (g: Phaser.GameObjects.Graphics) => void;
+type Paint = Painter;
 
-/** Draws one picture into a texture, once (a texture that exists already is kept). */
+/** Queues one picture for the atlas, once (a picture that exists already is kept). */
 function bake(scene: Phaser.Scene, key: string, w: number, h: number, paint: Paint): void {
+  if (hasPicture(scene, key)) return;
+  queuePainted(scene, key, w, h, paint);
+}
+
+/** A picture on a texture of its own: the laser zone is remade when the screen size changes, and an atlas page cannot drop a frame. */
+function bakeLoose(scene: Phaser.Scene, key: string, w: number, h: number, paint: Paint): void {
   if (scene.textures.exists(key)) return;
   const g = scene.make.graphics({}, false);
   paint(g);
@@ -133,8 +140,8 @@ export function bakeLaserZone(scene: Phaser.Scene): LaserZoneLayout {
   for (const key of [TOUCH_TEX.laserFill, TOUCH_TEX.laserEdge, TOUCH_TEX.laserBorder]) {
     if (scene.textures.exists(key)) scene.textures.remove(key);
   }
-  bake(scene, TOUCH_TEX.laserFill, W, H, (g) => g.fillStyle(L.zoneColor, 1).fillRoundedRect(pad, pad, w, h, L.cornerRadius));
-  bake(scene, TOUCH_TEX.laserEdge, W, H, (g) => g.lineStyle(L.borderWidth + 4, TOUCH.outlineColor, 0.5).strokeRoundedRect(pad, pad, w, h, L.cornerRadius));
-  bake(scene, TOUCH_TEX.laserBorder, W, H, (g) => g.lineStyle(L.borderWidth, L.zoneColor, 1).strokeRoundedRect(pad, pad, w, h, L.cornerRadius));
+  bakeLoose(scene, TOUCH_TEX.laserFill, W, H, (g) => g.fillStyle(L.zoneColor, 1).fillRoundedRect(pad, pad, w, h, L.cornerRadius));
+  bakeLoose(scene, TOUCH_TEX.laserEdge, W, H, (g) => g.lineStyle(L.borderWidth + 4, TOUCH.outlineColor, 0.5).strokeRoundedRect(pad, pad, w, h, L.cornerRadius));
+  bakeLoose(scene, TOUCH_TEX.laserBorder, W, H, (g) => g.lineStyle(L.borderWidth, L.zoneColor, 1).strokeRoundedRect(pad, pad, w, h, L.cornerRadius));
   return { x: x - pad, y: L.inset - pad, pad, screenW: GAME.width, screenH: GAME.height };
 }

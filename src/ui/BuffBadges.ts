@@ -1,4 +1,5 @@
 /** @file Round badges for active power-ups: a ring that drains clockwise, seconds left underneath. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { poly } from '../assets/paint';
 import { BUFF_BADGES as B } from '../config/buffBadges';
@@ -66,7 +67,7 @@ export class BuffBadges {
   private create(info: BuffInfo): Badge {
     const visual = PICKUP_VISUALS[info.kind];
     const gfx = this.scene.add.graphics();
-    const icon = this.scene.add.sprite(0, 0, visual.tex);
+    const icon = this.scene.add.sprite(0, 0, ...texArgs(visual.tex));
     fitToSize(icon, B.iconSize);
     const seconds = this.scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: `${B.seconds.size}px`, color: B.colors.seconds, stroke: B.colors.secondsStroke, strokeThickness: B.seconds.strokeThickness }).setOrigin(0.5);
     return { info, gfx, icon, iconScale: icon.scale, seconds, popInMs: B.popIn.ms, bumpMs: 0 };

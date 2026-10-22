@@ -1,4 +1,5 @@
 /** @file The red screen edge that glows when Varu is low on health and flashes with every heartbeat. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
 import { LOW_HP } from '../config/lowHp';
@@ -25,7 +26,7 @@ export class LowHpVignette {
         canvas.refresh();
       }
     }
-    this.image = scene.textures.exists(key) ? scene.add.image(0, 0, key).setOrigin(0).setDepth(V.depth).setAlpha(0) : null;
+    this.image = scene.textures.exists(key) ? scene.add.image(0, 0, ...texArgs(key)).setOrigin(0).setDepth(V.depth).setAlpha(0) : null;
   }
 
   /** Under the line the edge glows (more the lower the health); above it, it fades out. */

@@ -34,6 +34,8 @@ interface Bed {
  */
 export class BedCageSystem {
   private readonly beds: Bed[] = [];
+  /** Reused list of the beds that are ready for a cat this frame (rebuilt in `update`, no filter per frame). */
+  private readonly readyScratch: Bed[] = [];
 
   constructor(scene: Phaser.Scene) {
     const off = [listen(Events.WaveCleared, () => this.jailAll()), listen(Events.Victory, () => this.jailAll())];
@@ -81,7 +83,12 @@ export class BedCageSystem {
       if (bed.state === 'occupied' && bed.cat && (!bed.cat.active || now >= bed.until)) this.release(bed, true);
       else if (bed.state === 'cooldown' && now >= bed.until) this.rearm(bed);
     }
-    const ready = this.beds.filter((b) => b.state === 'ready' && !b.prop.dead);
+    const ready = this.readyScratch;
+    ready.length = 0;
+    for (let i = 0; i < this.beds.length; i++) {
+      const b = this.beds[i]!;
+      if (b.state === 'ready' && !b.prop.dead) ready.push(b);
+    }
     if (!BED_CAGE.enabled || ready.length === 0) return;
     for (const child of enemies.getChildren()) {
       const cat = child as Enemy;
@@ -109,6 +116,7 @@ export class BedCageSystem {
         break;
       }
     }
+    ready.length = 0;
   }
 
   /**

@@ -1,4 +1,5 @@
 /** @file The flying cat's two wings: loose layers behind the body that flap around the shoulders and follow her turn. Visual only. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { FLYER_WING_PIVOT } from '../../assets/art/cats';
 import { Tex } from '../../assets/keys';
@@ -17,8 +18,8 @@ export class FlyingCatRig {
     private readonly owner: Phaser.Physics.Arcade.Sprite,
   ) {
     const { x, y } = FLYER_WING_PIVOT;
-    this.right = scene.add.image(owner.x, owner.y, Tex.CatWingR).setDepth(ANIM.wing.depth).setOrigin(x / 96, y / 96);
-    this.left = scene.add.image(owner.x, owner.y, Tex.CatWingL).setDepth(ANIM.wing.depth).setOrigin((96 - x) / 96, y / 96);
+    this.right = scene.add.image(owner.x, owner.y, ...texArgs(Tex.CatWingR)).setDepth(ANIM.wing.depth).setOrigin(x / 96, y / 96);
+    this.left = scene.add.image(owner.x, owner.y, ...texArgs(Tex.CatWingL)).setDepth(ANIM.wing.depth).setOrigin((96 - x) / 96, y / 96);
   }
 
   /** Same white flash as the body (`Actor.flash` only tints the body). */
@@ -39,20 +40,23 @@ export class FlyingCatRig {
     const W = ANIM.wing;
     const c = Math.cos(o.rotation);
     const s = Math.sin(o.rotation);
-    const place = (img: Phaser.GameObjects.Image, side: 1 | -1, lag: number): void => {
-      const beat = Math.sin(this.phase - lag); // -1 (wings up and narrow) .. 1 (wings down and wide)
-      const wide = (beat + 1) / 2;
-      const lx = side * (FLYER_WING_PIVOT.x - HALF) * o.scaleX;
-      const ly = (FLYER_WING_PIVOT.y - HALF) * o.scaleY;
-      img
-        .setPosition(o.x + lx * c - ly * s, o.y + lx * s + ly * c)
-        .setRotation(o.rotation + side * Phaser.Math.DegToRad(-beat * W.swingDeg))
-        .setScale(o.scaleX * (W.foldX + (1 - W.foldX) * wide), o.scaleY)
-        .setAlpha(o.alpha)
-        .setVisible(o.visible);
-    };
-    place(this.right, 1, 0);
-    place(this.left, -1, W.lag);
+    this.placeWing(this.right, 1, 0, c, s);
+    this.placeWing(this.left, -1, W.lag, c, s);
+  }
+
+  /** One wing picture: it pivots on the body and flaps with `phase`. `c` / `s`: cos / sin of the body's angle, worked out once per frame. */
+  private placeWing(img: Phaser.GameObjects.Image, side: 1 | -1, lag: number, c: number, s: number): void {
+    const o = this.owner;
+    const beat = Math.sin(this.phase - lag); // -1 (wings up and narrow) .. 1 (wings down and wide)
+    const wide = (beat + 1) / 2;
+    const lx = side * (FLYER_WING_PIVOT.x - HALF) * o.scaleX;
+    const ly = (FLYER_WING_PIVOT.y - HALF) * o.scaleY;
+    img
+      .setPosition(o.x + lx * c - ly * s, o.y + lx * s + ly * c)
+      .setRotation(o.rotation + side * Phaser.Math.DegToRad(-beat * ANIM.wing.swingDeg))
+      .setScale(o.scaleX * (ANIM.wing.foldX + (1 - ANIM.wing.foldX) * wide), o.scaleY)
+      .setAlpha(o.alpha)
+      .setVisible(o.visible);
   }
 
   destroy(): void {

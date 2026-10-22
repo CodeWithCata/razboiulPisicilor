@@ -1,4 +1,5 @@
 /** @file Shared base for Varu and every cat: hp, shadow, hit flash, knockback. */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { fitToSize, setCircleHitbox } from '../core/sprite';
@@ -22,7 +23,7 @@ export abstract class Actor extends Phaser.Physics.Arcade.Sprite {
   private shadowGrow = 1;
 
   protected constructor(scene: Phaser.Scene, x: number, y: number, texture: TexKey, opts: ActorOptions) {
-    super(scene, x, y, texture);
+    super(scene, x, y, ...texArgs(texture));
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
@@ -34,7 +35,7 @@ export abstract class Actor extends Phaser.Physics.Arcade.Sprite {
     fitToSize(this, opts.size);
     setCircleHitbox(this, opts.hitRadius);
 
-    this.shadow = scene.add.image(x, y, Tex.Shadow).setDepth(0);
+    this.shadow = scene.add.image(x, y, ...texArgs(Tex.Shadow)).setDepth(0);
     this.shadow.setDisplaySize(opts.size * 0.9, opts.size * 0.45);
     this.setDepth(10);
   }

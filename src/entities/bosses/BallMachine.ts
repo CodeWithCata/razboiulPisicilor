@@ -1,4 +1,5 @@
 /** @file One of Federer's ball launchers (phase 2): stands on a side edge of the arena, glides along it, turns its barrel to Varu and, when it is its turn, draws a lane on the floor and fires tennis balls down it (v171: they smash what is in their way, and some are red and fast). The three launchers are run by BallMachines.ts. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { PLAY_AREA } from '../../config/arena';
@@ -46,6 +47,8 @@ export class BallMachine {
   private lane: Telegraph | null = null;
   private rageLook = false;
   private destroyed = false;
+  /** The widest lane angle from the centre line, in radians (a constant: worked out once, not every frame). */
+  private readonly widestRad: number;
   /** How many volleys it has finished (the bank watches this to pass the turn on). */
   volleys = 0;
 
@@ -58,8 +61,9 @@ export class BallMachine {
     this.edge = edge;
     this.facing = edge === 'left' ? 0 : Math.PI;
     this.laneAngle = this.facing;
+    this.widestRad = Phaser.Math.DegToRad(Math.max(...M.lanesDeg.map(Math.abs)));
     const x = edge === 'left' ? PLAY_AREA.left + M.edgeInsetPx : PLAY_AREA.right - M.edgeInsetPx;
-    this.sprite = scene.add.image(x, y, Tex.BallMachine).setDepth(14).setDisplaySize(M.sizePx, M.sizePx).setRotation(this.facing + Math.PI / 2);
+    this.sprite = scene.add.image(x, y, ...texArgs(Tex.BallMachine)).setDepth(14).setDisplaySize(M.sizePx, M.sizePx).setRotation(this.facing + Math.PI / 2);
     this.baseScale = this.sprite.scaleX;
     // It rolls in with a puff of smoke.
     this.sprite.setScale(this.baseScale * 0.1);
@@ -132,10 +136,8 @@ export class BallMachine {
 
   /** While it waits the barrel follows Varu, kept inside the lane fan (so it never points along its edge). */
   private trackBarrel(f: MachineFrame): void {
-    const M = FEDERER.machine;
-    const widest = Phaser.Math.DegToRad(Math.max(...M.lanesDeg.map(Math.abs)));
     const bearing = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, f.playerX, f.playerY);
-    const off = Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(bearing - this.facing), -widest, widest);
+    const off = Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(bearing - this.facing), -this.widestRad, this.widestRad);
     this.sprite.rotation = Phaser.Math.Angle.RotateTo(this.sprite.rotation, this.facing + off + Math.PI / 2, f.rage ? FEDERER.machine.rageTurnRate : 0.08);
   }
 

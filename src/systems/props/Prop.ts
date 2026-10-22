@@ -1,4 +1,5 @@
 /** @file One 2x2 arena object as a sprite on springs: lean, squash, shove, hop, idle sway, damage, break away. */
+import { hasPicture, texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { bushKey, crackKey, propKey } from '../../assets/propTextures';
 import { ARENA, type ObjectName } from '../../config/arena';
@@ -72,8 +73,8 @@ export class Prop {
     this.baseX = this.cx;
     this.baseY = this.box.y + size * feel.pivot;
     this.variant = kind === 'bush' ? bushVariantFor(col, row) : 0;
-    const textureKey = kind === 'bush' && scene.textures.exists(bushKey(this.variant)) ? bushKey(this.variant) : propKey(kind);
-    this.sprite = scene.add.image(this.baseX, this.baseY, textureKey).setOrigin(0.5, feel.pivot).setDepth(ARENA.depth.walls);
+    const textureKey = kind === 'bush' && hasPicture(scene, bushKey(this.variant)) ? bushKey(this.variant) : propKey(kind);
+    this.sprite = scene.add.image(this.baseX, this.baseY, ...texArgs(textureKey)).setOrigin(0.5, feel.pivot).setDepth(ARENA.depth.walls);
     const bodyTint = kind === 'bush' ? BUSH_VARIANTS[this.variant]?.bodyTint : null;
     if (bodyTint != null) this.sprite.setTint(bodyTint);
   }
@@ -96,7 +97,7 @@ export class Prop {
 
   /** Swap the picture only (a bed with or without its pillow). The prop's kind, feel and map tiles stay the same. */
   setLook(kind: ObjectName): void {
-    if (!this.dead) this.sprite.setTexture(propKey(kind));
+    if (!this.dead) this.sprite.setTexture(...texArgs(propKey(kind)));
   }
 
   /** A puff of wind: only a lean, no squash and no shove. */
@@ -185,8 +186,8 @@ export class Prop {
     const stage = ROCK_CRACKS.stages.filter((n) => this.hits >= n).length;
     if (stage <= this.stage) return;
     this.stage = stage;
-    if (this.crack) this.crack.setTexture(crackKey(stage));
-    else this.crack = this.scene.add.image(this.sprite.x, this.sprite.y, crackKey(stage)).setOrigin(0.5, this.feel.pivot).setDepth(ARENA.depth.walls + 0.01);
+    if (this.crack) this.crack.setTexture(...texArgs(crackKey(stage)));
+    else this.crack = this.scene.add.image(this.sprite.x, this.sprite.y, ...texArgs(crackKey(stage))).setOrigin(0.5, this.feel.pivot).setDepth(ARENA.depth.walls + 0.01);
     this.syncCrack();
     this.onCrack(this, stage);
   }

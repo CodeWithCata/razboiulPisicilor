@@ -1,4 +1,5 @@
 /** @file Draws the touch stick, attack button and pause button. Visuals only; logic is in TouchInput. */
+import { texArgs } from '../../assets/atlas';
 import type Phaser from 'phaser';
 import { GAME } from '../../config/balance';
 import { PERF } from '../../config/perf';
@@ -16,8 +17,12 @@ import { bakeLaserZone, bakeTouchButtons, TOUCH_TEX, type LaserZoneLayout } from
  */
 /** Switches a picture to another texture, only when it is not showing that one already. */
 function switchTo(img: Phaser.GameObjects.Image, key: string): void {
-  if (img.texture.key !== key) img.setTexture(key);
+  if (img.getData(PICTURE) === key) return;
+  img.setData(PICTURE, key);
+  img.setTexture(...texArgs(key));
 }
+/** The data slot where an image remembers which picture (key) it shows: an atlas frame is not a texture key, so the key is kept here. */
+const PICTURE = 'picture';
 
 export class TouchOverlay {
   private readonly laserFill: Phaser.GameObjects.Image;
@@ -47,14 +52,14 @@ export class TouchOverlay {
 
     const d = TOUCH.depth;
     // Drawing order (same as before): laser zone, stick, knob, attack disc, attack arm, pause.
-    this.laserFill = scene.add.image(this.laser.x, this.laser.y, TOUCH_TEX.laserFill).setOrigin(0).setScrollFactor(0).setDepth(d);
-    this.laserEdge = scene.add.image(this.laser.x, this.laser.y, TOUCH_TEX.laserEdge).setOrigin(0).setScrollFactor(0).setDepth(d);
-    this.laserBorder = scene.add.image(this.laser.x, this.laser.y, TOUCH_TEX.laserBorder).setOrigin(0).setScrollFactor(0).setDepth(d);
-    this.stick = scene.add.image(0, 0, TOUCH_TEX.stickIdle).setScrollFactor(0).setDepth(d);
-    this.knob = scene.add.image(0, 0, TOUCH_TEX.knobIdle).setScrollFactor(0).setDepth(d);
-    this.attack = scene.add.image(0, 0, TOUCH_TEX.attackIdle).setScrollFactor(0).setDepth(d);
-    this.attackIcon = scene.add.image(0, 0, TOUCH_TEX.attackIcon).setScrollFactor(0).setDepth(d);
-    this.pause = scene.add.image(0, 0, TOUCH_TEX.pauseIdle).setScrollFactor(0).setDepth(d);
+    this.laserFill = scene.add.image(this.laser.x, this.laser.y, ...texArgs(TOUCH_TEX.laserFill)).setOrigin(0).setScrollFactor(0).setDepth(d);
+    this.laserEdge = scene.add.image(this.laser.x, this.laser.y, ...texArgs(TOUCH_TEX.laserEdge)).setOrigin(0).setScrollFactor(0).setDepth(d);
+    this.laserBorder = scene.add.image(this.laser.x, this.laser.y, ...texArgs(TOUCH_TEX.laserBorder)).setOrigin(0).setScrollFactor(0).setDepth(d);
+    this.stick = scene.add.image(0, 0, ...texArgs(TOUCH_TEX.stickIdle)).setScrollFactor(0).setDepth(d);
+    this.knob = scene.add.image(0, 0, ...texArgs(TOUCH_TEX.knobIdle)).setScrollFactor(0).setDepth(d);
+    this.attack = scene.add.image(0, 0, ...texArgs(TOUCH_TEX.attackIdle)).setScrollFactor(0).setDepth(d);
+    this.attackIcon = scene.add.image(0, 0, ...texArgs(TOUCH_TEX.attackIcon)).setScrollFactor(0).setDepth(d);
+    this.pause = scene.add.image(0, 0, ...texArgs(TOUCH_TEX.pauseIdle)).setScrollFactor(0).setDepth(d);
     for (const img of [this.laserFill, this.laserEdge, this.laserBorder]) img.setAlpha(PERF.warm.alpha);
 
     // A caption under the idle stick says where the thumb goes. It fades after a few seconds and never comes back once the stick was used.
@@ -133,7 +138,7 @@ export class TouchOverlay {
       [this.laserEdge, TOUCH_TEX.laserEdge],
       [this.laserBorder, TOUCH_TEX.laserBorder],
     ] as const) {
-      img.setTexture(key).setPosition(this.laser.x, this.laser.y);
+      img.setTexture(...texArgs(key)).setPosition(this.laser.x, this.laser.y);
     }
   }
 

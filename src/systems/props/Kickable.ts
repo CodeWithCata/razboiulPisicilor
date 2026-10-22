@@ -1,4 +1,5 @@
 /** @file Cans and the ball: small kick physics (hop, bounce, wall hits). */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { tileKey } from '../../assets/propTextures';
 import { Tex } from '../../assets/keys';
@@ -59,10 +60,10 @@ export class Kickable {
     this.homeX = x;
     this.homeY = y;
     this.shadow = scene.add
-      .image(x, y + this.cfg.shadow.drop, Tex.Shadow)
+      .image(x, y + this.cfg.shadow.drop, ...texArgs(Tex.Shadow))
       .setDepth(ARENA.depth.decor + KICKABLE.shadowDepthLift)
       .setAlpha(0);
-    this.sprite = scene.add.image(x, y, tileKey(tile)).setDepth(ARENA.depth.decor + KICKABLE.depthLift);
+    this.sprite = scene.add.image(x, y, ...texArgs(tileKey(tile))).setDepth(ARENA.depth.decor + KICKABLE.depthLift);
   }
 
   get speed(): number {

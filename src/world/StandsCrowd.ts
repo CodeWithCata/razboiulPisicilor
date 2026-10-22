@@ -1,13 +1,15 @@
 /** @file Brings the stand fans to life: idle sway and fidgets, moods (calm / cheer / roar / gloom / boo), La Ola, arms-up frames, confetti, shouts and the fan that throws something. Visual only, real time. */
+import { texRef } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
+import { CULL } from '../config/culling';
 import { CROWD, MOOD_KEYS, type CrowdMood, type MoodLook, type ShoutKind, type ThrowPick, type ThrowSpot } from '../config/crowd';
 import { BOMBER_ENTRANCE, CROWD_LINES, pick } from '../content/lines';
 import { PERF } from '../config/perf';
 import { usesTouchControls } from '../core/device';
 import { Events, listen } from '../core/events';
 import type { BossStunnedPayload, PointPayload, WavePayload } from '../core/events';
-import type { StandsBuild, StandsFan } from './Stands';
+import type { StandsBuild, StandsFan, StandsPiece } from './Stands';
 import { RING_LENGTH, ringPosition } from './standsRing';
 
 const TAU = Math.PI * 2;
@@ -37,6 +39,7 @@ function hash01(n: number): number {
 export class StandsCrowd {
   private readonly fans: readonly StandsFan[];
   private readonly looks: StandsBuild['looks'];
+  private readonly pieces: readonly StandsPiece[];
   /** Fan indices in a fixed shuffled order, so when there are more fans on screen than `limit` the same ones rest (it looks random). */
   private readonly order: Int32Array;
   /** 0..1 per fan: how much of its motion it shows (fades in and out when it enters or leaves the animated set). */
@@ -91,6 +94,7 @@ export class StandsCrowd {
     stands: StandsBuild,
   ) {
     this.fans = stands.fans;
+    this.pieces = stands.pieces;
     this.looks = stands.looks;
     this.order = Int32Array.from(this.fans.map((_fan, i) => i).sort((a, b) => this.fans[a]!.phase - this.fans[b]!.phase));
     this.live = new Float32Array(this.fans.length);
@@ -191,7 +195,10 @@ export class StandsCrowd {
   }
 
   update(deltaMs: number): void {
-    if (!CROWD.enabled) return;
+    if (!CROWD.enabled) {
+      this.cull();
+      return;
+    }
     const dt = Math.min(deltaMs, CROWD.maxStepMs);
     this.t += dt;
     if (this.t >= this.until) {
@@ -205,6 +212,33 @@ export class StandsCrowd {
     this.tickLastCat(dt);
     this.tickThrower();
     this.animate(dt);
+    this.cull();
+  }
+
+  /** Hides the fans outside the camera view plus CULL.standsMarginPx, and shows them again when they come back. A picture only: no physics, no logic reads it. */
+  private cull(): void {
+    const view = this.scene.cameras.main.worldView;
+    const m = CULL.standsMarginPx;
+    const x0 = view.x - m;
+    const y0 = view.y - m;
+    const x1 = view.right + m;
+    const y1 = view.bottom + m;
+    for (let i = 0; i < this.fans.length; i++) {
+      const fan = this.fans[i]!;
+      const culled = fan.baseX < x0 || fan.baseX > x1 || fan.baseY < y0 || fan.baseY > y1;
+      if (culled === fan.culled) continue;
+      fan.culled = culled;
+      fan.sprite.setVisible(!culled);
+    }
+    // The big still pictures: hidden when their whole rectangle is outside the view plus the margin.
+    for (let i = 0; i < this.pieces.length; i++) {
+      const piece = this.pieces[i]!;
+      const img = piece.image;
+      const culled = img.x + img.displayWidth < x0 || img.x > x1 || img.y + img.displayHeight < y0 || img.y > y1;
+      if (culled === piece.culled) continue;
+      piece.culled = culled;
+      img.setVisible(!culled);
+    }
   }
 
   /**
@@ -323,7 +357,7 @@ export class StandsCrowd {
     const c = CROWD.confetti;
     if (!CROWD.enabled || !c.enabled) return null;
     return this.scene.add
-      .particles(0, 0, Tex.Particle, {
+      .particles(0, 0, texRef(Tex.Particle).key, { frame: texRef(Tex.Particle).frame,
         emitting: false,
         lifespan: { min: c.lifeMs.min, max: c.lifeMs.max },
         speed: { min: c.speed.min, max: c.speed.max },

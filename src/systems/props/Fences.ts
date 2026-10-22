@@ -1,4 +1,5 @@
 /** @file Fence pieces that ripple when shaken: lifts a tile off the layer while a sprite wobbles. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { tileKey } from '../../assets/propTextures';
 import { ARENA } from '../../config/arena';
@@ -97,7 +98,7 @@ export class Fences {
       const baseY = y0 + ARENA.tile * pivot;
       this.layer.removeTileAt(spot.col, spot.row, true, false); // the sprite below takes over drawing this piece
       s = {
-        sprite: this.scene.add.image(baseX, baseY, tileKey(spot.id)).setOrigin(0.5, pivot).setDepth(ARENA.depth.walls),
+        sprite: this.scene.add.image(baseX, baseY, ...texArgs(tileKey(spot.id))).setOrigin(0.5, pivot).setDepth(ARENA.depth.walls),
         gid: tile.index,
         col: spot.col,
         row: spot.row,

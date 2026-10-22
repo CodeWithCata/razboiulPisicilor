@@ -1,4 +1,5 @@
 /** @file The thrown belt as a boomerang: out, pierce, turn at range or wall, back. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { GOLD_BELT, MILK_FX } from '../../config/animation';
@@ -6,6 +7,7 @@ import { WORLD } from '../../config/arena';
 import { BELT_THROW, PROJECTILES } from '../../config/balance';
 import type { ArenaQuery } from '../../core/arena';
 import { bus, Events, type BeltFlightPayload } from '../../core/events';
+import { snapshotInto } from '../../core/snapshot';
 import { distToSegment } from '../../core/sweep';
 import { fitToSize } from '../../core/sprite';
 import type { Enemy } from '../../entities/Enemy';
@@ -28,6 +30,9 @@ export class ThrownBelt {
   private milkTimer = 0;
   private drips = 0;
   private readonly dir: Phaser.Math.Vector2;
+  /** Reused copies of the cat and shot lists for the per-frame loops (see `snapshotInto`). */
+  private readonly catScratch: Phaser.GameObjects.GameObject[] = [];
+  private readonly shotScratch: Phaser.GameObjects.GameObject[] = [];
   private readonly maxRange: number;
   private readonly alreadyHit = new Set<Enemy>();
   /** Tough projectiles (the emo cat's hearts: `throwHits` 2) this leg has already hit: one hit per leg, so out and back = 2 hits. */
@@ -51,7 +56,7 @@ export class ThrownBelt {
     this.dir = new Phaser.Math.Vector2(Math.cos(aimAngle), Math.sin(aimAngle));
     this.maxRange = BELT_THROW.maxRange * player.rangeMultiplier; // golden belt throws farther
     this.gold = GOLD_BELT.enabled && player.goldenBelt;
-    this.sprite = scene.add.sprite(player.x, player.y, this.gold ? Tex.BeltThrownGold : Tex.BeltThrown).setDepth(31);
+    this.sprite = scene.add.sprite(player.x, player.y, ...texArgs(this.gold ? Tex.BeltThrownGold : Tex.BeltThrown)).setDepth(31);
     fitToSize(this.sprite, BELT_THROW.size);
     this.scene = scene;
     this.milk = createDrops(scene, MILK_FX.trail, this.gold, 30);
@@ -148,8 +153,9 @@ export class ThrownBelt {
   private hitEnemies(prevX: number, prevY: number): void {
     const damage = BELT_THROW.damage * this.player.damageMultiplier;
     // A copy: a cat that dies is removed from the group in the middle of the loop, which would skip the next one.
-    for (const child of this.enemies.getChildren().slice()) {
-      const enemy = child as Enemy;
+    const cats = snapshotInto(this.enemies.getChildren(), this.catScratch);
+    for (let i = 0; i < cats.length; i++) {
+      const enemy = cats[i] as Enemy;
       if (!enemy.active || !enemy.hittable || this.alreadyHit.has(enemy)) continue;
       const reach = BELT_THROW.hitRadius + enemy.hitRadius;
       if (distToSegment(enemy.x, enemy.y, prevX, prevY, this.sprite.x, this.sprite.y) > reach) continue;
@@ -157,11 +163,13 @@ export class ThrownBelt {
       this.alreadyHit.add(enemy);
       enemy.takeDamage(damage, this.sprite.x, this.sprite.y, BELT_THROW.knockback);
     }
+    this.catScratch.length = 0;
   }
 
   private swatProjectiles(prevX: number, prevY: number): void {
-    for (const child of this.projectiles.getChildren().slice()) {
-      const proj = child as Projectile;
+    const shots = snapshotInto(this.projectiles.getChildren(), this.shotScratch);
+    for (let i = 0; i < shots.length; i++) {
+      const proj = shots[i] as Projectile;
       if (!proj.active || proj.friendly) continue;
       const reach = BELT_THROW.hitRadius + PROJECTILES[proj.kind].hitRadius;
       if (distToSegment(proj.x, proj.y, prevX, prevY, this.sprite.x, this.sprite.y) > reach) continue;
@@ -174,5 +182,6 @@ export class ThrownBelt {
       }
       swatProjectile(proj, this.enemies, true);
     }
+    this.shotScratch.length = 0;
   }
 }

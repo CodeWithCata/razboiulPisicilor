@@ -1,4 +1,5 @@
 /** @file Fog weather: some waves start in a mist. Cats far from Varu fade out (they walk out of the fog at him) and a soft sheet covers the arena and the screen edges go thick and white (you see less at the sides). */
+import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { PERF } from '../config/perf';
 import { WEATHER } from '../config/weather';
@@ -74,7 +75,7 @@ export class Fog {
     }
     if (!scene.textures.exists(key)) return null;
     const M = this.cfg.haze.margin; // a little bigger than the screen so a camera shake never shows a bare edge
-    return scene.add.image(-M, -M, key).setOrigin(0).setDisplaySize(width + M * 2, height + M * 2).setScrollFactor(0).setAlpha(0).setDepth(E.depth);
+    return scene.add.image(-M, -M, ...texArgs(key)).setOrigin(0).setDisplaySize(width + M * 2, height + M * 2).setScrollFactor(0).setAlpha(0).setDepth(E.depth);
   }
 
   /** `Weather` rolled this wave's weather: fog on or off. */

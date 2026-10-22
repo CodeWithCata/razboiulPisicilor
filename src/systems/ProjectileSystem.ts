@@ -1,4 +1,5 @@
 /** @file Projectile sprite (yarn, tennis, fireball, broken heart) and the group that updates and expires them. */
+import { texArgs, texRef } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { WORLD } from '../config/arena';
@@ -45,7 +46,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   private readonly spinPerSec: number;
 
   constructor(scene: Phaser.Scene, kind: ProjectileKind, x: number, y: number, angle: number, speed: number) {
-    super(scene, x, y, TEXTURES[kind]);
+    super(scene, x, y, ...texArgs(TEXTURES[kind]));
     const stats: ProjectileStats = PROJECTILES[kind];
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -176,7 +177,7 @@ export class ProjectileSystem {
     this.group = scene.physics.add.group();
     const F = FIREBALL_FX;
     this.flames = scene.add
-      .particles(0, 0, Tex.Particle, {
+      .particles(0, 0, texRef(Tex.Particle).key, { frame: texRef(Tex.Particle).frame,
         emitting: false,
         lifespan: F.lifespanMs,
         speed: F.speed,

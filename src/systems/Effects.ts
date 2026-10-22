@@ -1,4 +1,5 @@
 /** @file The juice: screen shake, particles, floating words (listens to the bus). */
+import { texRef } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { BALL_FX, ENERGY_FLIP, GOLD_BELT, IDLE_HABITS, KAMIKAZE_BLAST, MILK_FX, NINJA_POOF, SMOKE_BREAK, TENNIS_RETURN_FX } from '../config/animation';
@@ -63,7 +64,7 @@ export class Effects {
     this.smoke = this.emitter(500, { min: 30, max: 140 }, 1.1, [0x7a4fb5, 0x2e2e3d]);
     this.dust = this.emitter(450, { min: 50, max: 150 }, 0.9, [0xb4ff1a, 0xe6ffa8, 0xffffff]);
     this.feathers = this.scene.add
-      .particles(0, 0, Tex.Feather, {
+      .particles(0, 0, texRef(Tex.Feather).key, { frame: texRef(Tex.Feather).frame,
         emitting: false,
         lifespan: { min: 600, max: 1000 },
         speed: { min: 80, max: 260 },
@@ -344,7 +345,7 @@ export class Effects {
   }
 
   private emitter(lifespan: number, speed: { min: number; max: number }, startScale: number, tint: number[]) {
-    return this.scene.add.particles(0, 0, Tex.Particle, {
+    return this.scene.add.particles(0, 0, texRef(Tex.Particle).key, { frame: texRef(Tex.Particle).frame,
       emitting: false, lifespan, speed,
       scale: { start: startScale, end: 0 }, alpha: { start: 1, end: 0 }, tint,
     }).setDepth(40);

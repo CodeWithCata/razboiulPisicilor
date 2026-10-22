@@ -1,4 +1,5 @@
 /** @file Pisica Bombardier (the bomber cat): a strong walking cat that keeps her distance, lifts a petard over her head and lobs it at Varu (the same petard the fans throw). */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { PLAY_AREA, WORLD } from '../../config/arena';
@@ -38,7 +39,7 @@ export class BomberCat extends Enemy {
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'bomber', Tex.CatBomber);
     const H = BOMBER.held;
-    this.held = scene.add.image(x, y, H.tex).setVisible(false);
+    this.held = scene.add.image(x, y, ...texArgs(H.tex)).setVisible(false);
     this.heldBase = H.sizePx / Math.max(this.held.frame.realWidth, this.held.frame.realHeight);
     this.held.setScale(this.heldBase);
     this.rig = new BomberCatRig(scene, this);

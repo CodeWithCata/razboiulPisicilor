@@ -1,4 +1,5 @@
 /** @file The cutscene stage: who is who (Varu, the boss, props a script shows), where things are, and the camera the script drives. */
+import { texArgs } from '../../assets/atlas';
 import Phaser from 'phaser';
 import type { TexKey } from '../../assets/keys';
 import { CAMERA } from '../../config/arena';
@@ -133,7 +134,7 @@ export class CutsceneStage {
   show(id: string, tex: TexKey, x: number, y: number, size: number, fadeMs: number): void {
     this.removeProp(id, 0);
     const scene = this.host.scene;
-    const img = scene.add.image(x, y, tex).setDepth(CUTSCENE.actors.depth);
+    const img = scene.add.image(x, y, ...texArgs(tex)).setDepth(CUTSCENE.actors.depth);
     img.setScale(size / Math.max(img.frame.realWidth, img.frame.realHeight));
     this.props.set(id, img);
     if (fadeMs > 0) {
