@@ -22,8 +22,11 @@ export const PERF = {
    */
   adapt: { slowMs: 15, fastMs: 12.5, slowSamples: 1, fastSamples: 6, step: 0.25, minScale: 0.25 },
 
-  /** The WebGL canvas settings passed to Phaser (main.ts). `antialias` is the MSAA of the canvas: it costs fill rate on phones. */
-  render: { antialias: true },
+  /**
+   * The WebGL canvas settings passed to Phaser (main.ts). `antialias` is the MSAA of the canvas: it costs fill rate, so it is off
+   * for speed (edges may look a little less smooth). `powerPreference` is only a hint to the browser about which GPU to use.
+   */
+  render: { antialias: false, powerPreference: 'high-performance' },
 
   /** The little card: top left, under the health meter. */
   panel: { x: 12, y: 96, size: 18, padX: 8, padY: 6, lineSpacing: 2, radius: 8, backAlpha: 0.62, depth: 400, color: '#b6f5a8' },
