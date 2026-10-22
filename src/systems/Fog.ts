@@ -1,5 +1,6 @@
 /** @file Fog weather: some waves start in a mist. Cats far from Varu fade out (they walk out of the fog at him) and a soft sheet covers the arena and the screen edges go thick and white (you see less at the sides). */
 import Phaser from 'phaser';
+import { PERF } from '../config/perf';
 import { WEATHER } from '../config/weather';
 import { GAME } from '../config/balance';
 import { Events, listen, type WeatherPayload } from '../core/events';
@@ -21,7 +22,9 @@ export class Fog {
   /** True once every cat has been set back to full visibility while the fog is gone: until the fog returns there is nothing to redo each frame (new cats start at 1). */
   private clearApplied = true;
   /** Whether the haze and edge images are drawn at all (hidden while the fog is gone). */
-  private hazeShown = false;
+  private hazeShown = true;
+  /** Frames left in which the edge picture is only drawn once (see `PERF.warm`); the haze and the edges stay as they are meanwhile. */
+  private warmLeft = PERF.warm.frames;
 
   constructor(
     scene: Phaser.Scene,
@@ -36,10 +39,9 @@ export class Fog {
       .setOrigin(0)
       .setScrollFactor(0)
       .setAlpha(0)
-      .setVisible(false)
       .setDepth(this.cfg.haze.depth);
     this.edges = this.makeEdges(scene);
-    this.edges?.setVisible(false);
+    this.edges?.setAlpha(PERF.warm.alpha); // drawn once at this alpha, so its texture is ready before the first fog
 
     const off = listen<WeatherPayload>(Events.WeatherChanged, ({ weather }) => this.setFog(weather === 'fog'));
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
@@ -86,7 +88,8 @@ export class Fog {
     this.current += (this.target - this.current) * (1 - Math.exp(-delta / (this.cfg.transitionMs / 3)));
     // Off = hidden (not drawn at zero alpha). The check runs only when the state changes.
     const shown = this.current >= 0.01;
-    if (shown !== this.hazeShown) {
+    if (this.warmLeft > 0) this.warmLeft--;
+    else if (shown !== this.hazeShown) {
       this.hazeShown = shown;
       this.haze.setVisible(shown);
       this.edges?.setVisible(shown);

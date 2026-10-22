@@ -38,3 +38,7 @@ Behaviour and look are unchanged on purpose.
 - Milk trail: `entities/MilkTrail.ts`. Path points and splotches live in fixed typed arrays (`MILK_TRAIL.maxPoints` / `maxBlobs`; when full the oldest goes); the ribbon's edge points are in a scratch array; no object, tuple or closure is made per frame.
 - Perf card: shows the canvas backing size (`canvas.width` x `canvas.height`) and whether the WebGL context has antialias on.
 Still open: Vite chunk split, `powerPreference`, the surrender flag Graphics.
+
+## v195: first-draw hitch fix (written WITHOUT a browser: the owner reported a freeze at wave starts after v194)
+- Cause (likely, not measured): a picture is uploaded to the GPU the first time it is drawn. v194 kept the fog's edge image and the laser zone hidden until they were needed, so the big upload landed mid-wave (fog starts in about 30% of waves).
+- Fix: `PERF.warm` (`config/perf.ts`): both pictures are drawn at alpha 0.001 (invisible) for 2 frames when the run starts. Rule: a big picture that is first shown later must be warmed the same way.

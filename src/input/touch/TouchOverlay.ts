@@ -1,6 +1,7 @@
 /** @file Draws the touch stick, attack button and pause button. Visuals only; logic is in TouchInput. */
 import type Phaser from 'phaser';
 import { GAME } from '../../config/balance';
+import { PERF } from '../../config/perf';
 import { TOUCH } from '../../config/touch';
 import { FONT } from '../../config/style';
 import { TOUCH_TEXT } from '../../content/lines';
@@ -34,6 +35,8 @@ export class TouchOverlay {
   private laser: LaserZoneLayout;
   /** Set by `setHidden`: a cutscene hides every picture of the thumb controls. */
   private hidden = false;
+  /** Frames left in which the laser zone is drawn once at `PERF.warm` alpha, so its textures are on the GPU before the first laser (see `PERF.warm`). */
+  private laserWarm = PERF.warm.frames;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -52,6 +55,7 @@ export class TouchOverlay {
     this.attack = scene.add.image(0, 0, TOUCH_TEX.attackIdle).setScrollFactor(0).setDepth(d);
     this.attackIcon = scene.add.image(0, 0, TOUCH_TEX.attackIcon).setScrollFactor(0).setDepth(d);
     this.pause = scene.add.image(0, 0, TOUCH_TEX.pauseIdle).setScrollFactor(0).setDepth(d);
+    for (const img of [this.laserFill, this.laserEdge, this.laserBorder]) img.setAlpha(PERF.warm.alpha);
 
     // A caption under the idle stick says where the thumb goes. It fades after a few seconds and never comes back once the stick was used.
     const spot = TOUCH.idleStickSpot;
@@ -109,6 +113,7 @@ export class TouchOverlay {
   }
 
   update(): void {
+    if (this.laserWarm > 0) this.laserWarm--;
     // The laser zone is made for the screen size it is drawn on; a size change (rotation, fullscreen) remakes it.
     if (GAME.width !== this.laser.screenW || GAME.height !== this.laser.screenH) this.remakeLaserZone();
     this.drawLaserZone();
@@ -135,7 +140,7 @@ export class TouchOverlay {
   /** The pictures that show on screen: all of them unless a cutscene hides them; the laser zone only while the laser is aiming. */
   private applyVisibility(): void {
     const on = !this.hidden;
-    const zone = on && this.input.laserAiming;
+    const zone = on && (this.input.laserAiming || this.laserWarm > 0);
     this.laserFill.setVisible(zone);
     this.laserEdge.setVisible(zone);
     this.laserBorder.setVisible(zone);

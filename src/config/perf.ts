@@ -28,4 +28,11 @@ export const PERF = {
   /** The little card: top left, under the health meter. */
   panel: { x: 12, y: 96, size: 18, padX: 8, padY: 6, lineSpacing: 2, radius: 8, backAlpha: 0.62, depth: 400, color: '#b6f5a8' },
   back: COLORS.navy,
+
+  /**
+   * Big pictures (the fog's edge image, the laser zone) are drawn at this alpha for a few frames when a run starts, so the GPU has their
+   * texture before a wave needs it. A picture is only uploaded the first time it is drawn: if it stays hidden until the fog or the laser
+   * comes, that first frame stalls. At this alpha it is invisible.
+   */
+  warm: { frames: 2, alpha: 0.001 },
 } as const;
