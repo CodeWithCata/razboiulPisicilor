@@ -21,6 +21,8 @@ export abstract class Actor extends Phaser.Physics.Arcade.Sprite {
   private readonly shadow: Phaser.GameObjects.Image;
   private readonly shadowSize: number;
   private shadowGrow = 1;
+  /** Hidden because it is far off camera (`setCulled`). Separate from `visible`, which the owner's own logic may set. */
+  private culledOff = false;
 
   protected constructor(scene: Phaser.Scene, x: number, y: number, texture: TexKey, opts: ActorOptions) {
     super(scene, x, y, ...texArgs(texture));
@@ -84,6 +86,22 @@ export abstract class Actor extends Phaser.Physics.Arcade.Sprite {
   /** Puts the shadow under the sprite. Public so cutscenes can move a cat and keep its shadow with it. */
   syncShadow(): void {
     this.shadow.setPosition(this.x, this.y + this.shadowSize * 0.28 * this.shadowGrow);
+  }
+
+  /** True while the body and shadow are hidden by draw culling. */
+  get culled(): boolean {
+    return this.culledOff;
+  }
+
+  /**
+   * Draw culling: hide (or show again) the body and its shadow. Only for an actor whose own code never changes `visible` and that no
+   * rig copies it from. A caller that shows it again should also refresh the shadow position and alpha, so the first frame is right.
+   */
+  setCulled(culled: boolean): void {
+    if (culled === this.culledOff) return;
+    this.culledOff = culled;
+    this.setVisible(!culled);
+    this.shadow.setVisible(!culled);
   }
 
   override destroy(fromScene?: boolean): void {

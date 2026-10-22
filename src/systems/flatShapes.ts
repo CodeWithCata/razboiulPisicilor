@@ -18,3 +18,12 @@ export function flatDisc(scene: Phaser.Scene, x: number, y: number, radius: numb
 export function flatHoop(scene: Phaser.Scene, x: number, y: number, radius: number, color: number, alpha: number): Phaser.GameObjects.Image {
   return flat(scene.add.image(x, y, ...texArgs(Tex.FxHoop)).setScale(radius / FX_HOOP_R), color, alpha);
 }
+
+/** The `scale` a flat hoop / disc has when its edge is `radius` px out. Code that scales a ring to a share `k` of its size sets `k * hoopScale(radius)`. */
+export function hoopScale(radius: number): number {
+  return radius / FX_HOOP_R;
+}
+
+export function discScale(radius: number): number {
+  return radius / FX_DISC_R;
+}

@@ -23,6 +23,7 @@ import type { Player } from '../../entities/Player';
 import type { Effects } from '../Effects';
 import type { Obstacle, Obstacles } from './Obstacles';
 import { hyp } from '../../core/hyp';
+import { discScale, flatDisc } from '../flatShapes';
 import { snapshotInto } from '../../core/snapshot';
 
 /** One barrel standing in the arena. */
@@ -43,7 +44,7 @@ interface Barrel {
   /** Cursed barrel (bad luck): purple glow, and a purple cloud when it breaks. `rolled`: the chance was already rolled (only possible once curses exist in the run). */
   cursed: boolean;
   rolled: boolean;
-  glow: Phaser.GameObjects.Arc | null;
+  glow: Phaser.GameObjects.Image | null;
 }
 
 /** A mustard puddle on the floor. */
@@ -262,15 +263,16 @@ export class BarrelSystem {
     const G = CURSE.barrel.glow;
     barrel.cursed = true;
     barrel.sprite.setTint(CURSE.barrel.tint);
-    barrel.glow = this.scene.add.circle(barrel.x, barrel.y + G.offsetY, G.radiusPx, G.color, G.alphaMin).setDepth(BARREL.depth - 0.05);
-    this.scene.tweens.add({ targets: barrel.glow, alpha: { from: G.alphaMin, to: G.alphaMax }, scale: { from: 0.9, to: 1.25 }, duration: G.pulseMs, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    barrel.glow = flatDisc(this.scene, barrel.x, barrel.y + G.offsetY, G.radiusPx, G.color, G.alphaMin).setDepth(BARREL.depth - 0.05);
+    const glowBase = discScale(G.radiusPx); // the old circle's scale 1 = this
+    this.scene.tweens.add({ targets: barrel.glow, alpha: { from: G.alphaMin, to: G.alphaMax }, scale: { from: glowBase * 0.9, to: glowBase * 1.25 }, duration: G.pulseMs, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 
   /** A cursed barrel broke: a purple cloud puffs out; Varu inside it is cursed (`CurseSystem` decides, it applies the cooldown, wave and mercy rules). */
   private releaseCloud(x: number, y: number): void {
     const C = CURSE.barrel;
-    const cloud = this.scene.add.circle(x, y - 24, C.cloud.startPx, C.cloud.color, C.cloud.alpha).setDepth(BARREL.depth + 0.2);
-    this.scene.tweens.add({ targets: cloud, scale: C.radius / C.cloud.startPx, alpha: 0, duration: C.cloud.ms, ease: 'Cubic.easeOut', onComplete: () => cloud.destroy() });
+    const cloud = flatDisc(this.scene, x, y - 24, C.cloud.startPx, C.cloud.color, C.cloud.alpha).setDepth(BARREL.depth + 0.2);
+    this.scene.tweens.add({ targets: cloud, scale: discScale(C.radius), alpha: 0, duration: C.cloud.ms, ease: 'Cubic.easeOut', onComplete: () => cloud.destroy() });
     this.effects.floatText(x, y + C.word.offsetY, pick(CURSED_BARREL_WORDS), C.word.color, C.word.size);
     const zone: CurseZonePayload = { x, y, radius: C.radius, curse: { kind: weightedPick<BadKind>(MYSTERY.badWeights), line: pick(CURSED_BARREL_LINES) } };
     bus.emit(Events.CurseZone, zone);

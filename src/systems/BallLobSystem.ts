@@ -2,6 +2,7 @@
 import { texArgs, texRef } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
+import { flatHoop, hoopScale } from './flatShapes';
 import { BALL_LOB as L } from '../config/animation';
 import { bus, Events, listen, type BallLandedPayload, type LobBallPayload } from '../core/events';
 
@@ -61,11 +62,8 @@ export class BallLobSystem {
     const base = L.sizePx / ball.frame.realWidth;
     ball.setScale(base);
     const shadow = scene.add.image(p.toX, p.toY, ...texArgs(Tex.Shadow)).setDepth(L.depth.marker).setAlpha(0);
-    const ring = scene.add
-      .circle(p.toX, p.toY, p.radius, L.ring.color, L.ring.fill)
-      .setStrokeStyle(3, L.ring.color, L.ring.stroke)
-      .setDepth(L.depth.marker)
-      .setAlpha(0);
+    const ringBase = hoopScale(p.radius); // a tinted atlas hoop (flatShapes.ts): scale 1 of the old circle = `ringBase` now
+    const ring = flatHoop(scene, p.toX, p.toY, p.radius, L.ring.color, 1).setDepth(L.depth.marker).setAlpha(0);
 
     // Up: toward the camera and out of sight, leaning a little toward its spot. Down: from above and to a random side.
     const apexX = p.x + (p.toX - p.x) * 0.25;
@@ -90,10 +88,10 @@ export class BallLobSystem {
             .setScale(base * (1 + (L.apexScale - 1) * u))
             .setAlpha(1 - Math.max(0, (u - 0.7) / 0.3))
             .setVisible(true);
-          this.marker(shadow, ring, 0);
+          this.marker(shadow, ring, ringBase, 0);
         } else if (t < fallStart) {
           ball.setVisible(false); // far up in the sky
-          this.marker(shadow, ring, 0);
+          this.marker(shadow, ring, ringBase, 0);
         } else {
           const f = (t - fallStart) / L.fallMs;
           const u = f * f; // gravity: slow at first, fast at the end
@@ -102,10 +100,10 @@ export class BallLobSystem {
             .setScale(base * (L.startScale + (1 - L.startScale) * u))
             .setAlpha(Math.min(1, f * 8))
             .setVisible(true);
-          this.marker(shadow, ring, f);
+          this.marker(shadow, ring, ringBase, f);
           if (!alarmed && f >= L.ring.soonAt) {
             alarmed = true; // the last moments: the ring turns red
-            ring.setFillStyle(L.ring.soonColor, L.ring.fill).setStrokeStyle(3, L.ring.soonColor, L.ring.stroke);
+            ring.setTint(L.ring.soonColor);
           }
         }
       },
@@ -122,11 +120,11 @@ export class BallLobSystem {
   }
 
   /** The marker on the floor: `f` is how far the fall is (0 = not started, 1 = landing). The shadow grows and the ring (already the real reach at scale 1) grows to its full size. */
-  private marker(shadow: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Arc, f: number): void {
+  private marker(shadow: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Image, ringBase: number, f: number): void {
     const M = L.marker;
     const s = M.startShare + (1 - M.startShare) * f;
     shadow.setDisplaySize(L.sizePx * 2 * M.shadowW * s, L.sizePx * 2 * M.shadowH * s).setAlpha(M.startAlpha + (M.endAlpha - M.startAlpha) * f);
-    ring.setScale(0.6 + 0.4 * f).setAlpha(f === 0 ? 0.25 : 0.35 + 0.65 * f);
+    ring.setScale(ringBase * (0.6 + 0.4 * f)).setAlpha((f === 0 ? 0.25 : 0.35 + 0.65 * f) * L.ring.stroke);
   }
 
   private land(p: LobBallPayload, ball: Phaser.GameObjects.Image, shadow: Phaser.GameObjects.Image, base: number, side: number): void {
@@ -134,8 +132,8 @@ export class BallLobSystem {
     ball.setPosition(p.toX, p.toY).setScale(base).setAlpha(1).setVisible(true);
     this.dust.explode(L.dust.count, p.toX, p.toY);
     this.fuzz.explode(L.fuzz.count, p.toX, p.toY);
-    const pop = scene.add.circle(p.toX, p.toY, 10, L.pop.color, 0.2).setStrokeStyle(4, L.pop.color, 1).setDepth(L.depth.dust + 1);
-    scene.tweens.add({ targets: pop, scale: p.radius / 10, alpha: 0, duration: L.pop.ringMs, ease: 'Cubic.easeOut', onComplete: () => pop.destroy() });
+    const pop = flatHoop(scene, p.toX, p.toY, 10, L.pop.color, 1).setDepth(L.depth.dust + 1);
+    scene.tweens.add({ targets: pop, scale: hoopScale(p.radius), alpha: 0, duration: L.pop.ringMs, ease: 'Cubic.easeOut', onComplete: () => pop.destroy() });
 
     const landed: BallLandedPayload = { x: p.toX, y: p.toY, radius: p.radius, damage: p.damage, curse: p.curse };
     bus.emit(Events.BallLanded, landed);

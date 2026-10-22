@@ -100,6 +100,8 @@ export const Tex = {
   FxHoop: 'fx_hoop',
   FxCarpetPad: 'fx_carpet_pad',
   FxPuff: 'fx_puff',
+  FlagPole: 'flag_pole', // v201 the surrender flag as two pictures (art/flag.ts)
+  FlagCloth: 'flag_cloth',
   FxDrop: 'fx_drop',
   Star: 'star',
   Leaf: 'leaf',

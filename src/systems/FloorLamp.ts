@@ -6,6 +6,7 @@ import { DAY_NIGHT } from '../config/dayNight';
 import { COLORS } from '../config/style';
 import type { Box } from '../core/reach';
 import type { Obstacle, Obstacles } from './props/Obstacles';
+import { discScale, flatDisc } from './flatShapes';
 
 const L = DAY_NIGHT.lamp;
 
@@ -19,7 +20,10 @@ export class FloorLamp {
   private readonly shadow: Phaser.GameObjects.Image;
   private readonly stem: Phaser.GameObjects.Image;
   private readonly head: Phaser.GameObjects.Image;
-  private readonly lens: Phaser.GameObjects.Ellipse;
+  /** The glass: a flat disc picture stretched to the lens ellipse (`lensK` = its scale at lamp scale 1). */
+  private readonly lens: Phaser.GameObjects.Image;
+  private readonly lensKx = discScale(L.lens.w / 2);
+  private readonly lensKy = discScale(L.lens.h / 2);
   private readonly base: Phaser.GameObjects.Image;
   private readonly glow: Phaser.GameObjects.Image | null;
   private out = 0;
@@ -48,7 +52,7 @@ export class FloorLamp {
     this.base = scene.add.image(x, y, ...texArgs(Tex.LampBase)).setOrigin(0.5, L.base.originY).setDisplaySize(L.base.w, L.base.h).setDepth(d + 0.08);
     this.stem = scene.add.image(x, y, ...texArgs(Tex.LampStem)).setOrigin(0.5, 1).setDepth(d + 0.1);
     this.head = scene.add.image(x, y, ...texArgs(Tex.LampHead)).setOrigin(0.5, L.head.originY).setDepth(d + 0.2);
-    this.lens = scene.add.ellipse(x, y, L.lens.w, L.lens.h, L.lens.color).setDepth(d + 0.25);
+    this.lens = flatDisc(scene, x, y, 1, L.lens.color, 1).setScale(this.lensKx, this.lensKy).setDepth(d + 0.25);
     this.glow = this.glowKey ? scene.add.image(x, y - 8, ...texArgs(this.glowKey)).setDisplaySize(L.glowRadius * 2, L.glowRadius * 2).setDepth(L.glowDepth).setAlpha(0) : null;
     this.place(); // starts hidden
   }
@@ -122,8 +126,8 @@ export class FloorLamp {
     const side = Math.random() < 0.5 ? -1 : 1;
 
     // The bulb pops: a bright flash and a soft glow that swells and dies.
-    const flash = scene.add.circle(gx, gy, 9, S.flashColor, 0.95).setDepth(S.depthAir);
-    scene.tweens.add({ targets: flash, scale: 3.4, alpha: 0, duration: S.flashMs, ease: 'Quad.easeOut', onComplete: () => flash.destroy() });
+    const flash = flatDisc(scene, gx, gy, 9, S.flashColor, 0.95).setDepth(S.depthAir);
+    scene.tweens.add({ targets: flash, scale: 3.4 * discScale(9), alpha: 0, duration: S.flashMs, ease: 'Quad.easeOut', onComplete: () => flash.destroy() });
     if (this.glowKey) {
       const pop = scene.add.image(gx, gy, ...texArgs(this.glowKey)).setDisplaySize(L.glowRadius, L.glowRadius).setDepth(L.glowDepth).setAlpha(0.9);
       const w = pop.displayWidth;
@@ -243,7 +247,7 @@ export class FloorLamp {
     this.base.setVisible(riseT > 0).setScale((L.base.w / 36) * (0.5 + 0.5 * Math.min(1, riseT * 2)), (L.base.h / 20) * (0.5 + 0.5 * Math.min(1, riseT * 2)));
     const rattle = this.rattleMs > 0 ? Math.sin(this.rattleMs / 28) * L.rattle.px * (this.rattleMs / L.rattle.ms) : 0; // a hit shakes the lantern sideways
     this.head.setVisible(riseT > 0).setPosition(this.x + rattle, this.y - up).setDisplaySize(L.head.w * scale, L.head.h * scale);
-    this.lens.setPosition(this.x + rattle, this.y - up - (L.head.originY - L.head.glassY) * L.head.h * scale).setScale(scale).setVisible(riseT > 0);
+    this.lens.setPosition(this.x + rattle, this.y - up - (L.head.originY - L.head.glassY) * L.head.h * scale).setScale(scale * this.lensKx, scale * this.lensKy).setVisible(riseT > 0);
     if (!visible) {
       this.lens.setAlpha(0);
       this.glow?.setAlpha(0);
@@ -255,13 +259,14 @@ export class FloorLamp {
     const P = L.puff;
     for (let i = 0; i < P.count; i++) {
       const a = (i / P.count) * Math.PI * 2 + Math.random() * 0.6;
-      const dust = this.scene.add.circle(this.x, this.y, Phaser.Math.Between(3, 6), P.color, 0.7).setDepth(L.floorDepth + 0.3);
+      const dustR = Phaser.Math.Between(3, 6);
+      const dust = flatDisc(this.scene, this.x, this.y, dustR, P.color, 0.7).setDepth(L.floorDepth + 0.3);
       this.scene.tweens.add({
         targets: dust,
         x: this.x + Math.cos(a) * P.spreadPx,
         y: this.y + Math.sin(a) * P.spreadPx * 0.7 - 6,
         alpha: 0,
-        scale: 1.8,
+        scale: 1.8 * discScale(dustR),
         duration: P.ms,
         ease: 'Sine.easeOut',
         onComplete: () => dust.destroy(),

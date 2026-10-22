@@ -25,10 +25,11 @@ Phaser scenes. GameScene only WIRES systems together; UIScene is the HUD; Pause 
 Things in the arena: Varu (Player), the Enemy base, Pickup. `enemies/` = one file per cat, `bosses/` = Boss state machine + one file per boss.
 
 - Actor.ts - Shared base for Varu and every cat: hp, shadow, hit flash, knockback. Exports: ActorOptions, Actor
-- Enemy.ts (~600 lines) - Base class of every cat and boss: chase / steer / knockback / death. Subclasses override `think()`. Exports: EnemyContext, SlipOptions, Enemy
+- Enemy.ts (~650 lines) - Base class of every cat and boss: chase / steer / knockback / death. Subclasses override `think()`. Exports: EnemyContext, SlipOptions, Enemy
 - MilkTrail.ts (~250 lines) - The milk trail: a white smeared ribbon on the ground behind Varu (from his recent path) plus splotches beside it, in fixed-size buffers. Exports: MilkTrail
 - Pickup.ts - A collectible on the floor: item sprite on a glowing ring, bobs, then expires. Exports: Pickup
 - Player.ts (~750 lines) - Varu: movement, aim, damage, belt visuals, walk / smoke-break / energy back flip animation, power-up multipliers. Exports: Player
+- PlayerDrops.ts - Varu's rust flakes and broken hearts: two particle emitters (one burst of one particle per drop) instead of an image plus four or five tweens per drop. Exports: PlayerDrops
 
 ## systems/
 Game rules, one system per concern (belt, waves, score, projectiles, pickups, effects, audio, jokes). They talk through the event bus.
@@ -47,7 +48,7 @@ Game rules, one system per concern (belt, waves, score, projectiles, pickups, ef
 - DebugCheats.ts (~400 lines) - Dev-only cheats behind the debug card and its keys: spawn cats / bosses (also at the cursor), waves, speed, health, pickups, bad luck, fan throws. Exports: DebugSources, DebugCheats
 - Effects.ts (~350 lines) - The juice: screen shake, particles, floating words (listens to the bus). Exports: Effects
 - FanThrowSystem.ts (~550 lines) - The fans (and the bomber cat) throw something into the arena now and then: a gift (a normal pickup) or a bad item (a petard with a burning fuse, or a cursed item that curses Varu if he stands in its ring). Decides WHEN, flies the item and lands it. Exports: FanThrowSources, FanThrowSystem
-- FloorLamp.ts (~250 lines) - One retractable street lamp: by day it is gone, at night a pole grows out of the floor with the lantern on top, dust puffs and the light comes on. Exports: FloorLamp
+- FloorLamp.ts (~300 lines) - One retractable street lamp: by day it is gone, at night a pole grows out of the floor with the lantern on top, dust puffs and the light comes on. Exports: FloorLamp
 - Fog.ts - Fog weather: some waves start in a mist. Cats far from Varu fade out (they walk out of the fog at him) and a soft sheet covers the arena and the screen edges go thick and white (you see less at the sides). Exports: Fog
 - HitStop.ts - Tiny physics freeze on strong hits (config/hitstop.ts). Exports: HitStop
 - JokeSystem.ts - Decides WHEN a joke is said (cooldowns, chances, streaks) and emits Events.Joke. Exports: JokeSystem
@@ -67,7 +68,7 @@ Game rules, one system per concern (belt, waves, score, projectiles, pickups, ef
 - WaveSystem.ts - Wave loop: countdown -> cats trickle in -> all dead -> next wave (campaign and endless). Exports: WaveSystem
 - Weather.ts - Rolls the weather once per wave (fog, rain or clear, exclusive) and announces it with Events.WeatherChanged; Fog, Rain and the weather curses listen. Exports: Weather
 - WeatherCurses.ts - Wave-state curses: rain gives Rusty, fog gives Emo, Marți 13 gives a mild random curse; each is re-applied every ~25 s until the wave ends. Exports: WeatherCurses
-- flatShapes.ts - Flat round shapes (a filled disc, a thin ring) drawn as tinted atlas images, so they batch with the sprites around them instead of splitting the batch like `add.circle`. Exports: flatDisc, flatHoop
+- flatShapes.ts - Flat round shapes (a filled disc, a thin ring) drawn as tinted atlas images, so they batch with the sprites around them instead of splitting the batch like `add.circle`. Exports: flatDisc, flatHoop, hoopScale, discScale
 - pickupEffects.ts - What each pickup does when collected (one case per PickupKind); the question mark gambles on a good or a bad one. Exports: PickupContext, applyPickup, MysteryForce, mysteryDebug, announcePickup
 
 ## systems/belt/
@@ -188,7 +189,7 @@ NUMBERS ONLY (no magic numbers in code). `balance.ts` = all gameplay. Layout and
 - chatter.ts - Cat chatter numbers: how often a cat says something, how long its speech bubble stays, where it sits. The bubble's own look is `config/bubble.ts`. No Phaser. Exports: CHATTER
 - clock.ts - The game clock (core/clock.ts) counts only the time the game is really running. Exports: CLOCK
 - crowd.ts - Numbers for the stand crowd's life (world/StandsCrowd.ts): idle sway, moods, La Ola, arms-up frames, confetti, shouts. No Phaser. Exports: CrowdMood, MoodLook, MOOD_KEYS, ShoutKind, ThrowPick, ThrowSpot, CROWD
-- culling.ts - Numbers for doing less work off screen: the margin kept around the camera view for hiding the stands fans, and how rarely far-away walking cats think. Exports: CULL
+- culling.ts - Numbers for doing less work off screen: the margin kept around the camera view for hiding the stands fans and far cats, and how rarely far-away walking cats think. Exports: CULL
 - curses.ts - Bad luck (ghinion) numbers: the curse cooldown, the wave ramp, mercy, and which cat hit gives which curse. No Phaser. Exports: CURSE, CAT_HIT_CURSES, WEATHER_CURSE, MARTI_13, COSTLY
 - cutscene.ts - Cutscene numbers: cinema bars, dialogue box, typewriter, skip, camera, walking and emotes. No Phaser. Exports: CUTSCENE
 - dayNight.ts - Day-night numbers: the sky tint keyframes, how fast it changes, and the lamps that rise out of the floor and light up at night. No Phaser. Exports: DAY_NIGHT
@@ -286,6 +287,7 @@ One file per group of code-drawn art (Varu, cats, bosses, crows, items) + the sh
 - cats.ts (~450 lines) - Code-drawn cat sprites: normal (and the stands' fan, in any fur color), fat, ninja, kamikaze, flying, lucky, tennis, bomber (96x96, facing up). The tennis cat is layered: body, racket arm, racket. Exports: FanOutfit, FanLook, FanPose, drawCatFan, drawCatNormal, drawCatFat, drawCatNinja, drawCatKamikaze, FLYER_WING_PIVOT, drawWingRight, drawWingLeft, drawCatFlyingBody, drawCatFlying, drawCatLucky, TENNIS_SHOULDER, TENNIS_PAW, TENNIS_RACKET_HEAD, TENNIS_BALL_HAND, drawCatTennis, drawTennisArm, drawTennisRacket, BOMBER_SHOULDER, BOMBER_PAW, drawCatBomber, drawBomberArm
 - crows.ts - Code-drawn crow sprites (normal, gold, kamikaze looks; open / flap / fold wing poses) and the feather. Exports: CrowLook, CROW_NORMAL, CROW_GOLD, CROW_KAMIKAZE, CrowPose, POSE_OPEN, POSE_FLAP, POSE_FOLD, drawCrow, drawFeather
 - federer.ts - Code-drawn Pisica Federer (128x128, facing up): the body plus the loose layers FedererRig moves (racket arm, racket, tail, feet). Exports: FEDERER_SHOULDER, FEDERER_PAW, FEDERER_RACKET_HEAD, FEDERER_BALL_HAND, FEDERER_TAIL_ROOT, drawBossFederer, drawFedererArm, drawFedererRacket, drawFedererTail, drawFedererFootL, drawFedererFootR, drawBallMachine
+- flag.ts - The surrender flag's two pictures (pole, cloth), drawn once: the cat moves and tilts them instead of redrawing a Graphics every frame. Exports: FLAG_POLE_W, FLAG_POLE_H, FLAG_POLE_ORIGIN_Y, FLAG_CLOTH_W, FLAG_CLOTH_H, FLAG_CLOTH_ORIGIN_X, FLAG_CLOTH_ORIGIN_Y, drawFlagPole, drawFlagCloth
 - fx.ts (~300 lines) - Code-drawn floor and shield effects in the cartoon style (navy outline, shine, little sparkles): tear puddle, the big scream flood, bubble shields (queen, emo), magic floor ring, shockwave ring, carpet pad, dust puff and teardrop. Exports: FX_BUBBLE_R, FX_RING_R, FX_SHOCK_R, FX_DISC_R, FX_HOOP_R, FX_PUDDLE_W, FX_FLOOD_SIZE, FX_FLOOD_W, FX_PAD_R, FX_PUFF_R, drawFxPuddle, drawFxFlood, drawFxBubbleQueen, drawFxBubbleEmo, drawFxRing, drawFxDisc, drawFxHoop, drawFxShock, drawFxCarpetPad, drawFxPuff, drawFxDrop, drawFxDiamond, drawFxCarpetTile
 - items.ts (~850 lines) - Code-drawn projectiles (yarn, tennis ball, broken heart, thrown belt), pickup icons (crochete, the loose cigarettes and the vape (the crochete's other looks), lapte, the milk bottle (the lapte's second look), monster, the Red Bull can (the Monster's second look), golden belt, laser, mystery question mark, a 3D block letter; the roulette wheel (its second look); the bad snail, dumbbell, emo hood, rusty belt, big Varu and smoke break) and the fans' petard. Exports: drawYarn, drawTennis, drawFireball, drawBrokenHeart, drawBeltThrown, drawPickupCrochete, drawPickupCigarettes, drawPickupVape, drawPickupMilkBottle, drawPickupLapte, drawPickupMonster, drawPickupRedBull, drawPickupGoldenBelt, drawPickupLaser, drawPickupSnail, drawPickupDumbbell, drawPickupEmo, drawPickupRusty, drawPickupBig, drawPickupSmoke, drawPickupMystery, drawPickupRoulette, drawPetard
 - lamp.ts - Code-drawn parts of the retractable floor lamps (round foot, pole, lantern). Same toolkit and navy outline as the rest of the art. Seen from a little above like the scratching post and the bushes: every round part has a light top-left, a mid tone, a dark underside and a thin bounce light on the far edge, so it reads as a solid object and not as a sticker. Exports: drawLampBase, drawLampStem, drawLampHead
@@ -310,7 +312,7 @@ One file per group of code-drawn art (Varu, cats, bosses, crows, items) + the sh
 - QueenRig.ts (~450 lines) - Regina Pisicilor's moving parts (cape, feet, crown, scepter arm, glow, sparkles, dizzy stars) that follow her body and are posed by her attacks. Exports: QueenPose, QueenEase, QueenRig
 - RingDiamonds.ts - A row of small gold diamonds that circle a floor ring and flip like glints (the queen's spin ring and her hovering scepter). Visual only. Exports: RingDiamonds
 - SmoothOrbit.ts - Smooth circling for ranged bosses: keeps a distance from Varu with an eased push in or out, a lagging velocity, direction flips and a wall push. Exports: OrbitTuning, SmoothOrbit
-- TearPuddles.ts (~200 lines) - The emo cat's tear puddles: the scream, the rain and his crying leave them on the floor, and the scream also floods the whole ring around him; Varu walks slower while he stands in water, it dries up. Each is a flat cartoon puddle picture that splashes when it lands, wobbles and ripples. Visual + a speed factor on Varu. Exports: TearPuddles
+- TearPuddles.ts (~250 lines) - The emo cat's tear puddles: the scream, the rain and his crying leave them on the floor, and the scream also floods the whole ring around him; Varu walks slower while he stands in water, it dries up. Each is a flat cartoon puddle picture that splashes when it lands, wobbles and ripples. Visual + a speed factor on Varu. Exports: TearPuddles
 
 ## entities/enemies/
 

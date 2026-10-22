@@ -9,6 +9,7 @@ import { clampToArena } from '../../core/arena';
 import { gameClock } from '../../core/clock';
 import type { Player } from '../Player';
 import { hyp } from '../../core/hyp';
+import { flatHoop, hoopScale } from '../../systems/flatShapes';
 
 const P = MAFIA.puddle;
 const F = MAFIA.flood;
@@ -101,8 +102,8 @@ export class TearPuddles {
 
   /** A foam ring leaves the middle of the flood and spreads to its edge. */
   private floodRipple(f: Flood): void {
-    const ring = this.scene.add.ellipse(f.x, f.y, f.radius * 0.5, f.radius * 0.5).setStrokeStyle(3, P.rippleColor, 0.85).setDepth(F.depth + 0.01);
-    this.scene.tweens.add({ targets: ring, scale: 3.6, alpha: 0, duration: F.rippleMs, ease: 'Sine.easeOut', onComplete: () => ring.destroy() });
+    const ring = flatHoop(this.scene, f.x, f.y, f.radius * 0.25, P.rippleColor, 0.85).setDepth(F.depth + 0.01);
+    this.scene.tweens.add({ targets: ring, scale: 3.6 * hoopScale(f.radius * 0.25), alpha: 0, duration: F.rippleMs, ease: 'Sine.easeOut', onComplete: () => ring.destroy() });
   }
 
   /** The water stops at the fence: show only the part of the picture that is inside the play area. */
@@ -153,9 +154,12 @@ export class TearPuddles {
 
   /** A ring of foam spreads over the puddle and fades, like a drop just fell in. */
   private ripple(p: Puddle): void {
-    const ring = this.scene.add.ellipse(p.x, p.y, P.radius * 0.7, P.radius * 0.7 * P.hitRatioY).setStrokeStyle(2.5, P.rippleColor, 0.9).setDepth(P.depth + 0.01);
+    // A hoop picture squashed to the puddle's flat ellipse (wider than tall): the two scales are tweened separately to keep that shape.
+    const sx = hoopScale(P.radius * 0.35);
+    const sy = sx * P.hitRatioY;
+    const ring = flatHoop(this.scene, p.x, p.y, P.radius * 0.35, P.rippleColor, 0.9).setScale(sx, sy).setDepth(P.depth + 0.01);
     this.scene.tweens.add({
-      targets: ring, scale: 2.4, alpha: 0, duration: P.rippleMs, ease: 'Sine.easeOut',
+      targets: ring, scaleX: 2.4 * sx, scaleY: 2.4 * sy, alpha: 0, duration: P.rippleMs, ease: 'Sine.easeOut',
       onComplete: () => ring.destroy(),
     });
   }

@@ -17,6 +17,7 @@ import { bus, Events, listen, type BeltFlightPayload, type BeltSweepPayload, typ
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { WaveSystem } from './WaveSystem';
+import { flatHoop, hoopScale } from './flatShapes';
 import { hyp } from '../core/hyp';
 import { snapshotInto } from '../core/snapshot';
 
@@ -63,7 +64,7 @@ interface Lying {
   x: number;
   y: number;
   item: Phaser.GameObjects.Image;
-  ring: Phaser.GameObjects.Arc;
+  ring: Phaser.GameObjects.Image;
   trip: PetardTrip;
   /** It was knocked back (or the run ended): its tweens must do nothing any more. */
   cancelled: boolean;
@@ -388,11 +389,8 @@ export class FanThrowSystem {
     const base = look.sizePx / Math.max(item.frame.realWidth, item.frame.realHeight);
     item.setScale(base * A.startScale);
     const shadow = scene.add.image(from.x, from.y, ...texArgs(Tex.Shadow)).setDepth(F.depth.marker).setAlpha(0);
-    const ring = scene.add
-      .circle(to.x, to.y, radius, look.color, ringStyle.fill)
-      .setStrokeStyle(3, look.color, ringStyle.stroke)
-      .setDepth(F.depth.marker)
-      .setAlpha(0);
+    const ringBase = hoopScale(radius); // the ring is a tinted atlas hoop (flatShapes.ts); scale 1 of the old circle = `ringBase` now
+    const ring = flatHoop(scene, to.x, to.y, radius, look.color, 1).setDepth(F.depth.marker).setAlpha(0);
     const spin = Math.random() < 0.5 ? -1 : 1;
     const flightMs = trip.returned ? F.swat.flightMs : F.flightMs; // a knocked-back petard comes back faster
 
@@ -415,7 +413,7 @@ export class FanThrowSystem {
           .setPosition(gx, gy)
           .setDisplaySize(look.sizePx * 2 * M.shadowW * grow, look.sizePx * 2 * M.shadowH * grow)
           .setAlpha(M.startAlpha + (M.endAlpha - M.startAlpha) * u);
-        ring.setScale(ringStart + (1 - ringStart) * u).setAlpha(0.25 + 0.75 * u);
+        ring.setScale(ringBase * (ringStart + (1 - ringStart) * u)).setAlpha((0.25 + 0.75 * u) * ringStyle.stroke);
       },
       onComplete: () => {
         shadow.destroy();
@@ -434,14 +432,14 @@ export class FanThrowSystem {
   /* ------------------------------------------------------------ the gift */
 
   /** The gift touches down: dust and a ring, and a real pickup takes its place (it pops in and expires like any other). */
-  private landGift(item: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Arc, to: Point, kind: PickupKind, color: number, tex: TexKey): void {
+  private landGift(item: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Image, to: Point, kind: PickupKind, color: number, tex: TexKey): void {
     item.destroy();
     ring.destroy();
     this.src.spawnPickup(kind, to.x, to.y, tex); // the same look it had in the air
     this.dust.explode(F.dust.count, to.x, to.y);
     const P = F.gift.pop;
-    const pop = this.scene.add.circle(to.x, to.y, P.fromPx, color, 0.2).setStrokeStyle(4, color, 1).setDepth(F.depth.dust + 1);
-    this.scene.tweens.add({ targets: pop, scale: P.toPx / P.fromPx, alpha: 0, duration: P.ringMs, ease: 'Cubic.easeOut', onComplete: () => pop.destroy() });
+    const pop = flatHoop(this.scene, to.x, to.y, P.fromPx, color, 1).setDepth(F.depth.dust + 1);
+    this.scene.tweens.add({ targets: pop, scale: hoopScale(P.toPx), alpha: 0, duration: P.ringMs, ease: 'Cubic.easeOut', onComplete: () => pop.destroy() });
     const landed: FanLandedPayload = { x: to.x, y: to.y, bad: false };
     bus.emit(Events.FanLanded, landed);
   }
@@ -449,7 +447,7 @@ export class FanThrowSystem {
   /* ------------------------------------------------------------ the curse drop */
 
   /** The item touches down: if Varu is still inside the ring he gets the curse, otherwise a word says he dodged it. The item then fades out. */
-  private landCurse(item: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Arc, to: Point, kind: BadKind): void {
+  private landCurse(item: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Image, to: Point, kind: BadKind): void {
     const C = F.curse;
     const p = this.src.player;
     this.dust.explode(F.dust.count, to.x, to.y);
@@ -464,7 +462,7 @@ export class FanThrowSystem {
   /* ------------------------------------------------------------ the petard */
 
   /** The petard hits the floor: it squashes, hops once and lies down hissing. The ring (the real blast reach) stays where it is. */
-  private landPetard(item: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Arc, to: Point, base: number, trip: PetardTrip): void {
+  private landPetard(item: Phaser.GameObjects.Image, ring: Phaser.GameObjects.Image, to: Point, base: number, trip: PetardTrip): void {
     const scene = this.scene;
     const P = F.petard;
     const lyingAngle = Math.random() * 360;
@@ -502,6 +500,7 @@ export class FanThrowSystem {
     const { item, ring } = lying;
     const P = F.petard;
     const R = P.ring;
+    const ringBase = hoopScale(P.radius);
     const rad = Phaser.Math.DegToRad(angleDeg);
     const tipX = to.x + Math.sin(rad) * P.spark.tipPx; // the picture faces up at angle 0: the tip is `tipPx` along its length
     const tipY = to.y - Math.cos(rad) * P.spark.tipPx;
@@ -528,13 +527,13 @@ export class FanThrowSystem {
           this.sparks.emitParticleAt(tipX, tipY, 1);
         }
 
-        ring.setScale(R.startScale + (1 - R.startScale) * Math.min(1, u * 2));
+        ring.setScale(ringBase * (R.startScale + (1 - R.startScale) * Math.min(1, u * 2)));
         if (!alarmed && u >= R.soonAt) {
           alarmed = true; // the last moments: the ring turns red
-          ring.setFillStyle(R.soonColor, R.fill).setStrokeStyle(3, R.soonColor, R.stroke);
+          ring.setTint(R.soonColor);
         }
         const blink = u >= R.soonAt && Math.floor(elapsed / R.blinkMs) % 2 === 0 ? 0.45 : 1;
-        ring.setAlpha((0.4 + 0.6 * u) * blink);
+        ring.setAlpha((0.4 + 0.6 * u) * blink * R.stroke);
       },
       onComplete: () => {
         if (lying.cancelled) return;

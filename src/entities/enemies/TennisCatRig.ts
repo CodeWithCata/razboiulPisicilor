@@ -6,6 +6,7 @@ import { Tex, type TexKey } from '../../assets/keys';
 import { ANIM } from '../../config/animation';
 import { TENNIS_POSE_MS as MS, TENNIS_POSES as POSE, TENNIS_RIG as RIG } from '../../config/tennisRig';
 import { PoseTween } from '../../core/poseTween';
+import { flatHoop, hoopScale } from '../../systems/flatShapes';
 
 /** Her layers are all drawn on the same 96x96 canvas as her body. */
 const TEX = 96;
@@ -104,8 +105,8 @@ export class TennisCatRig {
   private pop(): void {
     const H = RIG.hit;
     const { x, y } = this.head;
-    const ring = this.scene.add.circle(x, y, 6, H.color, 0.22).setStrokeStyle(3, H.color, 1).setDepth(44);
-    this.scene.tweens.add({ targets: ring, scale: H.ringPx / 6, alpha: 0, duration: H.ringMs, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+    const ring = flatHoop(this.scene, x, y, 6, H.color, 1).setDepth(44);
+    this.scene.tweens.add({ targets: ring, scale: hoopScale(H.ringPx), alpha: 0, duration: H.ringMs, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
     for (let i = 0; i < H.stars; i++) {
       const a = (i / H.stars) * Math.PI * 2 + Math.random() * 0.6;
       const reach = H.starReachPx * (0.6 + Math.random() * 0.6);

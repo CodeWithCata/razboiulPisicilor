@@ -7,6 +7,7 @@ import { FEDERER_RIG as RIG } from '../../config/animation';
 import { COLORS } from '../../config/style';
 import type { BossLook } from './BossViews';
 import { hyp } from '../../core/hyp';
+import { discScale, flatDisc, flatHoop, hoopScale } from '../../systems/flatShapes';
 import { snapshotInto } from '../../core/snapshot';
 
 /** Texture size and center of every Federer layer (they are all drawn on the same 128x128 canvas). */
@@ -72,7 +73,7 @@ export class FedererRig {
   private readonly arm: Phaser.GameObjects.Image;
   private readonly ball: Phaser.GameObjects.Image;
   private readonly parts: Phaser.GameObjects.Image[];
-  private readonly aura: Phaser.GameObjects.Arc;
+  private readonly aura: Phaser.GameObjects.Image;
   /** The towel of her towel break (v147), hung over her shoulders. */
   private readonly towel: Phaser.GameObjects.Rectangle;
   private readonly tmp = { x: 0, y: 0 };
@@ -107,7 +108,7 @@ export class FedererRig {
     this.arm = make(Tex.BossFedererArm, RIG.depth.arm).setOrigin(FEDERER_SHOULDER.x / TEX, FEDERER_SHOULDER.y / TEX);
     this.ball = make(Tex.Tennis, RIG.depth.ball);
     this.parts = [this.tail, this.footL, this.footR, this.racket, this.arm, this.ball];
-    this.aura = scene.add.circle(owner.x, owner.y, RIG.aura.sizePx / 2, RIG.aura.color, 0).setDepth(RIG.depth.aura).setVisible(false);
+    this.aura = flatDisc(scene, owner.x, owner.y, RIG.aura.sizePx / 2, RIG.aura.color, 0).setDepth(RIG.depth.aura).setVisible(false);
     this.towel = scene.add.rectangle(owner.x, owner.y, RIG.towel.widthPx, RIG.towel.heightPx, 0xffffff).setStrokeStyle(3, COLORS.navy).setDepth(RIG.depth.arm + 0.5).setVisible(false);
   }
 
@@ -272,9 +273,9 @@ export class FedererRig {
   pop(): void {
     const H = RIG.hit;
     const { x, y } = this.head;
-    const ring = this.scene.add.circle(x, y, 8, H.color, 0.22).setStrokeStyle(4, H.color, 1).setDepth(44);
+    const ring = flatHoop(this.scene, x, y, 8, H.color, 1).setDepth(44);
     this.scene.tweens.add({
-      targets: ring, scale: H.ringPx / 8, alpha: 0, duration: H.ringMs, ease: 'Cubic.easeOut',
+      targets: ring, scale: hoopScale(H.ringPx), alpha: 0, duration: H.ringMs, ease: 'Cubic.easeOut',
       onComplete: () => ring.destroy(),
     });
     for (let i = 0; i < H.stars; i++) {
@@ -390,7 +391,7 @@ export class FedererRig {
     if (this.fury || this.rage) {
       const base = this.rage ? RIG.rage.auraAlpha : RIG.aura.alpha;
       const alpha = base + Math.sin(this.clock * RIG.aura.pulseRate) * RIG.aura.pulseAlpha;
-      this.aura.setPosition(o.x, o.y).setFillStyle(this.rage ? RIG.rage.auraColor : RIG.aura.color, alpha).setVisible(o.visible);
+      this.aura.setPosition(o.x, o.y).setTint(this.rage ? RIG.rage.auraColor : RIG.aura.color).setAlpha(alpha).setVisible(o.visible);
     }
     if (this.towelOn) {
       const spot = this.world(0, RIG.towel.offsetY, this.tmp);
@@ -409,9 +410,9 @@ export class FedererRig {
     if (speed < T.minSpeed || this.trailIn > 0 || this.trailAlive >= T.maxAlive || !this.owner.visible) return;
     this.trailIn = T.everyMs;
     this.trailAlive += 1;
-    const puff = this.scene.add.circle(this.head.x, this.head.y, T.sizePx / 2, T.color, T.alpha).setDepth(RIG.depth.trail);
+    const puff = flatDisc(this.scene, this.head.x, this.head.y, T.sizePx / 2, T.color, T.alpha).setDepth(RIG.depth.trail);
     this.scene.tweens.add({
-      targets: puff, scale: 0.25, alpha: 0, duration: T.lifeMs, ease: 'Quad.easeOut',
+      targets: puff, scale: 0.25 * discScale(T.sizePx / 2), alpha: 0, duration: T.lifeMs, ease: 'Quad.easeOut',
       onComplete: () => {
         this.trailAlive -= 1;
         puff.destroy();

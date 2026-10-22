@@ -9,6 +9,7 @@ import type { ArenaQuery } from '../core/arena';
 import { bus, Events, type CrowImpactPayload, type ExplosionPayload } from '../core/events';
 import type { Enemy } from '../entities/Enemy';
 import { gameClock } from '../core/clock';
+import { flatHoop } from './flatShapes';
 
 /** Each crow has three wing poses: open (gliding), flap (wings raised) and fold (tucked for the dive and the landing). */
 interface CrowFrames {
@@ -29,6 +30,9 @@ const FEATHER_TINT: Record<CrowVariant, number[]> = {
   kamikaze: [0x3d3d52, 0x2e2e3d, 0xd93a3a],
   miss: [0x3d3d52, 0x2e2e3d, 0x6b6b8c],
 };
+
+/** How strong the red landing ring is at full warning (it fades in with `t`). */
+const CROW_RING_ALPHA = 0.55;
 
 /**
  * The Crow Rain power-up: for a few seconds, crows drop from the sky.
@@ -142,7 +146,7 @@ export class CrowRainSystem {
     const shadow = this.scene.add.image(x, y, ...texArgs(Tex.Shadow)).setDepth(6).setAlpha(0.4);
     const ring =
       radius > 0
-        ? this.scene.add.circle(x, y, radius, 0xff4d4d, 0.08).setStrokeStyle(3, 0xff4d4d, 0.55).setDepth(6).setAlpha(0)
+        ? flatHoop(this.scene, x, y, radius, 0xff4d4d, CROW_RING_ALPHA).setDepth(6).setAlpha(0)
         : null;
 
     // The crow swoops in from above and to one side, head first along its path.
@@ -186,7 +190,7 @@ export class CrowRainSystem {
 
         const s = 0.25 + 0.75 * t;
         shadow.setDisplaySize(size * 1.1 * s, size * 0.55 * s).setAlpha(0.35 + 0.5 * t);
-        ring?.setAlpha(t);
+        ring?.setAlpha(t * CROW_RING_ALPHA);
       },
       onComplete: () => {
         shadow.destroy();

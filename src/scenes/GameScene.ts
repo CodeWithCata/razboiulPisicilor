@@ -82,6 +82,8 @@ export class GameScene extends Phaser.Scene {
   private readonly catScratch: Phaser.GameObjects.GameObject[] = [];
   /** The camera view widened by `CULL.catsThink.marginPx` (refilled every frame) and a frame counter: far walking cats think every few frames (`Enemy.tickThrottled`). */
   private readonly catView = new Phaser.Geom.Rectangle();
+  /** The camera view widened by `CULL.catsDraw.marginPx`: a cat whose centre is outside is not drawn (`Enemy.cullDraw`). */
+  private readonly catDrawView = new Phaser.Geom.Rectangle();
   private catFrame = 0;
   private belt!: BeltSystem;
   private effects!: Effects;
@@ -392,12 +394,14 @@ export class GameScene extends Phaser.Scene {
     const seen = this.cameras.main.worldView;
     const pad = CULL.catsThink.marginPx;
     this.catView.setTo(seen.x - pad, seen.y - pad, seen.width + pad * 2, seen.height + pad * 2);
+    const drawPad = Math.min(CULL.catsDraw.marginPx, pad); // never wider than the think margin: a drawn cat has always just ticked
+    this.catDrawView.setTo(seen.x - drawPad, seen.y - drawPad, seen.width + drawPad * 2, seen.height + drawPad * 2);
     this.catFrame++;
     for (let i = 0; i < cats.length; i++) {
       const enemy = cats[i] as Enemy;
       if (!enemy.active) continue;
       if (this.debug?.frozen) enemy.setVelocity(0, 0); // dev: "Pisici înghețate"
-      else enemy.tickThrottled(now, dt, this.enemyContext, this.catFrame, this.catView);
+      else enemy.tickThrottled(now, dt, this.enemyContext, this.catFrame, this.catView, this.catDrawView);
     }
     cats.length = 0;
     this.keepOutOfWalls();

@@ -13,6 +13,10 @@ export class FatCat extends Enemy {
     return true; // a straight chase with nothing to time: it can think every few frames while far off screen
   }
 
+  protected override get cullsDraw(): boolean {
+    return true; // a plain sprite and its shadow, no rig: it can be hidden while far off camera
+  }
+
   protected think(_time: number, _delta: number, ctx: EnemyContext): void {
     this.chase(ctx, this.stats.speed);
   }

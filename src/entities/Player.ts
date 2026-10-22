@@ -8,6 +8,7 @@ import { bus, Events, type IdleHabitPayload, type PlayerHealthPayload, type Play
 import type { InputSource } from '../input/InputSource';
 import { Actor } from './Actor';
 import { MilkTrail } from './MilkTrail';
+import { PlayerDrops } from './PlayerDrops';
 import { gameClock } from '../core/clock';
 import { CIG_SMOKE, ENERGY_FLIP, ENERGY_TRAIL, EMO_FX, GOLD_BELT, IDLE_HABITS, MILK_FX, MILK_TRAIL, RUST_FX, SMOKE_BREAK, VARU_ANIM, type ZLook } from '../config/animation';
 import { setCircleHitbox } from '../core/sprite';
@@ -106,6 +107,8 @@ export class Player extends Actor {
   private readonly tipPoint = new Phaser.Math.Vector2();
   /** One scratch point for the event effects (exhale, golden flourish, rust flakes): each use fills it and reads it at once, so they can share it. */
   private readonly scratchPoint = new Phaser.Math.Vector2();
+  /** Rust flakes and broken hearts (two emitters). */
+  private readonly drops: PlayerDrops;
   /** False while the belt swings or flies: the belt in his fist is hidden then (BeltSystem sets it). */
   beltInHand = true;
   /** Extra turn (radians) while the belt spins him around (BeltSystem sets it). */
@@ -128,6 +131,7 @@ export class Player extends Actor {
       alpha: CIG_SMOKE.alpha,
       tint: [...CIG_SMOKE.tint],
     }).setDepth(22);
+    this.drops = new PlayerDrops(scene);
     this.ember = scene.add.image(x, y, ...texArgs(Tex.Particle)).setTint(SMOKE_BREAK.ember.tint).setDepth(23).setVisible(false);
     this.goo = scene.add.particles(0, 0, texRef(Tex.MilkDrop).key, { frame: texRef(Tex.MilkDrop).frame,
       emitting: false,
@@ -560,7 +564,7 @@ export class Player extends Actor {
     return out.set(this.x + lx * c - ly * s, this.y + lx * s + ly * c);
   }
 
-  /** One flake: comes off a random point on the strap, pops in, falls, tumbles, drifts a little and fades. Tweens are scene-owned. */
+  /** One flake: comes off a random point on the strap, then the emitter (`PlayerDrops`) pops it in, drops it, spins and fades it. */
   private dropRust(): void {
     const cfg = RUST_FX;
     const path = cfg.strapPath;
@@ -569,56 +573,16 @@ export class Player extends Actor {
     const [ax, ay] = path[seg]!;
     const [bx, by] = path[seg + 1]!;
     const at = this.strapPoint(ax + (bx - ax) * t, ay + (by - ay) * t, this.scratchPoint);
-    const x = at.x + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
-    const y = at.y + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
-    const size = Phaser.Math.Between(cfg.sizePx.min, cfg.sizePx.max);
-    const color = cfg.colors[Phaser.Math.Between(0, cfg.colors.length - 1)]!; // no array copy per flake
-    const flake = this.scene.add
-      .image(x, y, ...texArgs(Tex.Chip))
-      .setDisplaySize(size * cfg.popScale, size * cfg.popScale)
-      .setTint(color)
-      .setDepth(cfg.depth)
-      .setAlpha(cfg.alpha)
-      .setAngle(Phaser.Math.FloatBetween(0, 360));
-    const life = Phaser.Math.Between(cfg.lifeMs.min, cfg.lifeMs.max);
-    const drift = (Math.random() < 0.5 ? -1 : 1) * cfg.driftPx;
-    const fall = Phaser.Math.Between(cfg.fallPx.min, cfg.fallPx.max);
-    const spin = Phaser.Math.Between(cfg.spinDeg.min, cfg.spinDeg.max) * (Math.random() < 0.5 ? -1 : 1);
-    this.scene.tweens.add({ targets: flake, displayWidth: size, displayHeight: size, duration: life * 0.15, ease: 'Back.easeOut' });
-    this.scene.tweens.add({ targets: flake, y: y + fall, duration: life, ease: 'Quad.easeIn' });
-    this.scene.tweens.add({ targets: flake, x: x + drift, duration: life, ease: 'Sine.easeInOut' });
-    this.scene.tweens.add({ targets: flake, angle: flake.angle + spin, duration: life, ease: 'Linear' });
-    this.scene.tweens.add({
-      targets: flake,
-      alpha: 0,
-      duration: life,
-      delay: life * 0.5,
-      ease: 'Sine.easeIn',
-      onComplete: () => flake.destroy(),
-    });
+    this.drops.rust(at.x + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx), at.y + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx));
   }
 
-  /** One broken heart: pops up over his head, floats up, sways and fades. Tweens are scene-owned, so a restart cleans them up. */
+  /** One broken heart over his head: the emitter (`PlayerDrops`) pops it up, floats it, sways it and fades it. */
   private dropHeart(): void {
     const cfg = EMO_FX;
-    const x = this.x + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
-    const y = this.y + cfg.offsetY * this.sizeNow + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
-    const size = Phaser.Math.Between(cfg.sizePx.min, cfg.sizePx.max);
-    const heart = this.scene.add.image(x, y, ...texArgs(Tex.Heart)).setDisplaySize(size, size).setDepth(cfg.depth).setAlpha(cfg.alpha).setAngle(Phaser.Math.FloatBetween(cfg.tiltDeg.min, cfg.tiltDeg.max));
-    const full = heart.scaleX; // the scale that gives the displayed size
-    heart.setScale(full * 0.4);
-    const life = Phaser.Math.Between(cfg.lifeMs.min, cfg.lifeMs.max);
-    const sway = (Math.random() < 0.5 ? -1 : 1) * cfg.swayPx;
-    this.scene.tweens.add({ targets: heart, scale: full, duration: life * 0.2, ease: 'Back.easeOut' });
-    this.scene.tweens.add({ targets: heart, x: x + sway, duration: life, ease: 'Sine.easeInOut' });
-    this.scene.tweens.add({
-      targets: heart,
-      y: y - Phaser.Math.Between(cfg.riseY.min, cfg.riseY.max),
-      alpha: 0,
-      duration: life,
-      ease: 'Sine.easeIn',
-      onComplete: () => heart.destroy(),
-    });
+    this.drops.heart(
+      this.x + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx),
+      this.y + cfg.offsetY * this.sizeNow + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx),
+    );
   }
 
   /** One letter of the trail: appears at his feet, floats up, sways and fades. Tweens are scene-owned, so a restart cleans them up. */
@@ -719,6 +683,7 @@ export class Player extends Actor {
     this.smoke.destroy();
     this.ember.destroy();
     this.goo.destroy();
+    this.drops.destroy();
     this.gooBurst.destroy();
     this.milkLine.destroy();
     super.destroy(fromScene);

@@ -1,6 +1,8 @@
 /** @file Base class of every cat and boss: chase / steer / knockback / death. Subclasses override `think()`. */
 import Phaser from 'phaser';
-import type { TexKey } from '../assets/keys';
+import { texArgs } from '../assets/atlas';
+import { FLAG_CLOTH_ORIGIN_X, FLAG_CLOTH_ORIGIN_Y, FLAG_POLE_ORIGIN_Y } from '../assets/art/flag';
+import { Tex, type TexKey } from '../assets/keys';
 import { ANIM, FLINCH } from '../config/animation';
 import { ARENA_RULES } from '../config/arena';
 import { ENEMIES, LASER, SURRENDER, type EnemyStats, type EnemyType } from '../config/balance';
@@ -47,14 +49,19 @@ export interface SlipOptions {
 /** Where a cat that gave up is: waving the flag, walking to its exit, or fading out (see `Enemy.surrender`). */
 type SurrenderPhase = 'flag' | 'walk' | 'fade';
 
+interface FlagImages {
+  pole: Phaser.GameObjects.Image;
+  cloth: Phaser.GameObjects.Image;
+}
+
 interface GiveUp {
   phase: SurrenderPhase;
   /** Game time the current phase began. */
   phaseAt: number;
   /** Where it walks to. */
   exit: { x: number; y: number };
-  /** The little white flag. A scene object of its own (it is drawn upright in world space while the cat turns); destroyed with the cat. */
-  flag: Phaser.GameObjects.Graphics;
+  /** The little white flag: two pictures (pole, cloth), scene objects of their own (upright in world space while the cat turns); destroyed with the cat. */
+  flag: FlagImages;
 }
 
 /**
@@ -189,6 +196,14 @@ export abstract class Enemy extends Actor {
     return false;
   }
 
+  /**
+   * True for a cat that may be hidden while it is far off camera (`CULL.catsDraw`). Opt in per cat, and only for one whose body is a plain
+   * sprite: nothing may read its `visible`, and no rig may copy it to loose parts (wings, racket, arm...). Default is always drawn.
+   */
+  protected get cullsDraw(): boolean {
+    return false;
+  }
+
   /** Movement / attack logic. Runs every frame unless the cat is being knocked back. */
   protected abstract think(time: number, delta: number, ctx: EnemyContext): void;
 
@@ -197,15 +212,33 @@ export abstract class Enemy extends Actor {
    * ticks on its own slot of every `CULL.catsThink.everyFrames` frames, with the time it skipped added to `delta` (see `config/culling.ts`).
    * A cat that is flung, slipping, slowed, fading or caged always ticks, so nothing that needs a fresh step is ever skipped.
    */
-  tickThrottled(time: number, delta: number, ctx: EnemyContext, frame: number, view: Phaser.Geom.Rectangle): void {
+  tickThrottled(time: number, delta: number, ctx: EnemyContext, frame: number, view: Phaser.Geom.Rectangle, drawView: Phaser.Geom.Rectangle): void {
     const T = CULL.catsThink;
     if (T.enabled && this.thinksRarely && this.canSkipFrame() && !view.contains(this.x, this.y) && (frame + this.thinkSlot) % T.everyFrames !== 0) {
       this.thinkOwedMs += delta;
+      this.cullDraw(drawView);
       return;
     }
     const owed = this.thinkOwedMs;
     this.thinkOwedMs = 0;
     this.tick(time, delta + owed, ctx);
+    this.cullDraw(drawView);
+  }
+
+  /**
+   * Hide the body and shadow while the cat's centre is outside `view` (the camera view plus `CULL.catsDraw.marginPx`), show them again
+   * when it returns. Runs after the cat's own step, so a cat that comes back has just ticked: the shadow and alpha are refreshed here too,
+   * so the first drawn frame is right even if the step was skipped. A caged cat is left alone (`cage` hides it, `release` shows it).
+   */
+  private cullDraw(view: Phaser.Geom.Rectangle): void {
+    if (!CULL.catsDraw.enabled || !this.cullsDraw || !this.active || !this.body || this.cagedIn) return;
+    const out = !view.contains(this.x, this.y);
+    if (out === this.culled) return;
+    this.setCulled(out);
+    if (!out) {
+      this.syncShadow();
+      this.refreshAlpha();
+    }
   }
 
   private canSkipFrame(): boolean {
@@ -319,9 +352,9 @@ export abstract class Enemy extends Actor {
       phase: 'flag',
       phaseAt: gameClock.now,
       exit: { x: exit.x ?? this.x, y: exit.y ?? this.y },
-      flag: this.scene.add.graphics().setDepth(SURRENDER.flag.depth),
+      flag: this.makeFlag(),
     };
-    this.drawFlag(gameClock.now);
+    this.placeFlag(gameClock.now);
     const payload: CatSurrenderPayload = { x: this.x, y: this.y, type: this.enemyType };
     bus.emit(Events.CatSurrender, payload);
   }
@@ -345,13 +378,14 @@ export abstract class Enemy extends Actor {
       this.setVelocity(0, 0);
       const left = 1 - Phaser.Math.Clamp((now - give.phaseAt) / SURRENDER.fadeMs, 0, 1);
       this.fadeAlpha = left; // body and shadow take it (with the fog) in refreshAlpha, at the end of tick
-      give.flag.setAlpha(left);
+      give.flag.pole.setAlpha(left);
+      give.flag.cloth.setAlpha(left);
       if (left <= 0) {
         this.destroy(); // really gone (the flag goes with it): this is what lets the wave end
         return;
       }
     }
-    this.drawFlag(now);
+    this.placeFlag(now);
   }
 
   private goToPhase(give: GiveUp, phase: SurrenderPhase, now: number): void {
@@ -359,41 +393,35 @@ export abstract class Enemy extends Actor {
     give.phaseAt = now;
   }
 
-  /** Redraws the white flag above the cat's shoulder (code-drawn, no image): a pole that sways and a cloth whose free edge ripples. */
-  private drawFlag(now: number): void {
+  /** The flag's two pictures (see `assets/art/flag.ts`). The pole turns about its base, the cloth about the pole top; `placeFlag` moves them. */
+  private makeFlag(): FlagImages {
+    const D = SURRENDER.flag.depth;
+    const pole = this.scene.add.image(0, 0, ...texArgs(Tex.FlagPole)).setOrigin(0.5, FLAG_POLE_ORIGIN_Y).setDepth(D);
+    const cloth = this.scene.add.image(0, 0, ...texArgs(Tex.FlagCloth)).setOrigin(FLAG_CLOTH_ORIGIN_X, FLAG_CLOTH_ORIGIN_Y).setDepth(D);
+    return { pole, cloth };
+  }
+
+  /**
+   * Moves the white flag above the cat's shoulder (no redraw): the pole sways sideways (it turns about its base) and the cloth's free edge
+   * ripples up and down (the cloth turns about the pole top by the angle that lifts its far edge by `ripplePx`: a rigid tilt, a touch
+   * stiffer than the old redrawn quad, at most about 7 degrees).
+   */
+  private placeFlag(now: number): void {
     const give = this.giveUp;
     if (!give) return;
     const F = SURRENDER.flag;
     const wave = (now / 1000) * F.waveHz * Math.PI * 2;
     const baseX = this.x + F.anchorX * this.stats.size;
     const baseY = this.y + F.anchorY * this.stats.size;
-    const topX = baseX + Math.sin(wave) * F.swayPx;
-    const topY = baseY - F.poleLen;
+    const sway = Math.sin(wave) * F.swayPx;
     const ripple = Math.sin(wave + 1.3) * F.ripplePx;
-    // The cloth hangs to the right of the pole top; its free edge (x + clothW) moves up and down.
-    const x0 = topX;
-    const y0 = topY;
-    const x1 = topX + F.clothW;
-    const y1 = topY + ripple;
-    const x2 = x1;
-    const y2 = y1 + F.clothH;
-    const x3 = topX;
-    const y3 = topY + F.clothH;
-
-    const g = give.flag;
-    g.clear();
-    g.lineStyle(F.poleWidth + F.outlineWidth * 2, F.outlineColor, 1).lineBetween(baseX, baseY, topX, topY);
-    g.lineStyle(F.poleWidth, F.poleColor, 1).lineBetween(baseX, baseY, topX, topY);
-    g.fillStyle(F.clothColor, 1).fillTriangle(x0, y0, x1, y1, x2, y2).fillTriangle(x0, y0, x2, y2, x3, y3);
-    g.lineStyle(F.outlineWidth, F.outlineColor, 1)
-      .lineBetween(x0, y0, x1, y1)
-      .lineBetween(x1, y1, x2, y2)
-      .lineBetween(x2, y2, x3, y3)
-      .lineBetween(x3, y3, x0, y0);
+    give.flag.pole.setPosition(baseX, baseY).setRotation(Math.atan2(sway, F.poleLen));
+    give.flag.cloth.setPosition(baseX + sway, baseY - F.poleLen).setRotation(Math.atan2(ripple, F.clothW));
   }
 
   override destroy(fromScene?: boolean): void {
-    this.giveUp?.flag.destroy(); // the flag is a scene object of its own: it must not outlive the cat
+    this.giveUp?.flag.pole.destroy(); // the flag is two scene objects of their own: they must not outlive the cat
+    this.giveUp?.flag.cloth.destroy();
     super.destroy(fromScene);
   }
 
@@ -581,6 +609,7 @@ export abstract class Enemy extends Actor {
     this.popAt = 0;
     this.setVelocity(0, 0);
     this.setPosition(x, y);
+    this.setCulled(false); // the cage hides it itself; a cat culled a moment ago must not keep its shadow switched off
     this.disableBody(false, false);
     this.setVisible(false);
     this.setShadowAlpha(0);
