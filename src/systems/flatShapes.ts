@@ -19,6 +19,11 @@ export function flatHoop(scene: Phaser.Scene, x: number, y: number, radius: numb
   return flat(scene.add.image(x, y, ...texArgs(Tex.FxHoop)).setScale(radius / FX_HOOP_R), color, alpha);
 }
 
+/** A flat block of this size (px), centered on (x, y) unless the caller sets another origin: an edge or a fill of a ground warning, tinted one flat color. Resize it with `setDisplaySize`. */
+export function flatBar(scene: Phaser.Scene, x: number, y: number, w: number, h: number, color: number, alpha: number): Phaser.GameObjects.Image {
+  return flat(scene.add.image(x, y, ...texArgs(Tex.FxBar)).setDisplaySize(w, h), color, alpha);
+}
+
 /** The `scale` a flat hoop / disc has when its edge is `radius` px out. Code that scales a ring to a share `k` of its size sets `k * hoopScale(radius)`. */
 export function hoopScale(radius: number): number {
   return radius / FX_HOOP_R;

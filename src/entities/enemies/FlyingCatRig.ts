@@ -12,6 +12,8 @@ export class FlyingCatRig {
   private readonly left: Phaser.GameObjects.Image;
   private phase = Math.random() * Math.PI * 2; // so a flock does not flap in step
   private destroyed = false;
+  /** Hidden by draw culling (`setCulled`): a flag of its own, so the owner's `visible` is never the only switch. */
+  private culledOff = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -30,6 +32,15 @@ export class FlyingCatRig {
       if (this.destroyed) return;
       for (const wing of [this.right, this.left]) wing.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     });
+  }
+
+  /** Draw culling (called by `FlyingCat.onCullChange`): hide / show both wings now, with the body's current alpha, so a cat that comes back is whole on that same frame. */
+  setCulled(culled: boolean): void {
+    if (this.destroyed || culled === this.culledOff) return;
+    this.culledOff = culled;
+    const o = this.owner;
+    this.right.setVisible(!culled && o.visible).setAlpha(o.alpha);
+    this.left.setVisible(!culled && o.visible).setAlpha(o.alpha);
   }
 
   /** Call every frame after the cat has moved (from `preUpdate`). `delta` is in ms. */
@@ -56,7 +67,7 @@ export class FlyingCatRig {
       .setRotation(o.rotation + side * Phaser.Math.DegToRad(-beat * ANIM.wing.swingDeg))
       .setScale(o.scaleX * (ANIM.wing.foldX + (1 - ANIM.wing.foldX) * wide), o.scaleY)
       .setAlpha(o.alpha)
-      .setVisible(o.visible);
+      .setVisible(o.visible && !this.culledOff);
   }
 
   destroy(): void {

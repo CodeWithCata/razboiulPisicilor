@@ -30,6 +30,8 @@ export class BomberCatRig {
   private phase = 0;
   private moveAmt = 0;
   private destroyed = false;
+  /** Hidden by draw culling (`setCulled`): a flag of its own, applied after the placement (`visible` stays the owner's). */
+  private culledOff = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -48,6 +50,14 @@ export class BomberCatRig {
 
   get tiltDeg(): number {
     return this.tween.pose.tiltDeg;
+  }
+
+  /** Draw culling (called by `BomberCat.onCullChange`): hide / show the arm now, with the body's current alpha. It is still placed every frame while culled, so `paw` stays right. */
+  setCulled(culled: boolean): void {
+    if (this.destroyed || culled === this.culledOff) return;
+    this.culledOff = culled;
+    const o = this.owner;
+    this.arm.setVisible(!culled && o.visible).setAlpha(o.alpha);
   }
 
   // ---- the throw ----------------------------------------------------------------
@@ -114,7 +124,7 @@ export class BomberCatRig {
     const calm = 1 - Math.min(1, Math.abs(pose.armDeg) / 60);
     const armDeg = pose.armDeg + (Math.sin(this.clock * RIG.arm.idleRate) * RIG.arm.idleDeg + step * RIG.arm.walkDeg) * calm;
     const shoulder = this.world(BOMBER_SHOULDER.x - HALF, BOMBER_SHOULDER.y - HALF, this.tmp);
-    this.arm.setPosition(shoulder.x, shoulder.y).setRotation(o.rotation + toRad(armDeg)).setScale(o.scaleX, o.scaleY).setAlpha(o.alpha).setVisible(o.visible);
+    this.arm.setPosition(shoulder.x, shoulder.y).setRotation(o.rotation + toRad(armDeg)).setScale(o.scaleX, o.scaleY).setAlpha(o.alpha).setVisible(o.visible && !this.culledOff);
 
     // The paw: its rest spot turned around the shoulder on the texture, then moved into the world.
     const a = toRad(armDeg);

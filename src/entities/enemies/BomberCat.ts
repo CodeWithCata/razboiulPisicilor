@@ -7,6 +7,7 @@ import { BOMBER } from '../../config/bomber';
 import { FAN_THROW } from '../../config/fanThrow';
 import { gameClock } from '../../core/clock';
 import { bus, Events, type ThrowPetardPayload } from '../../core/events';
+import { CULL } from '../../config/culling';
 import { Enemy, type EnemyContext } from '../Enemy';
 import { BomberCatRig } from './BomberCatRig';
 import type { Player } from '../Player';
@@ -185,6 +186,14 @@ export class BomberCat extends Enemy {
   private faceTowards(x: number, y: number): void {
     const angle = Phaser.Math.Angle.Between(this.x, this.y, x, y);
     this.rotation = Phaser.Math.Angle.RotateTo(this.rotation, angle + Math.PI / 2, BOMBER.turnRate);
+  }
+
+  protected override get cullsDraw(): boolean {
+    return CULL.catsDraw.rigs; // body, shadow and the arm (`onCullChange`). The held petard is left alone on purpose: its `visible` means "she is holding it" (read in `preUpdate`)
+  }
+
+  protected override onCullChange(out: boolean): void {
+    this.rig.setCulled(out);
   }
 
   /** The arm follows her body after it has moved this frame; the held petard rides above her raised paw (upright) and throbs. */

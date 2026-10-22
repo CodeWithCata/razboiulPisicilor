@@ -7,6 +7,7 @@ import { TENNIS_POSE_MS as MS } from '../../config/tennisRig';
 import { gameClock } from '../../core/clock';
 import { bus, Events, type SpawnProjectilePayload } from '../../core/events';
 import { hasClearLine } from '../../core/steering';
+import { CULL } from '../../config/culling';
 import { Enemy, type EnemyContext } from '../Enemy';
 import type { Player } from '../Player';
 import type { Projectile } from '../../systems/ProjectileSystem';
@@ -288,6 +289,14 @@ export class TennisCat extends Enemy {
     if (this.phase !== 'windup') return;
     this.phase = 'move';
     this.rig.relax();
+  }
+
+  protected override get cullsDraw(): boolean {
+    return CULL.catsDraw.rigs; // body, shadow and the rig's racket, arm and ball (`onCullChange`); nothing reads her `visible`
+  }
+
+  protected override onCullChange(out: boolean): void {
+    this.rig.setCulled(out);
   }
 
   /** The loose parts follow her body after it has moved this frame (same trick as Federer's racket arm). */

@@ -38,6 +38,8 @@ export class TennisCatRig {
   private phase = 0;
   private moveAmt = 0;
   private destroyed = false;
+  /** Hidden by draw culling (`setCulled`): a flag of its own, applied after the placement below (`visible` stays the owner's). */
+  private culledOff = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -59,6 +61,21 @@ export class TennisCatRig {
 
   get tiltDeg(): number {
     return this.tween.pose.tiltDeg;
+  }
+
+  /**
+   * Draw culling (called by `TennisCat.onCullChange`): hide / show the racket, arm and ball now, with the body's current alpha. The parts are still
+   * placed every frame while culled (the racket head the pop uses stays right), only drawing is switched off.
+   */
+  setCulled(culled: boolean): void {
+    if (this.destroyed || culled === this.culledOff) return;
+    this.culledOff = culled;
+    const o = this.owner;
+    const on = !culled && o.visible;
+    this.arm.setVisible(on).setAlpha(o.alpha);
+    this.racket.setVisible(on).setAlpha(o.alpha);
+    const show = this.tween.pose.ballShow;
+    this.ball.setVisible(on && show > 0.02).setAlpha(o.alpha * Math.min(1, show * 3));
   }
 
   // ---- the serve ------------------------------------------------------------------
@@ -148,12 +165,13 @@ export class TennisCatRig {
     const step = Math.sin(this.phase) * this.moveAmt;
 
     const r = o.rotation;
+    const drawn = o.visible && !this.culledOff;
 
     // Racket arm: turns around her shoulder; the racket turns on its own around her paw (the wrist).
     const armDeg = pose.armDeg + Math.sin(this.clock * RIG.arm.idleRate) * RIG.arm.idleDeg + step * RIG.arm.walkDeg;
     const wristDeg = pose.wristDeg + Math.sin(this.clock * RIG.arm.wristIdleRate) * RIG.arm.wristIdleDeg;
     const shoulder = this.world(TENNIS_SHOULDER.x - HALF, TENNIS_SHOULDER.y - HALF, this.tmp);
-    placeLayer(this.arm, shoulder.x, shoulder.y, r + toRad(armDeg), o.scaleX, o.scaleY, o.alpha, o.visible);
+    placeLayer(this.arm, shoulder.x, shoulder.y, r + toRad(armDeg), o.scaleX, o.scaleY, o.alpha, drawn);
 
     // The paw and the racket head, worked out on the texture (turned around the shoulder, then around the paw), then moved into the world.
     const a = toRad(armDeg);
@@ -163,7 +181,7 @@ export class TennisCatRig {
     const pawX = TENNIS_SHOULDER.x - HALF + pawVx * Math.cos(a) - pawVy * Math.sin(a);
     const pawY = TENNIS_SHOULDER.y - HALF + pawVx * Math.sin(a) + pawVy * Math.cos(a);
     const paw = this.world(pawX, pawY, this.tmp);
-    placeLayer(this.racket, paw.x, paw.y, r + w, o.scaleX, o.scaleY, o.alpha, o.visible);
+    placeLayer(this.racket, paw.x, paw.y, r + w, o.scaleX, o.scaleY, o.alpha, drawn);
     const headVx = TENNIS_RACKET_HEAD.x - TENNIS_PAW.x;
     const headVy = TENNIS_RACKET_HEAD.y - TENNIS_PAW.y;
     this.world(pawX + headVx * Math.cos(w) - headVy * Math.sin(w), pawY + headVx * Math.sin(w) + headVy * Math.cos(w), this.head);
@@ -178,7 +196,7 @@ export class TennisCatRig {
       .setDisplaySize(size, size)
       .setAngle(pose.ballLift > 1 ? this.clock * RIG.ball.spinPerMs : 0)
       .setAlpha(o.alpha * Math.min(1, show * 3))
-      .setVisible(o.visible && show > 0.02);
+      .setVisible(drawn && show > 0.02);
   }
 
   // ---- cleanup --------------------------------------------------------------------

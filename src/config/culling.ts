@@ -18,5 +18,8 @@ export const CULL = {
    * walker's size is 50 px, so 120 px keeps a cat's edge, shadow and sway on screen until the whole picture is out.
    * `enabled: false` = every cat is drawn every frame, as before.
    */
-  catsDraw: { enabled: true, marginPx: 120 },
+  catsDraw: { enabled: true, marginPx: 120, rigs: true },
+  // `rigs` (v202): also hide the loose parts of the flying, tennis and bomber cats (wings, racket arm + ball, throwing arm) with their body. Their rigs keep placing the parts every
+  // frame and only switch drawing off (a flag of their own, never `visible`), so a cat that comes back is whole on that same frame. `rigs: false` = those three cats are always drawn
+  // (NormalCat / FatCat are still culled). Bosses are never culled: see `docs/PERFORMANCE.md` v202.
 } as const;

@@ -9,6 +9,7 @@ import type { BossLook } from './BossViews';
 import { RingDiamonds } from './RingDiamonds';
 import { hyp } from '../../core/hyp';
 import { snapshotInto } from '../../core/snapshot';
+import { flatDisc } from '../../systems/flatShapes';
 
 /** Texture size and center of every Queen layer (they are all drawn on the same 128x128 canvas). */
 const TEX = 128;
@@ -70,9 +71,9 @@ export class QueenRig {
   private readonly crown: Phaser.GameObjects.Image;
   private readonly scepter: Phaser.GameObjects.Image;
   private readonly parts: Phaser.GameObjects.Image[];
-  private readonly glowCrown: Phaser.GameObjects.Arc;
-  private readonly glowScepter: Phaser.GameObjects.Arc;
-  private readonly aura: Phaser.GameObjects.Arc;
+  private readonly glowCrown: Phaser.GameObjects.Image;
+  private readonly glowScepter: Phaser.GameObjects.Image;
+  private readonly aura: Phaser.GameObjects.Image;
   private readonly ring: Phaser.GameObjects.Image;
   private readonly shield: Phaser.GameObjects.Image;
   private readonly tmp = { x: 0, y: 0 };
@@ -111,10 +112,10 @@ export class QueenRig {
     this.scepter = make(Tex.BossQueenScepter, RIG.depth.scepter).setOrigin(QUEEN_SHOULDER.x / TEX, QUEEN_SHOULDER.y / TEX);
     this.parts = [this.cape, this.footL, this.footR, this.crown, this.scepter];
 
-    const glow = (): Phaser.GameObjects.Arc => scene.add.circle(owner.x, owner.y, RIG.glow.sizePx / 2, RIG.glow.gold, 0).setDepth(RIG.depth.glow);
+    const glow = (): Phaser.GameObjects.Image => flatDisc(scene, owner.x, owner.y, RIG.glow.sizePx / 2, RIG.glow.gold, 0).setDepth(RIG.depth.glow); // flat tinted atlas discs, like FedererRig's aura (a circle shape would split the draw batch)
     this.glowCrown = glow();
     this.glowScepter = glow();
-    this.aura = scene.add.circle(owner.x, owner.y, RIG.aura.sizePx / 2, RIG.aura.color, 0).setDepth(RIG.depth.aura).setVisible(false);
+    this.aura = flatDisc(scene, owner.x, owner.y, RIG.aura.sizePx / 2, RIG.aura.color, 0).setDepth(RIG.depth.aura).setVisible(false);
     this.ring = scene.add.image(owner.x, owner.y, ...texArgs(Tex.FxRing)).setAlpha(RIG.ring.alpha).setDepth(RIG.depth.aura + 1).setVisible(false);
     this.diamonds = new RingDiamonds(scene, RIG.ring.diamonds.count, RIG.ring.diamonds.h, RIG.depth.aura + 2);
     this.shield = scene.add
@@ -373,15 +374,15 @@ export class QueenRig {
     const alpha = level * RIG.glow.maxAlpha * (0.8 + 0.2 * Math.sin(this.clock * RIG.glow.pulseRate));
     const visible = o.visible && level > 0.01 && this.look !== 'side'; // the jewels are not where the loose layers think in profile
     const gem = this.crownGem(this.tmp);
-    this.glowCrown.setPosition(gem.x, gem.y).setFillStyle(color, alpha).setVisible(visible);
+    this.glowCrown.setPosition(gem.x, gem.y).setTint(color).setAlpha(alpha).setVisible(visible);
     const gem2 = this.scepterGem(this.tmp);
-    this.glowScepter.setPosition(gem2.x, gem2.y).setFillStyle(color, alpha).setVisible(visible && !this.scepterHidden);
+    this.glowScepter.setPosition(gem2.x, gem2.y).setTint(color).setAlpha(alpha).setVisible(visible && !this.scepterHidden);
   }
 
   private updateAura(o: Phaser.Physics.Arcade.Sprite): void {
     if (!this.fury) return;
     const alpha = RIG.aura.alpha + Math.sin(this.clock * RIG.aura.pulseRate) * RIG.aura.pulseAlpha;
-    this.aura.setPosition(o.x, o.y).setFillStyle(RIG.aura.color, alpha).setVisible(o.visible);
+    this.aura.setPosition(o.x, o.y).setTint(RIG.aura.color).setAlpha(alpha).setVisible(o.visible);
   }
 
   private updateDust(dt: number): void {

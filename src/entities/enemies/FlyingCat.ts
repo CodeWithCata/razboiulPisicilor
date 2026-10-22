@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { Tex } from '../../assets/keys';
 import { FLYER } from '../../config/balance';
 import { bus, Events, type SpawnProjectilePayload } from '../../core/events';
+import { CULL } from '../../config/culling';
 import { Enemy, type EnemyContext } from '../Enemy';
 import { FlyingCatRig } from './FlyingCatRig';
 import { gameClock } from '../../core/clock';
@@ -21,6 +22,14 @@ export class FlyingCat extends Enemy {
 
   override get flies(): boolean {
     return true;
+  }
+
+  protected override get cullsDraw(): boolean {
+    return CULL.catsDraw.rigs; // body + shadow + the two wings of its rig (`onCullChange`); nothing reads its `visible`
+  }
+
+  protected override onCullChange(out: boolean): void {
+    this.wings.setCulled(out);
   }
 
   protected override get facesVelocity(): boolean {

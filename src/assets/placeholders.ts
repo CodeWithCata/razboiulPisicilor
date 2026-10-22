@@ -6,7 +6,7 @@ import { drawBossMafia } from './art/bosses';
 import { drawEmoBack, drawEmoSide, drawFedererFront, drawFedererSide, drawQueenBack, drawQueenSide } from './art/views';
 import { drawBallMachine, drawBossFederer, drawFedererArm, drawFedererFootL, drawFedererFootR, drawFedererRacket, drawFedererTail } from './art/federer';
 import { FLAG_CLOTH_H, FLAG_CLOTH_W, FLAG_POLE_H, FLAG_POLE_W, drawFlagCloth, drawFlagPole } from './art/flag';
-import { FX_FLOOD_SIZE, drawFxBubbleEmo, drawFxBubbleQueen, drawFxCarpetPad, drawFxCarpetTile, drawFxDiamond, drawFxDisc, drawFxDrop, drawFxFlood, drawFxHoop, drawFxPuddle, drawFxPuff, drawFxRing, drawFxShock } from './art/fx';
+import { FX_BAR_PX, FX_FLOOD_SIZE, drawFxBubbleEmo, drawFxBubbleQueen, drawFxCarpetPad, drawFxCarpetTile, drawFxDiamond, drawFxDisc, drawFxDrop, drawFxFlood, drawFxHoop, drawFxPuddle, drawFxPuff, drawFxRing, drawFxShock } from './art/fx';
 import { drawBarrel, drawBarrelBroken, drawBarrelPuddle } from './art/barrel';
 import { CROW_GOLD, CROW_KAMIKAZE, CROW_NORMAL, POSE_FLAP, POSE_FOLD, POSE_OPEN, drawCrow, drawFeather } from './art/crows';
 import { drawBossQueen, drawQueenCape, drawQueenCrown, drawQueenFootL, drawQueenFootR, drawQueenScepter } from './art/queen';
@@ -18,7 +18,7 @@ import {
 import { drawLampBase, drawLampHead, drawLampStem } from './art/lamp';
 import { drawVaru, drawVaruBelt, drawVaruLegL, drawVaruLegR } from './art/varu';
 import { make, makeRepeating, poly } from './paint';
-import { flushPictures } from './atlas';
+import { flushPictures, queueDrawn } from './atlas';
 
 const NAVY = COLORS.navy;
 
@@ -150,6 +150,11 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.FlagPole, FLAG_POLE_W, FLAG_POLE_H, drawFlagPole);
   make(scene, Tex.FlagCloth, FLAG_CLOTH_W, FLAG_CLOTH_H, drawFlagCloth);
   make(scene, Tex.FxHoop, 256, 256, drawFxHoop);
+  // A solid block that is stretched a lot: its edge pixels are repeated 1 px into the atlas gap (the gap is transparent and the filter is linear, so without it a stretched frame fades at its edge).
+  queueDrawn(scene, Tex.FxBar, FX_BAR_PX, FX_BAR_PX, (ctx, x, y) => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x - 1, y - 1, FX_BAR_PX + 2, FX_BAR_PX + 2);
+  });
   make(scene, Tex.FxCarpetPad, 80, 80, drawFxCarpetPad);
   makeRepeating(scene, Tex.FxCarpetTile, 64, 64, drawFxCarpetTile);
   make(scene, Tex.FxPuff, 64, 64, drawFxPuff);

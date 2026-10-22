@@ -4,17 +4,16 @@ import { texRef } from '../assets/atlas';
 import { Tex } from '../assets/keys';
 import { EMO_FX, RUST_FX } from '../config/animation';
 
-/** The chip picture is 12 x 10 px and the heart 32 x 32 (see `assets/placeholders.ts`): a displayed size in px = scale * these. */
+/** The chip picture is 12 px wide (and 10 high) and the heart 32 x 32 (see `assets/placeholders.ts`): a displayed size in px = scale * these. */
 const CHIP_W = 12;
-const CHIP_H = 10;
 const HEART_PX = 32;
 
 const mid = (r: { readonly min: number; readonly max: number }): number => (r.min + r.max) / 2;
 
 /**
- * The two drop effects. `rust` / `heart` start ONE particle at a point; the emitter does the rest (fall, drift, spin, fade).
+ * The two drop effects. `rust` / `heart` start ONE particle at a point; the emitter does the rest (fall, drift, turn, fade).
  * Numbers come from `RUST_FX` / `EMO_FX`. A particle emitter cannot give each particle its own life-linked distance, so every particle
- * uses the middle of the config ranges for size, fall, rise and spin (life, tint, start angle and drift direction still vary).
+ * uses the middle of the config ranges for size, fall and rise (life, tint, turn and drift direction still vary; the flake no longer tumbles, it keeps one random turn).
  * The emitters are scene objects: a scene restart destroys them, and `destroy()` does it when Varu goes first.
  */
 export class PlayerDrops {
@@ -29,19 +28,19 @@ export class PlayerDrops {
     // Fall: y = fall * t^2 over the life (Quad.easeIn) means a constant acceleration of 2 * fall / life^2.
     const rustGravity = (2 * mid(R.fallPx)) / (rustLifeS * rustLifeS);
     const rustDrift = R.driftPx / rustLifeS;
+    // Only option names that other emitters in the repo already use (lifespan, speed + angle, gravityY, scale, rotate, alpha, tint).
+    // Sideways drift: a slow push in a random direction (a little up or down too, a few px). Pop: scale runs linearly from the pop size to the size.
     this.rustEmitter = scene.add
       .particles(0, 0, chip.key, {
         frame: chip.frame,
         emitting: false,
-        lifespan: R.lifeMs,
-        speedX: { min: -rustDrift, max: rustDrift },
+        lifespan: { min: R.lifeMs.min, max: R.lifeMs.max },
+        speed: { min: 0, max: rustDrift },
+        angle: { min: 0, max: 360 },
         gravityY: rustGravity,
-        // It pops in bigger and settles to its size early in its life (a quick ease-out).
-        scaleX: { start: (rustSize * R.popScale) / CHIP_W, end: rustSize / CHIP_W, ease: 'Expo.easeOut' },
-        scaleY: { start: (rustSize * R.popScale) / CHIP_H, end: rustSize / CHIP_H, ease: 'Expo.easeOut' },
-        rotate: { start: 0, end: mid(R.spinDeg) },
-        // Full for the first half, then fades (Quart.easeIn stays high until late).
-        alpha: { start: R.alpha, end: 0, ease: 'Quart.easeIn' },
+        scale: { start: (rustSize * R.popScale) / CHIP_W, end: rustSize / CHIP_W },
+        rotate: { min: 0, max: 360 },
+        alpha: { start: R.alpha, end: 0 },
         tint: [...R.colors],
       })
       .setDepth(R.depth);
@@ -54,12 +53,13 @@ export class PlayerDrops {
       .particles(0, 0, heart.key, {
         frame: heart.frame,
         emitting: false,
-        lifespan: E.lifeMs,
-        speedX: { min: -E.swayPx / heartLifeS, max: E.swayPx / heartLifeS },
+        lifespan: { min: E.lifeMs.min, max: E.lifeMs.max },
+        speed: { min: 0, max: E.swayPx / heartLifeS },
+        angle: { min: 0, max: 360 },
         gravityY: (-2 * mid(E.riseY)) / (heartLifeS * heartLifeS), // up, speeding up (Sine.easeIn is close to a quad)
-        scale: { start: heartScale * 0.4, end: heartScale, ease: 'Expo.easeOut' }, // pops from 40% to full early in its life
-        angle: { min: E.tiltDeg.min, max: E.tiltDeg.max },
-        alpha: { start: E.alpha, end: 0, ease: 'Sine.easeIn' },
+        scale: { start: heartScale * 0.4, end: heartScale }, // pops from 40% to full over its life
+        rotate: { min: E.tiltDeg.min, max: E.tiltDeg.max }, // a fixed tilt (the emission `angle` above is the push direction, not the picture's turn)
+        alpha: { start: E.alpha, end: 0 },
       })
       .setDepth(E.depth);
   }

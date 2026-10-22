@@ -239,7 +239,15 @@ export abstract class Enemy extends Actor {
       this.syncShadow();
       this.refreshAlpha();
     }
+    this.onCullChange(out);
   }
+
+  /**
+   * Called after the body was hidden (`out` true) or shown again (false) by draw culling, and by `cage`. A cat with loose parts (wings, arm,
+   * racket...) overrides it to hide / show them the same frame: its rig copies `visible` in `preUpdate`, which runs BEFORE `GameScene` culls,
+   * so without this the parts would be one frame late. The body's alpha and shadow are already fresh when it runs.
+   */
+  protected onCullChange(_out: boolean): void {}
 
   private canSkipFrame(): boolean {
     return this.giveUp === null && !this.cagedIn && !this.isKnockedBack && this.slipUntil === 0 && this.slowApplied === 1 && this.terrainSlow === 1 && this.fadeAlpha === 1;
@@ -610,6 +618,7 @@ export abstract class Enemy extends Actor {
     this.setVelocity(0, 0);
     this.setPosition(x, y);
     this.setCulled(false); // the cage hides it itself; a cat culled a moment ago must not keep its shadow switched off
+    this.onCullChange(false); // loose parts of a rig must not stay hidden by the cull flag
     this.disableBody(false, false);
     this.setVisible(false);
     this.setShadowAlpha(0);

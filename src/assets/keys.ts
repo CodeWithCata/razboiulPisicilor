@@ -98,6 +98,7 @@ export const Tex = {
   FxShock: 'fx_shock',
   FxDisc: 'fx_disc', // v200 flat disc + thin ring: tinted atlas images instead of `add.circle` shapes
   FxHoop: 'fx_hoop',
+  FxBar: 'fx_bar', // v202 a solid white block, stretched + tinted into the edges / fills of ground warnings (see FX_BAR_PX)
   FxCarpetPad: 'fx_carpet_pad',
   FxPuff: 'fx_puff',
   FlagPole: 'flag_pole', // v201 the surrender flag as two pictures (art/flag.ts)

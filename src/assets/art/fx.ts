@@ -9,6 +9,8 @@ export const FX_SHOCK_R = 120;
 /** The flat white disc (128 px square) and the thin ring (256 px square): the atlas stand-ins for a filled / outlined `add.circle`. Edge radius in texture px. */
 export const FX_DISC_R = 62;
 export const FX_HOOP_R = 126;
+/** Side (px) of the solid white block `Tex.FxBar`: stretch it with `setDisplaySize`. It is drawn by `placeholders.ts` (with its edge pixels repeated into the atlas gap, so a big stretch never fades at the edges). */
+export const FX_BAR_PX = 8;
 /** Width of the water of the puddle picture (texture px), without its dark lip: scale = wantedWidth / this. */
 export const FX_PUDDLE_W = 114;
 /** The scream flood picture: its square size and the width of its water (texture px), so code can scale it to a game radius: scale = 2 * radius / FX_FLOOD_W. */
