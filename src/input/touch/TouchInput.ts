@@ -36,6 +36,7 @@ export class TouchInput implements InputSource {
   attackHeld = false;
   spinPressed = false;
   throwPressed = false;
+  dodgePressed = false;
   /** True while the laser pointer is active: the right half of the screen then places the dot (TouchOverlay shows the zone). */
   laserAiming = false;
   /** True once the thumb has put the dot somewhere (the zone's hint goes away). */
@@ -58,6 +59,7 @@ export class TouchInput implements InputSource {
   private readonly buttonIds = new Map<number, TouchButtonId>();
   private spinQueued = false;
   private throwQueued = false;
+  private dodgeQueued = false;
 
   constructor(private readonly scene: Phaser.Scene) {
     const input = scene.input;
@@ -108,8 +110,10 @@ export class TouchInput implements InputSource {
     // "Pressed" is true for one frame only.
     this.spinPressed = this.spinQueued;
     this.throwPressed = this.throwQueued;
+    this.dodgePressed = this.dodgeQueued;
     this.spinQueued = false;
     this.throwQueued = false;
+    this.dodgeQueued = false;
   }
 
   /** The laser power-up starts or ends. A new laser starts without a placed dot. */
@@ -129,6 +133,7 @@ export class TouchInput implements InputSource {
     this.heldButtons.clear();
     this.spinQueued = false;
     this.throwQueued = false;
+    this.dodgeQueued = false;
   }
 
   /** Direction (unit) and strength (0..1, dead zone removed, full speed a bit before the ring) of a stick. Strength 0 = untouched or inside the dead zone. */
@@ -158,6 +163,7 @@ export class TouchInput implements InputSource {
       this.heldButtons.add(button);
       if (button === 'spin') this.press('spin');
       else if (button === 'throw') this.press('throw');
+      else if (button === 'roll') this.press('roll');
       else if (button === 'attack') buzz(TOUCH.haptics.pressMs); // held, not queued: attackHeld follows the finger
       else bus.emit(Events.PauseRequest);
       return;
@@ -204,9 +210,10 @@ export class TouchInput implements InputSource {
     this.laserPlaced = true;
   }
 
-  /** A spin or throw button was tapped: ask for the attack (BeltSystem remembers it a moment if it is not ready), buzz, tell the badge. */
+  /** A spin, throw or roll button was tapped: ask for the attack (BeltSystem remembers it a moment if it is not ready), buzz, tell the badge. */
   private press(id: TouchPressPayload['button']): void {
     if (id === 'spin') this.spinQueued = true;
+    else if (id === 'roll') this.dodgeQueued = true;
     else this.throwQueued = true;
     buzz(TOUCH.haptics.pressMs);
     const payload: TouchPressPayload = { button: id };

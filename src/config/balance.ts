@@ -370,7 +370,7 @@ export const WAVE_TIMING = {
 // Pickups, buffs, laser pointer, Crow Rain
 // ---------------------------------------------------------------------------
 
-export type PickupKind = 'crochete' | 'lapte' | 'monster' | 'goldenBelt' | 'laser' | 'crow' | 'mystery' | 'snail' | 'dumbbell' | 'emo' | 'rusty' | 'big' | 'smoke';
+export type PickupKind = 'crochete' | 'lapte' | 'monster' | 'goldenBelt' | 'laser' | 'umbrella' | 'scooter' | 'iceCream' | 'crow' | 'mystery' | 'snail' | 'dumbbell' | 'emo' | 'rusty' | 'big' | 'smoke';
 
 /** The BAD pickups: they only ever come out of the question mark (their spawn weight is 0), never lie on the floor by themselves. */
 export const BAD_PICKUPS = ['snail', 'dumbbell', 'emo', 'rusty', 'big', 'smoke'] as const;
@@ -382,7 +382,7 @@ export const isBadPickup = (kind: PickupKind): kind is BadKind => (BAD_PICKUPS a
 export type MysteryPrize = GoodPrize | BadKind;
 
 /** Timed effects. Crochete (instant heal), the crow (one-off event) and the question mark (turns into one of the others) are not buffs. The snail, dumbbell, emo, rusty belt and big Varu are timed BAD effects (`bad: true`); the smoke break is a bad one-off (Varu freezes, `SMOKE_FREEZE`). */
-export type BuffKind = 'lapte' | 'monster' | 'goldenBelt' | 'laser' | 'snail' | 'dumbbell' | 'emo' | 'rusty' | 'big';
+export type BuffKind = 'lapte' | 'monster' | 'goldenBelt' | 'laser' | 'umbrella' | 'scooter' | 'snail' | 'dumbbell' | 'emo' | 'rusty' | 'big';
 
 export interface BuffStats {
   durationMs: number;
@@ -402,6 +402,8 @@ export const BUFFS: Record<BuffKind, BuffStats> = {
   monster: { durationMs: 8000, damage: 2 },
   goldenBelt: { durationMs: 7000, damage: 2.5, range: 1.25 },
   laser: { durationMs: 6000 }, // cats chase the red dot, see LASER
+  umbrella: { durationMs: 8000 }, // blocks balls, shots and petards, see config/umbrella.ts
+  scooter: { durationMs: 5000, speed: 1.6 }, // Varu rides a scooter: faster, and cats that touch him are bumped away (config/scooter.ts)
   snail: { durationMs: 6000, speed: 0.55, bad: true }, // the snail: Varu crawls
   dumbbell: { durationMs: 6000, damage: 0.5, bad: true }, // the dumbbell: the belt feels heavy and hits for half
   emo: { durationMs: 7000, swingCooldown: 2, specialCooldown: 1.5, bad: true }, // emo: he can't be bothered, slow swings (300 -> 600 ms), slow spin and throw; hood up and broken hearts over his head
@@ -432,7 +434,7 @@ export const PICKUP_SPAWN = {
   goldenBeltFirstMs: 12000,
   goldenBeltEveryMs: 25000,
   /** Higher = more common. */
-  weights: { crochete: 3, lapte: 2, monster: 4, goldenBelt: 5, laser: 1.5, crow: 1.5, mystery: 2, snail: 0, dumbbell: 0, emo: 0, rusty: 0, big: 0, smoke: 0 } satisfies Record<PickupKind, number>, // the bad ones never spawn alone: only the question mark gives them
+  weights: { crochete: 3, lapte: 2, monster: 4, goldenBelt: 5, laser: 1.5, umbrella: 2.5, scooter: 2, iceCream: 2, crow: 1.5, mystery: 2, snail: 0, dumbbell: 0, emo: 0, rusty: 0, big: 0, smoke: 0 } satisfies Record<PickupKind, number>, // the bad ones never spawn alone: only the question mark gives them
   lowHpThreshold: 0.4, // below this HP fraction...
   lowHpHealBoost: 3, // ...crochete is this many times more likely
 } as const;
@@ -444,7 +446,7 @@ export const MYSTERY = {
   /** Chance (0..1) that the prize is a BAD one (the snail, dumbbell, emo, rusty belt, big Varu or the smoke break). 0 = never, 1 = always. */
   badChance: 0.4,
   /** When the prize is good: higher = more likely. Equal = every good prize is as likely as the others. */
-  goodWeights: { crochete: 1, lapte: 1, monster: 1, goldenBelt: 1, laser: 1, crow: 1 } satisfies Record<GoodPrize, number>,
+  goodWeights: { crochete: 1, lapte: 1, monster: 1, goldenBelt: 1, laser: 1, umbrella: 1, scooter: 1, iceCream: 1, crow: 1 } satisfies Record<GoodPrize, number>,
   /** When the prize is bad: which one. */
   badWeights: { snail: 1, dumbbell: 1, emo: 1, rusty: 1, big: 1, smoke: 1 } satisfies Record<BadKind, number>,
 } as const;

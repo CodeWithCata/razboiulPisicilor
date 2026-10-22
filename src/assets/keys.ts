@@ -61,6 +61,13 @@ export const Tex = {
   PickupRedBull: 'pickup_redbull', // the second look of the Monster pickup
   PickupGoldenBelt: 'pickup_golden_belt',
   PickupLaser: 'pickup_laser',
+  PickupUmbrella: 'pickup_umbrella',
+  UmbrellaCanopy: 'umbrella_canopy', // the open umbrella seen from above, held over Varu while the buff runs
+  DodgeIcon: 'dodge_icon', // Varu rolling over, on the dodge badge
+  PickupScooter: 'pickup_scooter',
+  ScooterBody: 'scooter_body', // the scooter seen from above, under Varu while the buff runs
+  PickupIceCream: 'pickup_ice_cream',
+  IceBlock: 'ice_block', // the ice block drawn over a cat frozen by the ice cream
   PickupMystery: 'pickup_mystery',
   PickupRoulette: 'pickup_roulette', // the second look of the question mark
   PickupSnail: 'pickup_snail',

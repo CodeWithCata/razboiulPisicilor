@@ -548,7 +548,7 @@ export class FanThrowSystem {
   /** Goes off: the usual blast event (it hurts Varu if he is inside, breaks barrels, shakes the screen) and every cat in the ring takes a hit. */
   private explode(at: Point, trip: PetardTrip): void {
     const P = F.petard;
-    const blast: ExplosionPayload = { x: at.x, y: at.y, radius: P.radius, damage: P.damage, shockwave: true, fur: false };
+    const blast: ExplosionPayload = { x: at.x, y: at.y, radius: P.radius, damage: P.damage, shockwave: true, fur: false, source: 'petard' };
     bus.emit(Events.Explosion, blast);
     for (const child of this.src.enemies.getChildren().slice()) {
       const enemy = child as Enemy;

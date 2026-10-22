@@ -64,12 +64,13 @@ export const TOUCH = {
   /**
    * Round buttons. Attack and pause are drawn by TouchOverlay. Spin and throw are drawn by ui/BeltBadges.ts at these spots
    * (it scales its badge to `r`). They sit under the right thumb and never cover the middle of the screen.
-   * Attack is the biggest, at the thumb's natural rest spot; spin sits above it and throw to its left.
+   * Attack is the biggest, at the thumb's natural rest spot; spin sits above it and throw to its left; the dodge roll sits above throw.
    */
   buttons: {
     attack: { get x() { return shiftRight(1150); }, get y() { return shiftDown(596); }, r: 70 },
     spin: { get x() { return shiftRight(1190); }, get y() { return shiftDown(436); }, r: 52 },
     throw: { get x() { return shiftRight(992); }, get y() { return shiftDown(548); }, r: 48 },
+    roll: { get x() { return shiftRight(1010); }, get y() { return shiftDown(412); }, r: 48 },
     pause: { get x() { return shiftRight(1226); }, y: 132, r: 36 },
   },
   /** A finger is fat: buttons also react this many pixels outside their circle. */

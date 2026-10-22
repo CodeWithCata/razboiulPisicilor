@@ -79,7 +79,7 @@ export class Tutorial {
     }
 
     // The steps are done by doing them.
-    const steps: ReadonlyArray<readonly [StepId, string]> = [['swing', Events.BeltSwing], ['spin', Events.BeltSpin], ['throw', Events.BeltThrow]];
+    const steps: ReadonlyArray<readonly [StepId, string]> = [['swing', Events.BeltSwing], ['spin', Events.BeltSpin], ['throw', Events.BeltThrow], ['dodge', Events.DodgeRoll]];
     for (const [id, event] of steps) this.offs.push(listen(event, () => this.did(id)));
     if (touch) {
       const onTouch = (p: Phaser.Input.Pointer): void => {

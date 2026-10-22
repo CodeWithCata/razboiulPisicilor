@@ -125,6 +125,12 @@ export class AudioSystem {
     sound(Events.ProjectileDeflected, 'deflect');
     sound(Events.TennisReturn, 'deflect', { pitch: 0.8 });
     sound(Events.ProjectileBlocked, 'bonk');
+    sound(Events.RainbowDrop, 'pickup', { pitch: 1.5, gain: 0.7 }); // a bright chime per drop
+    sound(Events.DodgeLaunch, 'swing', { pitch: 0.7, gain: 0.7 }); // a low whoosh
+    sound(Events.DodgeSave, 'deflect', { pitch: 1.6, gain: 0.7 });
+    sound(Events.ScooterBump, 'bonk', { pitch: 1.3, gain: 0.8 }); // a light bonk per cat shoved
+    sound(Events.IceBlast, 'deflect', { pitch: 1.9, gain: 0.9 }); // a bright icy ping
+    sound(Events.UmbrellaBlock, 'deflect', { pitch: 1.4, gain: 0.8 }); // a taut "tok" on the canopy
     sound(Events.BackflipLand, 'bonk', { pitch: 0.7 });
     sound(Events.BossStunned, 'stun');
     sound(Events.BossSpawned, 'bossIntro');

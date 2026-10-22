@@ -32,7 +32,7 @@ export class PowerUpSystem {
     return this.endsAt.has('laser') ? this.lurePoint : null;
   }
 
-  /** How many GOOD buffs are active right now (milk, Monster, golden belt, laser). The bad ones do not count. Greed (config/curses.ts) reads it. */
+  /** How many GOOD buffs are active right now (milk, Monster, golden belt, laser, umbrella, scooter). The bad ones do not count. Greed (config/curses.ts) reads it. */
   get goodCount(): number {
     let n = 0;
     for (const kind of this.endsAt.keys()) if (!BUFFS[kind].bad) n += 1;
@@ -128,6 +128,8 @@ export class PowerUpSystem {
     this.player.damageMultiplier = good.damage * bad.damage;
     this.player.rangeMultiplier = good.range * bad.range;
     this.player.goldenBelt = this.endsAt.has('goldenBelt');
+    this.player.umbrella = this.endsAt.has('umbrella');
+    this.player.scooter = this.endsAt.has('scooter');
     this.player.milkTrail = this.endsAt.has('lapte');
     this.player.energyTrail = this.endsAt.has('monster');
     this.player.rustyFlakes = this.endsAt.has('rusty');

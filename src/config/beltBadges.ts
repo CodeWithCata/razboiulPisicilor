@@ -2,12 +2,12 @@
 import { COLORS } from './style';
 
 /**
- * The cooldown badges for the belt specials (ui/BeltBadges.ts), bottom right: two round buttons, throw on the left, spin on the right.
+ * The cooldown badges for the belt specials (ui/BeltBadges.ts), bottom right: three round buttons: dodge roll, throw, spin (left to right).
  * Same order as the touch buttons. Same family as the power-up badges (config/buffBadges.ts): a soft glow disc and a thin ring,
  * no frame. Sizes are game pixels. Icon numbers are in "icon units" around the badge's center (0, 0).
  */
 export const BELT_BADGES = {
-  order: ['throw', 'spin'],
+  order: ['roll', 'throw', 'spin'],
   /** Outer radius of the badge, gap between badges, distance from the screen's right and bottom edges to the badge. */
   r: 31,
   gap: 20,
@@ -77,6 +77,12 @@ export const BELT_BADGES = {
       streakW: 2,
       streaks: [{ dr: 6.5, fromDeg: 110, toDeg: 175 }, { dr: -6, fromDeg: 150, toDeg: 205 }],
     },
+    /**
+     * The dodge roll icon is a picture, drawn in code like Varu and the pickups (`assets/art/dodgeIcon.ts`, key `Tex.DodgeIcon`): Varu curled
+     * into a ball, tumbling. It is shown as an image `sizePx` big (before the badge's own scaling), rocks `rockDeg` either way once per `rockMs`,
+     * and while the roll recharges it fades to `coolAlpha` and takes the cooling tint.
+     */
+    roll: { sizePx: 50, rockDeg: 8, rockMs: 1100, coolAlpha: 0.55 },
     throw: {
       strap: [[-12, 11], [8, -9]],
       strapW: 5.4,

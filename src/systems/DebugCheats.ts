@@ -252,7 +252,9 @@ export class DebugCheats {
         src.player.thaw();
         return this.done(id);
       case 'weather': {
-        src.weather.set(debugChoice('weather').value as WeatherKind, src.waves.wave); // as if the wave had rolled it: the visual and the weather curse follow
+        const picked = debugChoice('weather').value;
+        if (picked === 'rainbow') src.weather.set('clear', src.waves.wave, true);
+        else src.weather.set(picked as WeatherKind, src.waves.wave); // as if the wave had rolled it: the visual and the weather curse follow
         return this.done(id, undefined, debugChoice('weather').label);
       }
       case 'marti13':

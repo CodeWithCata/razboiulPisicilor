@@ -17,6 +17,8 @@ export interface InputSource {
   readonly spinPressed: boolean;
   /** True only on the frame the player asked to throw the belt. */
   readonly throwPressed: boolean;
+  /** True only on the frame the player asked for a dodge roll. */
+  readonly dodgePressed: boolean;
   /** PowerUpSystem tells the input every frame whether the laser pointer is active. On touch it opens the tap zone where the dot is placed. */
   setLaserAiming(on: boolean): void;
   /** Call once per frame with the player's position (needed for mouse aim). */

@@ -3,14 +3,16 @@ import { texArgs, texRef } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex, type TexKey } from '../assets/keys';
 import { PLAYER } from '../config/balance';
+import { SCOOTER } from '../config/scooter';
+import { DODGE } from '../config/dodge';
 import { sampleKeys } from '../core/ease';
-import { bus, Events, type IdleHabitPayload, type PlayerHealthPayload, type PlayerHurtPayload } from '../core/events';
+import { bus, Events, type DodgeRollPayload, type IdleHabitPayload, type PlayerHealthPayload, type PlayerHurtPayload } from '../core/events';
 import type { InputSource } from '../input/InputSource';
 import { Actor } from './Actor';
 import { MilkTrail } from './MilkTrail';
 import { PlayerDrops } from './PlayerDrops';
 import { gameClock } from '../core/clock';
-import { CIG_SMOKE, ENERGY_FLIP, ENERGY_TRAIL, EMO_FX, GOLD_BELT, IDLE_HABITS, MILK_FX, MILK_TRAIL, RUST_FX, SMOKE_BREAK, VARU_ANIM, type ZLook } from '../config/animation';
+import { CIG_SMOKE, ENERGY_FLIP, ENERGY_TRAIL, type FlipLook, EMO_FX, GOLD_BELT, IDLE_HABITS, MILK_FX, MILK_TRAIL, RUST_FX, SMOKE_BREAK, VARU_ANIM, type ZLook } from '../config/animation';
 import { setCircleHitbox } from '../core/sprite';
 import { BELT_FX, css, FONT } from '../config/style';
 import { hyp } from '../core/hyp';
@@ -40,6 +42,10 @@ export class Player extends Actor {
   emo = false;
   /** True while the golden belt is active (PowerUpSystem sets it): gold strap, sticky white goo. */
   goldenBelt = false;
+  /** True while the umbrella buff is active (PowerUpSystem sets it): balls, shots and petards bounce off (ProjectileSystem, GameScene), the canopy is drawn by UmbrellaSystem. */
+  umbrella = false;
+  /** True while the scooter buff is active (PowerUpSystem sets it): ScooterSystem draws the scooter under him and bumps the cats that touch him; GameScene lets those cats' bites through. */
+  scooter = false;
   /** True while the milk buff is active (PowerUpSystem sets it): drippy white trail. */
   milkTrail = false;
   /** True while the energy drink buff is active (PowerUpSystem sets it): small green Z z z letters behind him. */
@@ -97,6 +103,21 @@ export class Player extends Actor {
    * `flipBody` plays the somersault in its place (with the legs and belt), so the body's scale and hitbox never change.
    */
   private flipMs = -1;
+  /** The numbers the running somersault uses: the energy drink's back flip or the dodge roll. */
+  private flipLook: FlipLook = ENERGY_FLIP;
+  /** True while the somersault is a dodge roll (he moves along `rollDir` and cannot be hit). */
+  private flipIsRoll = false;
+  /** The roll phase of the dodge started (the launch dust and whoosh fired). */
+  private rollLaunched = false;
+  /** How fast he was walking when the roll phase starts (px/s): the roll begins at this speed so he never stops first. */
+  private rollStartSpeed = 0;
+  /** The post-roll speed boost runs until this game time (gameClock). */
+  private boostUntil = -Infinity;
+  /** The way the scooter points (radians, like `rotation`) while he rides; ScooterSystem draws the scooter along it. */
+  scooterHeading = 0;
+  private wasOnScooter = false;
+  private readonly rollDir = new Phaser.Math.Vector2(0, -1);
+  private lastSaveAt = -Infinity;
   /** Where the stand-in parts are: position, turn, and the scale across (`sx`) and along (`sy`, negative = flipped over) his body. */
   private readonly flipPose = { on: false, x: 0, y: 0, rot: 0, sx: 1, sy: 1 };
   private flipGhostMs = 0;
@@ -161,21 +182,85 @@ export class Player extends Actor {
   tick(input: InputSource): void {
     if (!this.alive) return;
 
+    if (this.rollActive) {
+      const t = this.flipMs;
+      const walk = PLAYER.speed * this.speedMultiplier * this.terrainSlow * this.tearSlow;
+      const target = this.rollDir.angle() + Math.PI / 2;
+      if (t < DODGE.windupMs) {
+        // Wind-up: he does NOT stop. He keeps walking as before, crouches, and swings round toward the roll (the way can still change).
+        if (input.move.x !== 0 || input.move.y !== 0) this.rollDir.set(input.move.x, input.move.y).normalize();
+        this.rollStartSpeed = input.move.x !== 0 || input.move.y !== 0 ? walk : 0;
+        if (!this.isKnockedBack) this.setVelocity(input.move.x * walk, input.move.y * walk);
+        this.facing.copy(input.aim);
+        this.setRotation(this.rotation + Phaser.Math.Angle.Wrap(target - this.rotation) * 0.4);
+      } else {
+        // Roll: the speed starts exactly where the walk was (no jerk), swells and eases to 0 at the end. The push (`peak`) is worked out so
+        // the whole roll covers `distancePx` (the walk part gives half its start speed times the time, the sine part 2/pi of the peak times it).
+        const into = Phaser.Math.Clamp((t - DODGE.windupMs) / DODGE.rollMs, 0, 1);
+        const seconds = DODGE.rollMs / 1000;
+        const peak = Math.max(0, DODGE.distancePx / seconds - this.rollStartSpeed * 0.5) * (Math.PI / 2);
+        const speed = this.rollStartSpeed * (1 - Phaser.Math.Easing.Quadratic.InOut(into)) + peak * Math.sin(Math.PI * into);
+        this.setVelocity(this.rollDir.x * speed, this.rollDir.y * speed);
+        this.facing.copy(this.rollDir);
+        this.setRotation(target);
+      }
+      this.waddle();
+      this.syncShadow();
+      return;
+    }
     if (!this.isKnockedBack) {
       // Only when `ENERGY_FLIP.rooted` is on: planted during the back flip. By default he keeps full control while he flips.
       const planted = ENERGY_FLIP.rooted && this.flipMs >= 0;
-      const speed = planted || this.frozen ? 0 : PLAYER.speed * this.speedMultiplier * this.terrainSlow * this.tearSlow;
+      const speed = planted || this.frozen ? 0 : PLAYER.speed * this.speedMultiplier * this.terrainSlow * this.tearSlow * this.rollBoost();
       this.setVelocity(input.move.x * speed, input.move.y * speed);
     }
     this.facing.copy(input.aim);
-    this.setRotation(input.aim.angle() + Math.PI / 2 + this.spinTurn);
+    this.setRotation(this.restingRotation(input.aim.angle() + Math.PI / 2) + this.spinTurn);
     this.waddle();
     this.rotation += this.habitTilt; // neck crack
     this.syncShadow();
   }
 
+  /**
+   * The turn his body has. Normally he looks at the aim. On the scooter he stands on the deck: his feet and hips follow the way the scooter
+   * rolls (`scooterHeading`, which turns smoothly toward where he moves) and only his upper body twists toward the aim, at most `SCOOTER.ride.twistRad`.
+   */
+  private restingRotation(aimRotation: number): number {
+    if (!this.scooter) {
+      this.wasOnScooter = false;
+      return aimRotation;
+    }
+    const R = SCOOTER.ride;
+    if (!this.wasOnScooter) {
+      this.wasOnScooter = true;
+      this.scooterHeading = aimRotation; // hops on facing the way he looks, then the scooter takes over
+    }
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    if (body.speed > R.minSpeed) {
+      const heading = Math.atan2(body.velocity.y, body.velocity.x) + Math.PI / 2;
+      this.scooterHeading = Phaser.Math.Angle.RotateTo(this.scooterHeading, heading, R.turnRate);
+    }
+    const twist = Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(aimRotation - this.scooterHeading), -R.twistRad, R.twistRad);
+    return this.scooterHeading + twist;
+  }
+
+  /** The speed factor of the boost after a dodge roll: `DODGE.boost.mult` for the first part, then easing back to 1. */
+  private rollBoost(): number {
+    const B = DODGE.boost;
+    const left = (this.boostUntil - gameClock.now) / B.ms; // 1 right after the roll, 0 when it is over
+    if (left <= 0) return 1;
+    const fade = Math.min(1, left / (1 - B.holdShare));
+    return 1 + (B.mult - 1) * Phaser.Math.Easing.Sine.Out(fade);
+  }
+
   /** Smooth waddle: rock left and right while walking, eased in and out. */
   private waddle(): void {
+    if (this.scooter) {
+      // Standing on the deck: both feet planted, no walking rock.
+      this.legSwing = 0;
+      this.rockAmount = 0;
+      return;
+    }
     if (!VARU_ANIM.enabled) return;
     const dt = Math.min(gameClock.scaled(this.scene.game.loop.delta), 50) / 1000; // game time: slow-mo slows the waddle too
     const speed = (this.body as Phaser.Physics.Arcade.Body).speed;
@@ -307,16 +392,52 @@ export class Player extends Actor {
   /** The energy drink: he plants his feet, crouches, springs up and does one somersault on the spot. Animation only (ENERGY_FLIP); a second can in mid air does nothing. */
   backflip(): void {
     if (!ENERGY_FLIP.enabled || !this.alive || this.flipMs >= 0 || this.hiddenInTornado) return;
+    this.flipLook = ENERGY_FLIP;
+    this.flipIsRoll = false;
     this.flipMs = 0;
     this.flipGhostMs = 0;
     this.flipLanded = false;
     this.flipBody.setTexture(...texArgs(this.frame.name)); // the pose he has right now
   }
 
+  /** True during the whole dodge move (wind-up, roll, recover): the walk and the belt hand are overridden. */
+  get rollActive(): boolean {
+    return this.flipMs >= 0 && this.flipIsRoll;
+  }
+
+  /** True while the dodge roll protects him (from `DODGE.safeFromMs`, inside the wind-up, to the end): nothing can hit him. */
+  get rolling(): boolean {
+    return this.rollActive && this.flipMs >= DODGE.safeFromMs;
+  }
+
+  /** Can a roll start now? (alive, not in a smoke break, not inside the golden tornado, not mid spin, not already rolling.) */
+  get canRoll(): boolean {
+    return DODGE.enabled && this.alive && !this.frozen && !this.hiddenInTornado && this.spinTurn === 0 && !this.rollActive;
+  }
+
+  /** Starts the dodge roll toward (dx, dy) (any length; zero = the way he faces). The cooldown is DodgeSystem's job. */
+  startRoll(dx: number, dy: number): void {
+    if (!this.canRoll) return;
+    if (dx * dx + dy * dy < 0.0001) this.rollDir.copy(this.facing);
+    else this.rollDir.set(dx, dy);
+    this.rollDir.normalize();
+    this.knockbackUntil = 0;
+    this.flipLook = DODGE.anim;
+    this.flipIsRoll = true;
+    this.flipMs = 0;
+    this.flipGhostMs = 0;
+    this.flipLanded = true; // no landing show for a roll
+    this.rollLaunched = false;
+    this.rollStartSpeed = dx * dx + dy * dy < 0.0001 ? 0 : PLAYER.speed * this.speedMultiplier * this.terrainSlow * this.tearSlow;
+    this.flipBody.setTexture(...texArgs(this.frame.name));
+    const started: DodgeRollPayload = { x: this.x, y: this.y, angle: this.rollDir.angle() };
+    bus.emit(Events.DodgeRoll, started);
+  }
+
   /** Moves the flip on one frame and works out where its parts are (`flipPose`). Runs BEFORE the body is shown or hidden, so the last frame is never empty. `delta` is game ms. */
   private advanceBackflip(delta: number): void {
     if (this.flipMs < 0) return;
-    const F = ENERGY_FLIP;
+    const F = this.flipLook;
     if (!this.alive || this.hiddenInTornado) {
       this.endBackflip();
       return;
@@ -338,7 +459,7 @@ export class Player extends Actor {
     // The somersault seen from above: his length (the way he faces) shrinks to a sliver, flips over (negative) and grows back.
     let along = Math.cos(turn);
     if (Math.abs(along) < F.minLength) along = along < 0 ? -F.minLength : F.minLength;
-    const grow = this.scaleX * (1 + F.hop * air);
+    const grow = this.scaleX * (1 + F.hop * air) * (1 - (1 - (F.tuck ?? 1)) * air);
     const pose = this.flipPose;
     pose.on = true;
     pose.x = this.x; // rides along with him wherever he walks (his body and hitbox never leave the floor)
@@ -351,6 +472,11 @@ export class Player extends Actor {
       this.flipLanded = true;
       bus.emit(Events.BackflipLand, { x: this.x, y: this.y });
     }
+    if (this.flipIsRoll && !this.rollLaunched && this.flipMs >= DODGE.windupMs) {
+      this.rollLaunched = true;
+      const launched: DodgeRollPayload = { x: this.x, y: this.y, angle: this.rollDir.angle() };
+      bus.emit(Events.DodgeLaunch, launched);
+    }
     this.flipGhostMs += delta;
     if (air > 0.05 && this.flipGhostMs >= F.ghost.everyMs) {
       this.flipGhostMs = 0;
@@ -360,7 +486,7 @@ export class Player extends Actor {
 
   /** A green copy of the body that stays where it was and fades out: the speed lines of the spin. Tweens are scene-owned, so a restart cleans them up. */
   private dropGhost(): void {
-    const G = ENERGY_FLIP.ghost;
+    const G = this.flipLook.ghost;
     const pose = this.flipPose;
     const ghost = this.scene.add
       .image(pose.x, pose.y, ...texArgs(this.flipBody.frame.name))
@@ -383,6 +509,11 @@ export class Player extends Actor {
   }
 
   private endBackflip(): void {
+    if (this.flipIsRoll) {
+      this.invincibleUntil = Math.max(this.invincibleUntil, gameClock.now + DODGE.graceMs);
+      this.boostUntil = gameClock.now + DODGE.boost.ms; // the quick speed boost after the roll
+    }
+    this.flipIsRoll = false;
     this.flipMs = -1;
     this.flipPose.on = false;
     this.flipBody.setVisible(false);
@@ -692,6 +823,13 @@ export class Player extends Actor {
   /** Returns true if the hit landed (false during i-frames). `source` says what hurt him (a cat type, a projectile kind...) for the bad luck system. */
   takeDamage(amount: number, fromX: number, fromY: number, source?: string): boolean {
     const now = gameClock.now;
+    if (this.rolling) {
+      if (this.alive && now - this.lastSaveAt >= DODGE.saveWordEveryMs) {
+        this.lastSaveAt = now;
+        bus.emit(Events.DodgeSave, { x: this.x, y: this.y });
+      }
+      return false;
+    }
     if (!this.alive || this.godMode || now < this.invincibleUntil) return false;
 
     this.hp = Math.max(0, this.hp - amount);

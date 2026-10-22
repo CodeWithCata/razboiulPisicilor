@@ -32,6 +32,7 @@ import {
   Events,
   listen,
   type BeltCooldownPayload,
+  type DodgeCooldownPayload,
   type BossHealthPayload,
   type BossPhasePayload,
   type BossSpawnedPayload,
@@ -141,6 +142,7 @@ export class UIScene extends Phaser.Scene {
         if (attack === 'swing') return; // the plain swing has no HUD badge
         this.beltBadges.startCooldown(attack, durationMs);
       }),
+      listen<DodgeCooldownPayload>(Events.DodgeCooldown, ({ durationMs }) => this.beltBadges.startCooldown('roll', durationMs)),
       listen(Events.BeltThrow, () => {
         this.beltBadges.beltAway();
       }),

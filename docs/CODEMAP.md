@@ -12,10 +12,11 @@ Entry point.
 ## scenes/
 Phaser scenes. GameScene only WIRES systems together; UIScene is the HUD; Pause / GameOver / Victory sit on top.
 
+- AlmanacScene.ts - The almanac screen (opened from the main menu, like the Suburban Almanac in Plants vs. Zombies): a grid of cards for every cat, boss and pickup, and a panel with the selected one. Exports: AlmanacScene
 - BootScene.ts - Loads real assets from the manifests, waits for the font, fills gaps with placeholders, starts the menu. Exports: BootScene
 - CutsceneScene.ts - The cutscene overlay scene: cinema bars, dialogue box and the hold-to-skip ring, over a held-still game. Talks to the director only through the bus. Exports: CutsceneScene
 - GameOverScene.ts - Game over screen: score, kills, wave, best; again / menu input. Exports: GameOverData, GameOverScene
-- GameScene.ts (~650 lines) - The run: builds the arena, player, systems and collisions, and wires them together. Rules live in the systems. Exports: GameScene
+- GameScene.ts (~700 lines) - The run: builds the arena, player, systems and collisions, and wires them together. Rules live in the systems. Exports: GameScene
 - MenuScene.ts - Main menu: logo, Varu, tap to start (endless button once unlocked), mute badge, install button. Exports: MenuScene
 - PauseScene.ts (~250 lines) - Pause menu on top of the run: resume, volumes, toggles, restart, menu. Esc opens and closes it. Exports: PauseScene
 - UIScene.ts (~200 lines) - The HUD, running in parallel on top of GameScene; it only listens to events. Exports: UIScene
@@ -25,16 +26,16 @@ Phaser scenes. GameScene only WIRES systems together; UIScene is the HUD; Pause 
 Things in the arena: Varu (Player), the Enemy base, Pickup. `enemies/` = one file per cat, `bosses/` = Boss state machine + one file per boss.
 
 - Actor.ts - Shared base for Varu and every cat: hp, shadow, hit flash, knockback. Exports: ActorOptions, Actor
-- Enemy.ts (~650 lines) - Base class of every cat and boss: chase / steer / knockback / death. Subclasses override `think()`. Exports: EnemyContext, SlipOptions, Enemy
+- Enemy.ts (~750 lines) - Base class of every cat and boss: chase / steer / knockback / death. Subclasses override `think()`. Exports: EnemyContext, SlipOptions, Enemy
 - MilkTrail.ts (~250 lines) - The milk trail: a white smeared ribbon on the ground behind Varu (from his recent path) plus splotches beside it, in fixed-size buffers. Exports: MilkTrail
 - Pickup.ts - A collectible on the floor: item sprite on a glowing ring, bobs, then expires. Exports: Pickup
-- Player.ts (~750 lines) - Varu: movement, aim, damage, belt visuals, walk / smoke-break / energy back flip animation, power-up multipliers. Exports: Player
+- Player.ts (~850 lines) - Varu: movement, aim, damage, belt visuals, walk / smoke-break / energy back flip animation, power-up multipliers. Exports: Player
 - PlayerDrops.ts - Varu's rust flakes and broken hearts: two particle emitters (one burst of one particle per drop) instead of an image plus four or five tweens per drop. Exports: PlayerDrops
 
 ## systems/
 Game rules, one system per concern (belt, waves, score, projectiles, pickups, effects, audio, jokes). They talk through the event bus.
 
-- AudioSystem.ts (~250 lines) - ALL sound: listens to the bus, plays synthesized or real sounds and music, owns mute (N) and volumes. Game-lifetime. Exports: AudioSystem
+- AudioSystem.ts (~300 lines) - ALL sound: listens to the bus, plays synthesized or real sounds and music, owns mute (N) and volumes. Game-lifetime. Exports: AudioSystem
 - BallLobSystem.ts - The tennis cat's ball rain: balls soar up from her racket, hang out of sight, then fall on spots marked by a growing shadow and a ring, bounce and fade (like the crows, but they hurt Varu). Exports: BallLobSystem
 - BeltSystem.ts - Varu's belt: swing, spin and throw state, cooldowns and which attack is active. Exports: BeltSystem
 - Blackout.ts - Lights out (every boss, at low health): a dark sheet over the arena with soft circles of light round Varu, the bosses and the lit street lamps. Exports: Blackout
@@ -45,12 +46,14 @@ Game rules, one system per concern (belt, waves, score, projectiles, pickups, ef
 - CrowRainSystem.ts (~250 lines) - The Crow Rain power-up: crows drop with a growing shadow, land and bonk nearby cats. Exports: CrowRainSystem
 - CurseSystem.ts - Bad luck gate: every random curse asks here (cooldown, wave ramp, mercy), then Varu gets one of the six bad pickups. Also: cats that curse him on hit. Exports: CurseSystem
 - DayNight.ts - Day to night: a colored sheet over the arena that follows the wave number, plus floor lamps that rise out of the floor when it gets dark. Exports: nightProgress, DayNight
-- DebugCheats.ts (~400 lines) - Dev-only cheats behind the debug card and its keys: spawn cats / bosses (also at the cursor), waves, speed, health, pickups, bad luck, fan throws. Exports: DebugSources, DebugCheats
-- Effects.ts (~350 lines) - The juice: screen shake, particles, floating words (listens to the bus). Exports: Effects
+- DebugCheats.ts (~450 lines) - Dev-only cheats behind the debug card and its keys: spawn cats / bosses (also at the cursor), waves, speed, health, pickups, bad luck, fan throws. Exports: DebugSources, DebugCheats
+- DodgeSystem.ts - Varu's dodge roll: reads the roll press, keeps the 2 s cooldown (with a short input buffer) and starts the roll on the player. Exports: DodgeSystem
+- Effects.ts (~400 lines) - The juice: screen shake, particles, floating words (listens to the bus). Exports: Effects
 - FanThrowSystem.ts (~550 lines) - The fans (and the bomber cat) throw something into the arena now and then: a gift (a normal pickup) or a bad item (a petard with a burning fuse, or a cursed item that curses Varu if he stands in its ring). Decides WHEN, flies the item and lands it. Exports: FanThrowSources, FanThrowSystem
 - FloorLamp.ts (~300 lines) - One retractable street lamp: by day it is gone, at night a pole grows out of the floor with the lantern on top, dust puffs and the light comes on. Exports: FloorLamp
 - Fog.ts - Fog weather: some waves start in a mist. Cats far from Varu fade out (they walk out of the fog at him) and a soft sheet covers the arena and the screen edges go thick and white (you see less at the sides). Exports: Fog
 - HitStop.ts - Tiny physics freeze on strong hits (config/hitstop.ts). Exports: HitStop
+- IceCreamSystem.ts - The ice cream power-up: when Varu grabs it, every cat (not a boss) near him is frozen solid for a few seconds. Exports: IceCreamSystem
 - JokeSystem.ts - Decides WHEN a joke is said (cooldowns, chances, streaks) and emits Events.Joke. Exports: JokeSystem
 - LampSystem.ts - Smashing the street lamps: the belt, blasts and bosses hit a lamp that is out; it breaks after a few hits and a new one rises at the next night. Exports: LampSystem
 - LowHpSystem.ts - Low-health heartbeat: while Varu is under the low-HP line it emits a beat now and then (faster the closer to death). Exports: LowHpSystem
@@ -61,10 +64,13 @@ Game rules, one system per concern (belt, waves, score, projectiles, pickups, ef
 - PowerUpSystem.ts - Timed buffs (best value wins) and the laser pointer dot cats chase. Exports: PowerUpSystem
 - ProjectileSystem.ts (~300 lines) - Projectile sprite (yarn, tennis, fireball, broken heart) and the group that updates and expires them. Exports: Projectile, ProjectileSystem
 - Rain.ts - Rain weather visual: falling streaks drawn on the screen and a faint grey sheet; both fade in and out with the weather. Visual only. Exports: Rain
+- Rainbow.ts - The rainbow event: after a rainy wave a cartoon rainbow fades in over the screen for the next wave and 2-3 bonus pickups drop under it. Exports: RainbowHooks, Rainbow
+- ScooterSystem.ts - The scooter power-up: the scooter under Varu (turns to where he moves, blinks before it is gone) and the bump that shoves cats away as he drives. Exports: ScooterSystem
 - ScoreSystem.ts - Score, kills and the saved best (campaign and endless kept apart). Exports: ScoreSystem
 - SlowMoSystem.ts - The last cat of a wave dies in slow motion for the WHOLE game (Varu, cats, physics, timers, tweens, particles) with a camera zoom, then it speeds back up. Exports: SlowMoSystem
 - SurrenderSystem.ts - "Predarea pisicilor": decides WHEN the last cats of a wave give up (rare, funny, never the normal way to win). Exports: SurrenderSources, SurrenderSystem
 - Telegraph.ts (~250 lines) - Ground warning visuals for boss attacks (`telegraphCircle`, `telegraphLine`, `telegraphLineAimed`, `telegraphRect`) that can be cancelled early. Exports: Telegraph, telegraphDepth, telegraphCircle, telegraphLine, AimedTelegraph, telegraphLineAimed, telegraphRect
+- UmbrellaSystem.ts - The umbrella power-up's canopy over Varu (pop open, slow spin, blink before it closes, bump when it blocks) and the block itself for petards and ball rain. Exports: UmbrellaSystem
 - WaveSystem.ts - Wave loop: countdown -> cats trickle in -> all dead -> next wave (campaign and endless). Exports: WaveSystem
 - Weather.ts - Rolls the weather once per wave (fog, rain or clear, exclusive) and announces it with Events.WeatherChanged; Fog, Rain and the weather curses listen. Exports: Weather
 - WeatherCurses.ts - Wave-state curses: rain gives Rusty, fog gives Emo, Marți 13 gives a mild random curse; each is re-applied every ~25 s until the wave ends. Exports: WeatherCurses
@@ -108,7 +114,7 @@ Synthesized placeholder sound and music (Web Audio). Real files go through asset
 Input behind the `InputSource` interface. Gameplay never reads keyboard, mouse or touch directly.
 
 - InputSource.ts - The interface gameplay reads input from (move, aim, attack, spin, throw). Keyboard and touch implement it. Exports: InputSource
-- KeyboardMouseInput.ts - Desktop controls: WASD / arrows, mouse aim, click / Space swing, Shift / right click spin, E throw. Exports: KeyboardMouseInput
+- KeyboardMouseInput.ts - Desktop controls: WASD / arrows, mouse aim, click swing, Shift / right click spin, E throw, Space dodge roll. Exports: KeyboardMouseInput
 - ScriptedInput.ts - Input driven by a cutscene script instead of a thumb or a mouse: Varu walks and turns with his real animation. Exports: ScriptedInput
 
 ## input/touch/
@@ -134,7 +140,9 @@ The Tiled arena map, the solid grid gameplay queries, spawn points, prop layout.
 ## ui/
 HUD and menu pieces (Phaser objects). `ui/pause/` = pause rows, `ui/debug/` = dev cheat card.
 
-- BeltBadges.ts (~350 lines) - Spin and throw cooldown badges (also the touch buttons for them). Exports: BeltSpecial, BeltBadges
+- AlmanacCards.ts - The grid of almanac cards (left side): one tappable card per entry, a gold border on the selected one, a "?" on the ones not met yet. Exports: AlmanacCards
+- AlmanacDetail.ts - The right-hand panel of the almanac: big picture, name, description, quote and four stat lines of the selected entry. Exports: AlmanacDetail
+- BeltBadges.ts (~400 lines) - Spin and throw cooldown badges (also the touch buttons for them). Exports: BeltSpecial, BeltBadges
 - BossBar.ts - Boss health bar at the top: slides in, drains smoothly, phase-2 notch. Exports: BossBar
 - BossIntroCard.ts - A friend's photo card that slides in when a boss appears. Exports: showBossIntroCard
 - BossLabPanel.ts - Dev-only boss lab panel: the live numbers of the duel (time per mode, attack table, verdict) or the scoreboard of all bosses. Tab cycles hidden / live / scoreboard. Exports: BossLabPanel
@@ -174,7 +182,8 @@ Pieces of the dev-only debug card.
 ## config/
 NUMBERS ONLY (no magic numbers in code). `balance.ts` = all gameplay. Layout and look configs sit next to it.
 
-- animation.ts (~800 lines) - Procedural animation numbers (cat sway / squash / flap, Varu walk, smoke break, milk and crow FX, golden belt, rust flakes off the rusty belt, blasts). Exports: ANIM, VARU_ANIM, CIG_SMOKE, MILK_FX, MILK_TRAIL, ZLook, ENERGY_TRAIL, EMO_FX, RUST_FX, ENERGY_FLIP, CROW_FALL, SMOKE_BREAK_ON, SMOKE_BREAK, GOLD_BELT, KAMIKAZE_BLAST, NINJA_POOF, QUEEN_RIG, QUEEN_POSES, QUEEN_POSE_MS, EMO_RIG, EMO_POSES, EMO_POSE_MS, FEDERER_RIG, FEDERER_POSES, FEDERER_POSE_MS, BALL_LOB, FIREBALL_FX, TENNIS_RETURN_FX, BALL_FX, FLINCH, IDLE_HABITS, BED_CAGE_FX, CARPET_FX
+- almanac.ts - The almanac: which entries it has and in what order, the picture of each cat, the speed words and the layout of the screen. No Phaser. Exports: AlmanacId, ALMANAC_ORDER, isCatId, almanacTex, ALMANAC_SPEED_BANDS, ALMANAC_RARITY, ALMANAC
+- animation.ts (~850 lines) - Procedural animation numbers (cat sway / squash / flap, Varu walk, smoke break, milk and crow FX, golden belt, rust flakes off the rusty belt, blasts). Exports: ANIM, VARU_ANIM, CIG_SMOKE, MILK_FX, MILK_TRAIL, ZLook, ENERGY_TRAIL, EMO_FX, RUST_FX, FlipLook, ENERGY_FLIP, CROW_FALL, SMOKE_BREAK_ON, SMOKE_BREAK, GOLD_BELT, KAMIKAZE_BLAST, NINJA_POOF, QUEEN_RIG, QUEEN_POSES, QUEEN_POSE_MS, EMO_RIG, EMO_POSES, EMO_POSE_MS, FEDERER_RIG, FEDERER_POSES, FEDERER_POSE_MS, BALL_LOB, FIREBALL_FX, TENNIS_RETURN_FX, BALL_FX, FLINCH, IDLE_HABITS, BED_CAGE_FX, CARPET_FX
 - arena.ts - Arena (Tiled map) numbers and tile ids. Exports: ARENA, WORLD, PLAY_AREA, CAMERA, CAMPUS_TEXT, CAMPUS_MILK, TILES, OBJECTS, ObjectName, objectTiles, SOLID_TILES, SPAWN_KINDS, ARENA_RULES
 - atlas.ts - Numbers for the texture atlas (assets/atlas.ts): page size and the gap between pictures. Exports: ATLAS
 - audio.ts - Audio numbers: volumes and the generated music tracks (TRACKS). Exports: AUDIO, TrackDef, TRACKS
@@ -194,9 +203,11 @@ NUMBERS ONLY (no magic numbers in code). `balance.ts` = all gameplay. Layout and
 - cutscene.ts - Cutscene numbers: cinema bars, dialogue box, typewriter, skip, camera, walking and emotes. No Phaser. Exports: CUTSCENE
 - dayNight.ts - Day-night numbers: the sky tint keyframes, how fast it changes, and the lamps that rise out of the floor and light up at night. No Phaser. Exports: DAY_NIGHT
 - debug.ts - Dev-only cheats (`pnpm dev`). Exports: DebugId, DEBUG, BOSS_LAB
+- dodge.ts - Dodge roll numbers: key, cooldown, distance, i-frames and the look of the somersault. No Phaser. Exports: DODGE
 - fanThrow.ts - Numbers for the fans' throws: how often, which fan, where it lands, the flight, the gift and the petard. No Phaser. Exports: FAN_THROW
 - hitstop.ts - Hit-stop (tiny freeze on strong hits) timings per enemy type. Exports: HIT_STOP
 - hud.ts - HUD layout and colors (score, wave, boss bar, fanfare, debug card), in game pixels. Exports: HUD
+- iceCream.ts - The ice cream power-up: who it freezes, for how long, and how the ice block on a frozen cat looks. Exports: ICE_CREAM
 - introVideo.ts - Opening videos (backstory + intro): which files, in what order, how often, and how the player looks. No Phaser. Exports: INTRO_VIDEO
 - jokes.ts - Joke timing: categories, per-category chance and cooldown, toast and boss-card looks (no Phaser). Exports: JOKE_CATEGORIES, JokeCategory, JokeChannel, JokeRule, JOKE_RULES, JOKE_TUNING, TOAST, BOSS_CARD, PHOTO_FRAME
 - lowHp.ts - Low-health warning numbers: how often the heartbeat thumps and how the red screen edge pulses. No Phaser. Exports: LOW_HP
@@ -207,12 +218,15 @@ NUMBERS ONLY (no magic numbers in code). `balance.ts` = all gameplay. Layout and
 - pickups.ts - How each pickup looks (texture, optional alternate looks, glow color, size), `pickLook`, and the list of pickup kinds. Exports: PICKUP_VISUALS, pickLook, PICKUP_KINDS, BAD_PICKUP_FX
 - props.ts (~450 lines) - Living-arena numbers: prop springs, FX, kickables, rock cracks, hide-and-seek, bed cages, hp / smash, gold leaf, fence splinters. Exports: PropKind, SpringKind, KickKind, FxId, AmbientAction, PROP_TUNING, PropFeel, PROP_FEEL, PropLook, PROP_LOOK, FxDef, PROP_FX, PROP_AMBIENT, KickDef, KICKABLE, KICK_HIT, ROCK_CRACKS, HIDEOUT, BED_CAGE, PROP_HP, BUSH_STATES, BUSH_REGROW, SMASH, PROP_DEBRIS, PROP_LAYER_NAME, BushVariant, BUSH_VARIANTS, bushVariantFor, GOLD_LEAF, FENCE_SPLINTERS
 - pwa.ts - PWA numbers: service worker path, icon, update re-check, boot self-repair flag. Exports: PWA
+- rainbow.ts - Rainbow event numbers: when it comes, how it looks, how many bonus pickups drop under it. No Phaser. Exports: RAINBOW
+- scooter.ts - The scooter power-up: how hard it bumps cats, how the scooter under Varu looks and moves. Duration and speed live in BUFFS (balance.ts). Exports: SCOOTER
 - slowMo.ts - Slow-mo numbers for the last cat of a wave (Clone Drone style: long crawl, hard push-in on the final kill). No Phaser. Exports: SLOW_MO
 - stands.ts - Look of the stands outside the fence (numbers and colors only, no Phaser): terraces, ad barrier, aisles, balcony boxes, bunting, fans. Exports: FanSpec, STANDS
 - style.ts - One place for the look of all text. Exports: FONT_FAMILY, FONT, FONT_SFX_FAMILY, FONT_SFX, FONT_LOADING, COLORS, css, BELT_FX
 - tennisRig.ts - Numbers for the tennis cat's little rig (racket arm, racket, ball): sway, toss, swing and pop poses. Visual only. Exports: TENNIS_RIG, TENNIS_POSES, TENNIS_POSE_MS
 - touch.ts - Touch controls: stick, attack button, auto-aim numbers, and where the spin / throw / pause buttons sit. Exports: TOUCH, TouchButtonId, TOUCH_BUTTON_IDS
 - tutorial.ts - Numbers for the first-run tutorial card (ui/Tutorial.ts): when it starts, how long each step waits, where the card sits. Words are in content/lines.ts (TUTORIAL_TEXT). No Phaser. Exports: TUTORIAL
+- umbrella.ts - The umbrella power-up: what it blocks, how the canopy over Varu looks and moves. Duration lives in BUFFS (balance.ts). Exports: UMBRELLA
 - viewport.ts - What happens when the screen size changes (core/relayout.ts, core/fullscreen.ts). Exports: RELAYOUT
 - waves.ts - The campaign wave by wave (how many of each cat), the final wave and endless-mode scaling. Exports: WaveDef, WAVES, FINAL_WAVE, ENDLESS, getWave
 - weather.ts - Weather numbers: which waves can start in fog, how far Varu sees cats through it, the mist sheet and the thick edges of the screen. No Phaser. Exports: WEATHER
@@ -220,17 +234,19 @@ NUMBERS ONLY (no magic numbers in code). `balance.ts` = all gameplay. Layout and
 ## content/
 TEXT ONLY (Romanian jokes, names, labels). Edit here to personalise the game.
 
+- almanac.ts - All the words of the almanac (title, labels, one entry per cat and pickup) and the stat lines of an entry, worked out from the game numbers so they never drift. Exports: ALMANAC_TEXT, AlmanacEntry, ALMANAC_ENTRIES, AlmanacStat, almanacStats
 - bossLab.ts - Dev-only boss lab texts: verdict words, the reasons, what spoils a duel, and the formatters for the live panel, the scoreboard and the copied report. Exports: BOSS_LAB_TEXT, liveLines, bookLines, reportMarkdown
 - bosses.ts - Boss names, phase-2 banners, attack shouts and the hidden ending message (Romanian). Exports: BossText, BOSS_TEXT, ENDING_TITLE, ENDING_MESSAGE, FEDERER_RALLY_LINES, FEDERER_TOWEL_LINE, BOSS_CURSE_LINES, MAFIA_MOODS, LIGHTS_OUT_LINES
 - cutscenes.ts - Cutscene content: who speaks (names, colors, voices), the scripts themselves (none yet) and what triggers them. Exports: SpeakerDef, SPEAKERS, CUTSCENES, CUTSCENE_TRIGGERS, CUTSCENE_TEXT
 - debugChoices.ts - Dev-only: the options of the debug card's pickers (cat type, boss, wave, pickup, speed...), and how to read the chosen one. Exports: DebugOption, DEBUG_CAT_TYPES, DEBUG_CHOICES, debugOptions, debugChoiceIndex, debugChoice, debugStepChoice, debugSetChoice
 - jokes.ts - The jokes (Romanian), grouped by trigger, plus boss intro lines and photo captions. Exports: JOKE_LINES, BOSS_INTRO_LINES, PHOTO_CAPTIONS, fillLine
-- lines.ts (~550 lines) - All other player-facing text: hit words, Varu lines, menu / HUD / pause / PWA / touch / debug texts, prop words. Exports: HIT_WORDS, VARU_LINES, SMOKE_LINES, BACKFLIP_WORDS, GAME_OVER_TITLE, GAME_OVER_LINES, WAVE_FANFARE_LINES, WAVE_CLEARED_LINES, CROWD_LINES, FAN_THROW_LINES, CURSED_BARREL_WORDS, CURSED_BARREL_LINES, CURSE_DODGE_WORDS, PETARD_WORDS, RAIN_LINES, COSTLY_LINES, MARTI_13_TEXT, FOG_LINES, SURRENDER_LINES, PETARD_SWAT_WORDS, BOMBER_ENTRANCE, JAIL_WORDS, LUCKY_TEXT, LUCKY_ESCAPE_LINES, WAVE_FANFARE_SURRENDER_LINES, PICKUP_LABELS, MYSTERY_REVEAL_WORD, BAD_LUCK_WORD, BUFF_NAMES, BELT_LABELS, CAT_CHATTER, CAT_BUMPED_LINES, HIDEOUT_TAUNTS, HIDEOUT_SLEEPY_TAUNTS, BED_CAGE_WORDS, BED_ESCAPE_WORDS, BED_REARM_WORDS, BED_CAGED_CAT_LINES, BUMP_WORDS, IDLE_HABIT_WORDS, POOF_WORDS, CROW_SCREAM, BALL_LAND_WORDS, CROW_MISS_LINES, pick, PROP_WORDS, SLIP_WORDS, BARREL_DESTROY_WORDS, LAMP_DESTROY_WORDS, PROP_DESTROY_WORDS, PROP_CRACK_WORDS, PROP_AMBIENT_TEXT, ENDLESS_TEXT, INTRO_TEXT, MENU_TEXT, PWA_TEXT, TOUCH_TEXT, END_SCREEN_TEXT, TUTORIAL_TEXT, HUD_TEXT, DebugRowKind, DebugRow, DebugSection, DEBUG_SECTIONS, DEBUG_TEXT, PERF_TEXT
+- lines.ts (~550 lines) - All other player-facing text: hit words, Varu lines, menu / HUD / pause / PWA / touch / debug texts, prop words. Exports: HIT_WORDS, VARU_LINES, SMOKE_LINES, BACKFLIP_WORDS, GAME_OVER_TITLE, GAME_OVER_LINES, WAVE_FANFARE_LINES, WAVE_CLEARED_LINES, CROWD_LINES, FAN_THROW_LINES, CURSED_BARREL_WORDS, CURSED_BARREL_LINES, CURSE_DODGE_WORDS, PETARD_WORDS, RAIN_LINES, COSTLY_LINES, MARTI_13_TEXT, FOG_LINES, SURRENDER_LINES, PETARD_SWAT_WORDS, BOMBER_ENTRANCE, JAIL_WORDS, LUCKY_TEXT, LUCKY_ESCAPE_LINES, WAVE_FANFARE_SURRENDER_LINES, DODGE_WORDS, RAINBOW_LINES, SCOOTER_WORDS, ICE_WORDS, UMBRELLA_WORDS, PICKUP_LABELS, MYSTERY_REVEAL_WORD, BAD_LUCK_WORD, BUFF_NAMES, BELT_LABELS, CAT_CHATTER, CAT_BUMPED_LINES, HIDEOUT_TAUNTS, HIDEOUT_SLEEPY_TAUNTS, BED_CAGE_WORDS, BED_ESCAPE_WORDS, BED_REARM_WORDS, BED_CAGED_CAT_LINES, BUMP_WORDS, IDLE_HABIT_WORDS, POOF_WORDS, CROW_SCREAM, BALL_LAND_WORDS, CROW_MISS_LINES, pick, PROP_WORDS, SLIP_WORDS, BARREL_DESTROY_WORDS, LAMP_DESTROY_WORDS, PROP_DESTROY_WORDS, PROP_CRACK_WORDS, PROP_AMBIENT_TEXT, ENDLESS_TEXT, INTRO_TEXT, MENU_TEXT, PWA_TEXT, TOUCH_TEXT, END_SCREEN_TEXT, TUTORIAL_TEXT, HUD_TEXT, DebugRowKind, DebugRow, DebugSection, DEBUG_SECTIONS, DEBUG_TEXT, PERF_TEXT
 - pause.ts - All the words of the pause menu. Exports: PAUSE_TEXT, PAUSE_CAT_LINES
 
 ## core/
 Small helpers with no gameplay rules: event bus, game clock, storage, viewport, fullscreen, PWA, math.
 
+- almanac.ts - Which almanac entries the player has met (a cat that appeared, a pickup that was grabbed). Saved in localStorage. Exports: markSeen, hasSeen
 - arena.ts - ArenaQuery (what gameplay may ask the arena: is a point solid, is a circle free, nearest open spot) and `clampToArena`. Exports: clampToArena, Point, ArenaQuery
 - bossLog.ts - Pure counters for one boss fight: time per mode and tier, attacks used and how often each hit Varu, damage both ways, stuns. Fed by Boss and BossLab. Exports: LogMode, AttackTally, OtherTally, BossFightLog
 - bossVerdict.ts (~200 lines) - Turns a BossFightLog into a FightReport with a verdict (balanced / boring / brutal) and the reasons, and sums many reports per boss. Pure; thresholds in config/debug.ts BOSS_LAB. Exports: FightResult, VerdictLabel, FlagCode, BORING_FLAGS, BRUTAL_FLAGS, AttackRow, FightContext, FightReport, buildReport, BossSummary, summarizeBook
@@ -241,7 +257,7 @@ Small helpers with no gameplay rules: event bus, game clock, storage, viewport, 
 - device.ts - Phone or tablet? Exports: usesTouchControls, forcesTutorial
 - downloadTexture.ts - Dev helper: saves a loaded texture as a PNG download (debug key T). Exports: downloadTexture
 - ease.ts - Pure easing math (no Phaser import, testable with plain node). Exports: easeInOutBack, sampleKeys, EaseName, applyEase
-- events.ts (~550 lines) - The event bus (`bus`), every event name (`Events`) and the payload type of each. Gameplay emits, UI / FX / audio listen. Exports: bus, Events, JokePayload, FanThrowPayload, ThrowPetardPayload, FanLandedPayload, CatBumpPayload, CatPoppedPayload, CatCagedPayload, CatReleasedPayload, CatJailedPayload, BedRearmedPayload, CatSurrenderPayload, IdleHabitPayload, HeartbeatPayload, PerfStatsPayload, DebugActionPayload, BossLabPayload, DebugRunPayload, DebugStepPayload, DebugStatsPayload, TouchPressPayload, MutePayload, VolumePayload, MusicPayload, PointPayload, BeltAttackPayload, BeltCooldownPayload, BeltSweepPayload, BeltFlightPayload, PropHitPayload, PropCrackedPayload, PropThinnedPayload, PropDestroyedPayload, PropAmbientPayload, PlayerHealthPayload, EnemyKilledPayload, TeleportPayload, ExplosionPayload, SpawnProjectilePayload, ProjectileSmashPayload, WavePayload, LightsOutPayload, WeatherKind, WeatherPayload, ScorePayload, PlayerHurtPayload, SmokeBreakPayload, PickupPayload, BuffInfo, BuffEndedPayload, BuffsPayload, CrowImpactPayload, CurseSpec, CurseZonePayload, LobBallPayload, BallLandedPayload, SpawnEnemyPayload, BossStunnedPayload, RallyHitPayload, BossSpawnedPayload, BossHealthPayload, BossPhasePayload, ShoutPayload, BossDefeatedPayload, CutsceneStartPayload, CutsceneEndPayload, CutsceneLinePayload, CutsceneBlipPayload, CutsceneSfxPayload, listen
+- events.ts (~550 lines) - The event bus (`bus`), every event name (`Events`) and the payload type of each. Gameplay emits, UI / FX / audio listen. Exports: bus, Events, JokePayload, FanThrowPayload, ThrowPetardPayload, FanLandedPayload, CatBumpPayload, CatPoppedPayload, CatCagedPayload, CatReleasedPayload, CatJailedPayload, BedRearmedPayload, CatSurrenderPayload, IdleHabitPayload, HeartbeatPayload, PerfStatsPayload, DebugActionPayload, BossLabPayload, DebugRunPayload, DebugStepPayload, DebugStatsPayload, DodgeRollPayload, DodgeCooldownPayload, TouchPressPayload, MutePayload, VolumePayload, MusicPayload, PointPayload, IceBlastPayload, BeltAttackPayload, BeltCooldownPayload, BeltSweepPayload, BeltFlightPayload, PropHitPayload, PropCrackedPayload, PropThinnedPayload, PropDestroyedPayload, PropAmbientPayload, PlayerHealthPayload, EnemyKilledPayload, TeleportPayload, ExplosionPayload, SpawnProjectilePayload, ProjectileSmashPayload, WavePayload, LightsOutPayload, WeatherKind, WeatherPayload, ScorePayload, PlayerHurtPayload, SmokeBreakPayload, PickupPayload, BuffInfo, BuffEndedPayload, BuffsPayload, CrowImpactPayload, CurseSpec, CurseZonePayload, LobBallPayload, BallLandedPayload, SpawnEnemyPayload, BossStunnedPayload, RallyHitPayload, BossSpawnedPayload, BossHealthPayload, BossPhasePayload, ShoutPayload, BossDefeatedPayload, CutsceneStartPayload, CutsceneEndPayload, CutsceneLinePayload, CutsceneBlipPayload, CutsceneSfxPayload, listen
 - flowField.ts - Breadth-first walking distances to a target, so cats path around walls (used by Enemy.steerTo). Exports: FlowGrid, FlowField
 - fonts.ts - Loads the self-hosted game font once, before any text is drawn (never rejects). Exports: loadGameFont
 - fullscreen.ts - Fullscreen, landscape lock and keep-screen-on for phones; `whenScaleSettled` waits for the resize. Exports: keepScreenOn, enterFullscreenLandscape, retryFullscreenOnTap, whenScaleSettled
@@ -255,12 +271,12 @@ Small helpers with no gameplay rules: event bus, game clock, storage, viewport, 
 - reach.ts - Pure geometry for "did the belt reach that prop?". Exports: Box, nearestOnBox, sweepTouchesBox, segmentTouchesBox
 - relayout.ts - Rebuilds Menu / GameOver / Victory when the canvas size changes (fullscreen, rotation). Exports: watchRelayout
 - rotateHint.ts - The "turn your phone" page (index.html) used to be a dead end: it covers the game and swallowed every tap, so a phone with auto-rotate OFF (or any iPhone with the orie... Exports: watchRotateHint
-- run.ts - Which way the game is being played. Exports: RunMode, RunOptions, DEFAULT_RUN, readRun
+- run.ts - Which way the game is being played. Exports: RunMode, RunOptions, DEFAULT_RUN, readRun, isStartingRun, setStartingRun
 - settings.ts - Player settings saved on the device: music / sfx volume, auto-attack, debug numbers. Exports: VolumeKind, getVolume, setVolume, nudgeVolume, getAutoAttack, setAutoAttack, toggleAutoAttack, getDebugInfo, toggleDebugInfo
 - snapshot.ts - `snapshotInto(list, out)`: a reusable copy of a list for loops that may add or remove members, without a new array every frame. Exports: snapshotInto
 - sprite.ts - `fitToSize` and `setCircleHitbox`: size and hitboxes in game pixels, independent of texture size. Exports: fitToSize, setCircleHitbox
 - steering.ts - Cheap wall avoidance for cats walking straight (`steerAround`). Pure math. Exports: steerAround, lastFreePoint, hasClearLine
-- storage.ts - Guarded localStorage: best scores, mute, volumes, hints, unlocks. Exports: loadBest, saveBest, loadMuted, saveMuted, loadVolume, saveVolume, loadEndlessUnlocked, saveEndlessUnlocked, loadHelpHidden, saveHelpHidden, loadAutoAttack, saveAutoAttack, loadDebugInfo, saveDebugInfo, loadSeenCutscenes, saveSeenCutscene, loadTutorialDone, saveTutorialDone, loadIntroSeen, saveIntroSeen
+- storage.ts - Guarded localStorage: best scores, mute, volumes, hints, unlocks. Exports: loadAlmanacSeen, saveAlmanacSeen, loadBest, saveBest, loadMuted, saveMuted, loadVolume, saveVolume, loadEndlessUnlocked, saveEndlessUnlocked, loadHelpHidden, saveHelpHidden, loadAutoAttack, saveAutoAttack, loadDebugInfo, saveDebugInfo, loadSeenCutscenes, saveSeenCutscene, loadTutorialDone, saveTutorialDone, loadIntroSeen, saveIntroSeen
 - streak.ts - Counts kills that follow each other quickly. Exports: KillStreak
 - sweep.ts - Pure math for the belt. Exports: normalizeAngle, isSwept, distToSegment
 - tutorial.ts - Does this run show the first-run tutorial? (campaign only, first time on this device, or `?tutorial=1`.) Shared by GameScene (holds the first wave) and UIScene (shows the card). Exports: tutorialWanted
@@ -286,12 +302,14 @@ One file per group of code-drawn art (Varu, cats, bosses, crows, items) + the sh
 - bosses.ts - Code-drawn boss sprites: Mafia Cat, the emo cat (128x128, facing up). The Queen is in art/queen.ts, Pisica Federer in art/federer.ts. Exports: drawBossMafia
 - cats.ts (~450 lines) - Code-drawn cat sprites: normal (and the stands' fan, in any fur color), fat, ninja, kamikaze, flying, lucky, tennis, bomber (96x96, facing up). The tennis cat is layered: body, racket arm, racket. Exports: FanOutfit, FanLook, FanPose, drawCatFan, drawCatNormal, drawCatFat, drawCatNinja, drawCatKamikaze, FLYER_WING_PIVOT, drawWingRight, drawWingLeft, drawCatFlyingBody, drawCatFlying, drawCatLucky, TENNIS_SHOULDER, TENNIS_PAW, TENNIS_RACKET_HEAD, TENNIS_BALL_HAND, drawCatTennis, drawTennisArm, drawTennisRacket, BOMBER_SHOULDER, BOMBER_PAW, drawCatBomber, drawBomberArm
 - crows.ts - Code-drawn crow sprites (normal, gold, kamikaze looks; open / flap / fold wing poses) and the feather. Exports: CrowLook, CROW_NORMAL, CROW_GOLD, CROW_KAMIKAZE, CrowPose, POSE_OPEN, POSE_FLAP, POSE_FOLD, drawCrow, drawFeather
+- dodgeIcon.ts - Code-drawn art for the dodge roll badge: Varu curled into a ball and tumbling, in the same flat navy-outlined style as Varu and the pickups. Exports: drawDodgeIcon
 - federer.ts - Code-drawn Pisica Federer (128x128, facing up): the body plus the loose layers FedererRig moves (racket arm, racket, tail, feet). Exports: FEDERER_SHOULDER, FEDERER_PAW, FEDERER_RACKET_HEAD, FEDERER_BALL_HAND, FEDERER_TAIL_ROOT, drawBossFederer, drawFedererArm, drawFedererRacket, drawFedererTail, drawFedererFootL, drawFedererFootR, drawBallMachine
 - flag.ts - The surrender flag's two pictures (pole, cloth), drawn once: the cat moves and tilts them instead of redrawing a Graphics every frame. Exports: FLAG_POLE_W, FLAG_POLE_H, FLAG_POLE_ORIGIN_Y, FLAG_CLOTH_W, FLAG_CLOTH_H, FLAG_CLOTH_ORIGIN_X, FLAG_CLOTH_ORIGIN_Y, drawFlagPole, drawFlagCloth
 - fx.ts (~300 lines) - Code-drawn floor and shield effects in the cartoon style (navy outline, shine, little sparkles): tear puddle, the big scream flood, bubble shields (queen, emo), magic floor ring, shockwave ring, carpet pad, dust puff and teardrop. Exports: FX_BUBBLE_R, FX_RING_R, FX_SHOCK_R, FX_DISC_R, FX_HOOP_R, FX_BAR_PX, FX_PUDDLE_W, FX_FLOOD_SIZE, FX_FLOOD_W, FX_PAD_R, FX_PUFF_R, drawFxPuddle, drawFxFlood, drawFxBubbleQueen, drawFxBubbleEmo, drawFxRing, drawFxDisc, drawFxHoop, drawFxShock, drawFxCarpetPad, drawFxPuff, drawFxDrop, drawFxDiamond, drawFxCarpetTile
-- items.ts (~850 lines) - Code-drawn projectiles (yarn, tennis ball, broken heart, thrown belt), pickup icons (crochete, the loose cigarettes and the vape (the crochete's other looks), lapte, the milk bottle (the lapte's second look), monster, the Red Bull can (the Monster's second look), golden belt, laser, mystery question mark, a 3D block letter; the roulette wheel (its second look); the bad snail, dumbbell, emo hood, rusty belt, big Varu and smoke break) and the fans' petard. Exports: drawYarn, drawTennis, drawFireball, drawBrokenHeart, drawBeltThrown, drawPickupCrochete, drawPickupCigarettes, drawPickupVape, drawPickupMilkBottle, drawPickupLapte, drawPickupMonster, drawPickupRedBull, drawPickupGoldenBelt, drawPickupLaser, drawPickupSnail, drawPickupDumbbell, drawPickupEmo, drawPickupRusty, drawPickupBig, drawPickupSmoke, drawPickupMystery, drawPickupRoulette, drawPetard
+- items.ts (~900 lines) - Code-drawn projectiles (yarn, tennis ball, broken heart, thrown belt), pickup icons (crochete, the loose cigarettes and the vape (the crochete's other looks), lapte, the milk bottle (the lapte's second look), monster, the Red Bull can (the Monster's second look), golden belt, laser, umbrella (and its canopy seen from above), mystery question mark, a 3D block letter; the roulette wheel (its second look); the bad snail, dumbbell, emo hood, rusty belt, big Varu and smoke break) and the fans' petard. Exports: drawYarn, drawTennis, drawFireball, drawBrokenHeart, drawBeltThrown, drawPickupCrochete, drawPickupCigarettes, drawPickupVape, drawPickupMilkBottle, drawPickupLapte, drawPickupMonster, drawPickupRedBull, drawPickupGoldenBelt, drawPickupLaser, drawPickupSnail, drawPickupDumbbell, drawPickupEmo, drawPickupRusty, drawPickupBig, drawPickupSmoke, drawPickupMystery, drawPickupRoulette, drawPetard, drawPickupUmbrella, drawUmbrellaCanopy
 - lamp.ts - Code-drawn parts of the retractable floor lamps (round foot, pole, lantern). Same toolkit and navy outline as the rest of the art. Seen from a little above like the scratching post and the bushes: every round part has a light top-left, a mid tone, a dark underside and a thin bounce light on the far edge, so it reads as a solid object and not as a sticker. Exports: drawLampBase, drawLampStem, drawLampHead
 - queen.ts - Code-drawn Queen Cat in layers (128x128 each, facing UP): body, cape, crown, scepter arm and two feet, so `QueenRig` can animate them apart. Exports: QUEEN_SHOULDER, QUEEN_CROWN_BASE, QUEEN_GEMS, drawQueenCape, drawBossQueen, drawQueenCrown, drawQueenScepter, drawQueenFootL, drawQueenFootR
+- rideAndIce.ts - Code-drawn art for the scooter and ice cream power-ups: the two pickup icons, the scooter seen from above (under Varu) and the ice block drawn over a frozen cat. Exports: drawPickupScooter, drawScooterBody, drawPickupIceCream, drawIceBlock
 - shapes.ts - Drawing toolkit for the code-drawn art: flat shapes with a thick navy outline (layer / flat / ink / T / P / C / E ...). Exports: G, Pt, NAVY, OUTLINE, Shape, E, C, R, P, smooth, dense, S, T, Tpart, fluff, scalloped, ellipsePts, rod, layer, flat, ink, sparkle, heart
 - varu.ts - Code-drawn Varu: body, belt, legs, and the body colors the touch button reuses. Exports: SKIN, DARK_BELT, FLEECE, FLEECE_SHADE, PIPING, drawVaruLegL, drawVaruLegR, drawVaruBelt, HoodState, drawVaru
 - views.ts (~450 lines) - Code-drawn side and back/front views of the three bosses (emo: back + side, queen: back + side, Federer: front + side), 128x128, side views face RIGHT, plus the baked one-piece drawings the game swaps in. Exports: emoSide, emoBack, queenSide, queenBack, fedFront, fedSide, drawEmoSide, drawEmoBack, drawQueenSide, drawQueenBack, drawFedererFront, drawFedererSide

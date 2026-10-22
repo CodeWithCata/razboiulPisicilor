@@ -12,9 +12,11 @@ import { CROW_GOLD, CROW_KAMIKAZE, CROW_NORMAL, POSE_FLAP, POSE_FOLD, POSE_OPEN,
 import { drawBossQueen, drawQueenCape, drawQueenCrown, drawQueenFootL, drawQueenFootR, drawQueenScepter } from './art/queen';
 import { drawBomberArm, drawCatBomber, drawCatFat, drawCatFlying, drawCatFlyingBody, drawWingLeft, drawWingRight, drawCatKamikaze, drawCatLucky, drawCatNinja, drawCatNormal, drawCatTennis, drawTennisArm, drawTennisRacket } from './art/cats';
 import {
-  drawBeltThrown, drawPetard, drawPickupCrochete, drawPickupCigarettes, drawPickupVape, drawPickupGoldenBelt, drawPickupLapte, drawPickupMilkBottle, drawPickupLaser, drawPickupMonster, drawPickupRedBull, drawPickupMystery, drawPickupRoulette, drawPickupSnail, drawPickupDumbbell, drawPickupEmo, drawPickupRusty, drawPickupBig, drawPickupSmoke,
+  drawBeltThrown, drawPetard, drawPickupCrochete, drawPickupCigarettes, drawPickupVape, drawPickupGoldenBelt, drawPickupLapte, drawPickupMilkBottle, drawPickupLaser, drawPickupUmbrella, drawUmbrellaCanopy, drawPickupMonster, drawPickupRedBull, drawPickupMystery, drawPickupRoulette, drawPickupSnail, drawPickupDumbbell, drawPickupEmo, drawPickupRusty, drawPickupBig, drawPickupSmoke,
   drawBrokenHeart, drawFireball, drawTennis, drawYarn,
 } from './art/items';
+import { drawDodgeIcon } from './art/dodgeIcon';
+import { drawIceBlock, drawPickupIceCream, drawPickupScooter, drawScooterBody } from './art/rideAndIce';
 import { drawLampBase, drawLampHead, drawLampStem } from './art/lamp';
 import { drawVaru, drawVaruBelt, drawVaruLegL, drawVaruLegR } from './art/varu';
 import { make, makeRepeating, poly } from './paint';
@@ -97,6 +99,13 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.PickupRedBull, 64, 64, drawPickupRedBull);
   make(scene, Tex.PickupGoldenBelt, 64, 64, drawPickupGoldenBelt);
   make(scene, Tex.PickupLaser, 64, 64, drawPickupLaser);
+  make(scene, Tex.PickupUmbrella, 64, 64, drawPickupUmbrella);
+  make(scene, Tex.UmbrellaCanopy, 128, 128, drawUmbrellaCanopy);
+  make(scene, Tex.DodgeIcon, 64, 64, drawDodgeIcon);
+  make(scene, Tex.PickupScooter, 64, 64, drawPickupScooter);
+  make(scene, Tex.ScooterBody, 64, 128, drawScooterBody);
+  make(scene, Tex.PickupIceCream, 64, 64, drawPickupIceCream);
+  make(scene, Tex.IceBlock, 128, 128, drawIceBlock);
   make(scene, Tex.PickupMystery, 64, 64, drawPickupMystery);
   make(scene, Tex.PickupRoulette, 64, 64, drawPickupRoulette);
   make(scene, Tex.PickupSnail, 64, 64, drawPickupSnail);

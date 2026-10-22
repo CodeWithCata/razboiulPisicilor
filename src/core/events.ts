@@ -43,6 +43,15 @@ export const Events = {
   Teleport: 'fx:teleport', // TeleportPayload
   SpawnProjectile: 'projectile:spawn', // SpawnProjectilePayload
   ProjectileBlocked: 'projectile:blocked', // PointPayload
+  RainbowDrop: 'rainbow:drop', // PointPayload (a bonus pickup dropped under the rainbow: sparkle, sound)
+  DodgeRoll: 'dodge:roll', // DodgeRollPayload (Varu starts the dodge: the wind-up crouch begins)
+  DodgeLaunch: 'dodge:launch', // DodgeRollPayload (the wind-up is over and he pushes off: dust, whoosh)
+  DodgeSave: 'dodge:save', // PointPayload (a hit missed because he was rolling: word, sparks, sound)
+  DodgeCooldown: 'dodge:cooldown', // DodgeCooldownPayload (HUD badge)
+  ScooterBump: 'scooter:bump', // PointPayload (the scooter shoved a cat out of the way: a word, sparks, a sound)
+  IceCream: 'icecream:eaten', // PointPayload (Varu grabbed the ice cream: IceCreamSystem freezes the cats around him)
+  IceBlast: 'icecream:blast', // IceBlastPayload (the freeze happened: ring, sparks, a word, a sound)
+  UmbrellaBlock: 'umbrella:block', // PointPayload (the umbrella stopped a ball, a shot or a petard: sparks, a word, a sound)
   LightsOut: 'fx:lights-out', // LightsOutPayload (the emo cat turns the lights off / on: Blackout draws the dark, DayNight raises the lamps)
   ProjectileSmash: 'projectile:smash', // ProjectileSmashPayload (every frame a smashing projectile flies: props, barrels and lamps in its way take the hit)
   WaveStarted: 'wave:started', // WavePayload
@@ -240,8 +249,17 @@ export interface DebugStatsPayload {
   luck: string;
 }
 
+export interface DodgeRollPayload extends PointPayload {
+  /** The way he rolls (radians). */
+  angle: number;
+}
+
+export interface DodgeCooldownPayload {
+  durationMs: number; // 0 = ready right now
+}
+
 export interface TouchPressPayload {
-  button: Exclude<BeltAttackId, 'swing'>;
+  button: Exclude<BeltAttackId, 'swing'> | 'roll';
 }
 
 export interface MutePayload {
@@ -262,6 +280,13 @@ export interface MusicPayload {
 export interface PointPayload {
   x: number;
   y: number;
+}
+
+export interface IceBlastPayload extends PointPayload {
+  /** How far the freeze reaches (px). */
+  radius: number;
+  /** How many cats it froze. */
+  frozen: number;
 }
 
 export interface BeltAttackPayload extends PointPayload {
@@ -395,6 +420,8 @@ export type WeatherKind = 'clear' | 'fog' | 'rain';
 export interface WeatherPayload {
   weather: WeatherKind;
   wave: number;
+  /** True on the wave after rain: the rainbow shows and drops bonus pickups (systems/Rainbow.ts). */
+  rainbow?: boolean;
 }
 
 export interface ScorePayload {

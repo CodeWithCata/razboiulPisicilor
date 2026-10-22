@@ -4,6 +4,8 @@ import { FX_SHOCK_R } from '../assets/art/fx';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { BALL_FX, ENERGY_FLIP, GOLD_BELT, IDLE_HABITS, KAMIKAZE_BLAST, MILK_FX, NINJA_POOF, SMOKE_BREAK, TENNIS_RETURN_FX } from '../config/animation';
+import { DODGE } from '../config/dodge';
+import { ICE_CREAM } from '../config/iceCream';
 import { ARENA } from '../config/arena';
 import { LUCKY, SURRENDER } from '../config/balance';
 import { BAD_PICKUP_FX, PICKUP_VISUALS } from '../config/pickups';
@@ -18,16 +20,18 @@ import {
   type IdleHabitPayload,
   type BossDefeatedPayload,
   type CrowImpactPayload,
+  type DodgeRollPayload,
   type EnemyKilledPayload,
   type ExplosionPayload,
   type JokePayload,
+  type IceBlastPayload,
   type PickupPayload,
   type PointPayload,
   type SmokeBreakPayload,
   type TeleportPayload,
 } from '../core/events';
 import { gameClock } from '../core/clock';
-import { JAIL_WORDS, BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, pick } from '../content/lines';
+import { JAIL_WORDS, BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, UMBRELLA_WORDS, DODGE_WORDS, SCOOTER_WORDS, ICE_WORDS, pick } from '../content/lines';
 import { createDrops, createPuddles } from './belt/gooEmitters';
 import { flatDisc } from './flatShapes';
 
@@ -48,6 +52,8 @@ export class Effects {
   private readonly feathers: Phaser.GameObjects.Particles.ParticleEmitter;
   /** Green dust of the back flip's landing. */
   private readonly dust: Phaser.GameObjects.Particles.ParticleEmitter;
+  /** Pale dust kicked up at the start of a dodge roll. */
+  private readonly rollDust: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly milk: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly milkPuddles: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly goldMilk: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -65,6 +71,7 @@ export class Effects {
     this.fur = this.emitter(550, { min: 60, max: 200 }, 0.9, [0xf59a3c, 0xfff3d6, 0xd9731a]);
     this.smoke = this.emitter(500, { min: 30, max: 140 }, 1.1, [0x7a4fb5, 0x2e2e3d]);
     this.dust = this.emitter(450, { min: 50, max: 150 }, 0.9, [0xb4ff1a, 0xe6ffa8, 0xffffff]);
+    this.rollDust = this.emitter(380, { min: 40, max: 120 }, 0.8, [0xe6d9b3, 0xf5ecd0, 0xffffff]);
     this.feathers = this.scene.add
       .particles(0, 0, texRef(Tex.Feather).key, { frame: texRef(Tex.Feather).frame,
         emitting: false,
@@ -135,6 +142,21 @@ export class Effects {
         this.sparks.explode(5, x, y);
         this.floatText(x, y - 14, 'PLAF!', '#ffb3cf', 20, FONT_SFX);
       }),
+      listen<PointPayload>(Events.RainbowDrop, ({ x, y }) => this.sparks.explode(16, x, y)),
+      listen<DodgeRollPayload>(Events.DodgeLaunch, ({ x, y }) => this.rollDust.explode(DODGE.dust.count, x, y)),
+      listen<PointPayload>(Events.DodgeSave, ({ x, y }) => {
+        this.sparks.explode(6, x, y);
+        this.floatText(x, y - 44, pick(DODGE_WORDS), '#9fd3ff', 26, FONT_SFX);
+      }),
+      listen<PointPayload>(Events.UmbrellaBlock, ({ x, y }) => {
+        this.sparks.explode(7, x, y);
+        this.floatText(x, y - 40, pick(UMBRELLA_WORDS), '#9fd3ff', 24, FONT_SFX);
+      }),
+      listen<PointPayload>(Events.ScooterBump, ({ x, y }) => {
+        this.sparks.explode(5, x, y);
+        this.floatText(x, y - 36, pick(SCOOTER_WORDS), '#7ff0de', 24, FONT_SFX);
+      }),
+      listen<IceBlastPayload>(Events.IceBlast, ({ x, y, radius, frozen }) => this.iceBlast(x, y, radius, frozen)),
       listen<ExplosionPayload>(Events.Explosion, (e) => this.explosion(e)),
       listen<PickupPayload>(Events.PickupCollected, ({ kind, x, y }) => {
         this.sparks.explode(14, x, y);
@@ -268,6 +290,15 @@ export class Effects {
     if (now - this.lastBallWordAt < BALL_FX.word.gapMs) return;
     this.lastBallWordAt = now;
     this.floatText(x, y - BALL_FX.word.offsetY, pick(BALL_LAND_WORDS), BALL_FX.word.color, BALL_FX.word.size, FONT_SFX);
+  }
+
+  /** The ice cream: a pale-blue ring spreads from Varu out to the freeze radius, frost sparks, a word over him. */
+  private iceBlast(x: number, y: number, radius: number, frozen: number): void {
+    const B = ICE_CREAM.blast;
+    const ring = this.scene.add.image(x, y, ...texArgs(Tex.FxShock)).setTint(B.color).setAlpha(B.alpha).setDepth(45).setScale(B.startPx / FX_SHOCK_R);
+    this.scene.tweens.add({ targets: ring, scale: radius / FX_SHOCK_R, alpha: 0, duration: B.ringMs, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+    this.sparks.explode(B.sparks, x, y);
+    this.floatText(x, y - 64, frozen > 0 ? pick(ICE_WORDS) : 'Nimeni nu-i aproape...', '#9fe4ff', 30, FONT_SFX);
   }
 
   /** Expanding ring + fur burst. The ring is the visible blast radius. */

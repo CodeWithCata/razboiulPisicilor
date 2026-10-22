@@ -4,6 +4,7 @@ import { SMOKE_BREAK, SMOKE_BREAK_ON } from '../config/animation';
 import { COSTLY } from '../config/curses';
 import { isBadPickup, MYSTERY, PICKUPS, SMOKE_FREEZE, type BadKind, type GoodPrize, type MysteryPrize, type PickupKind } from '../config/balance';
 import { bus, Events, type PickupPayload } from '../core/events';
+import { markSeen } from '../core/almanac';
 import { weightedPick } from '../core/random';
 import type { Player } from '../entities/Player';
 import type { CrowRainSystem } from './CrowRainSystem';
@@ -22,6 +23,7 @@ export interface PickupContext {
 
 /** What each pickup actually does. Add a new pickup kind = add one case here. */
 export function applyPickup(kind: PickupKind, ctx: PickupContext, durationMs?: number): void {
+  markSeen(kind); // the almanac unlocks this pickup
   if (SMOKE_BREAK.enabled && SMOKE_BREAK_ON.includes(kind)) ctx.player.smokeBreak(); // food and energy drink: a drag of his cigarette
   switch (kind) {
     case 'crochete':
@@ -32,6 +34,8 @@ export function applyPickup(kind: PickupKind, ctx: PickupContext, durationMs?: n
     case 'monster':
     case 'goldenBelt':
     case 'laser':
+    case 'umbrella':
+    case 'scooter':
     case 'snail':
     case 'dumbbell':
     case 'emo':
@@ -41,6 +45,9 @@ export function applyPickup(kind: PickupKind, ctx: PickupContext, durationMs?: n
       if (kind === 'goldenBelt') ctx.player.goldenBeltFlourish();
       if (kind === 'lapte') ctx.player.milkSplash();
       if (kind === 'monster') ctx.player.backflip(); // energy: one back flip (animation only; the Z z z trail comes from the buff)
+      break;
+    case 'iceCream':
+      bus.emit(Events.IceCream, { x: ctx.player.x, y: ctx.player.y }); // IceCreamSystem freezes the cats around him
       break;
     case 'crow':
       ctx.crowRain.start();

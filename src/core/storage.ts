@@ -13,6 +13,7 @@ const AUTO_ATTACK_KEY = `${KEY_PREFIX}auto-attack`;
 const SEEN_CUTSCENES_KEY = `${KEY_PREFIX}cutscenes-seen`;
 const TUTORIAL_DONE_KEY = `${KEY_PREFIX}tutorial-done`;
 const INTRO_SEEN_KEY = `${KEY_PREFIX}intro-seen`;
+const ALMANAC_SEEN_KEY = `${KEY_PREFIX}almanac-seen`;
 const DEBUG_INFO_KEY = `${KEY_PREFIX}debug-info`;
 const volumeKey = (kind: string): string => `${KEY_PREFIX}volume-${kind}`;
 
@@ -31,6 +32,20 @@ function write(key: string, value: string): void {
   } catch {
     // Storage unavailable: the setting just won't persist.
   }
+}
+
+/** The almanac entries the player has met (cat types and pickup kinds), as saved. */
+export function loadAlmanacSeen(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(read(ALMANAC_SEEN_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveAlmanacSeen(ids: readonly string[]): void {
+  write(ALMANAC_SEEN_KEY, JSON.stringify(ids));
 }
 
 export function loadBest(mode: RunMode = 'campaign'): number {

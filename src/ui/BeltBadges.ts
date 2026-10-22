@@ -1,5 +1,7 @@
 /** @file Spin and throw cooldown badges (also the touch buttons for them). */
 import Phaser from 'phaser';
+import { texArgs } from '../assets/atlas';
+import { Tex } from '../assets/keys';
 import { poly } from '../assets/paint';
 import { GAME, type BeltAttackId } from '../config/balance';
 import { BELT_BADGES as B } from '../config/beltBadges';
@@ -10,7 +12,7 @@ import { usesTouchControls } from '../core/device';
 import type { Pt } from '../core/polyClip';
 import { hyp } from '../core/hyp';
 
-export type BeltSpecial = Exclude<BeltAttackId, 'swing'>;
+export type BeltSpecial = Exclude<BeltAttackId, 'swing'> | 'roll';
 
 const DEG = Math.PI / 180;
 
@@ -47,6 +49,8 @@ interface Badge {
   milk?: Milk;
   /** Counts down after a touch tap (the badge squashes). */
   pressMs: number;
+  /** The dodge badge only: its picture (Varu rolling over). */
+  picture?: Phaser.GameObjects.Image;
 }
 
 /**
@@ -58,6 +62,8 @@ interface Badge {
  */
 export class BeltBadges {
   private readonly badges: Badge[];
+  /** Runs on while the game runs (drives the rocking of Varu on the roll badge). */
+  private clockMs = 0;
 
   constructor(scene: Phaser.Scene) {
     const touch = usesTouchControls();
@@ -73,12 +79,14 @@ export class BeltBadges {
       const seconds = scene.add
         .text(cx, cy, '', { fontFamily: FONT, fontSize: `${B.seconds.size}px`, color: B.colors.seconds, stroke: B.colors.secondsStroke, strokeThickness: B.seconds.strokeThickness })
         .setOrigin(0.5)
+        .setDepth(1) // over the picture on the roll badge
         .setVisible(false);
       const badge: Badge = { id, cx, cy, k, gfx, seconds, totalMs: 1, remainingMs: 0, away: false, popMs: 0, wasReady: true, milkMs: 0, pressMs: 0 };
       // Under the badge: the key on a computer, the name of the button on a phone (it fades after the first seconds of a run).
       badge.tag = scene.add
         .text(0, 0, touch ? TOUCH_TEXT[id] : BELT_LABELS[id].key, { fontFamily: FONT, fontSize: `${B.tag.size}px`, color: B.colors.tagText, stroke: B.colors.tagStroke, strokeThickness: B.tag.strokeThickness })
         .setOrigin(0.5);
+      if (id === 'roll') badge.picture = scene.add.image(cx, cy, ...texArgs(Tex.DodgeIcon));
       if (touch) scene.tweens.add({ targets: badge.tag, alpha: 0, delay: TOUCH.hintMs, duration: TOUCH.hintFadeMs });
       return badge;
     });
@@ -104,6 +112,7 @@ export class BeltBadges {
   }
 
   update(delta: number): void {
+    this.clockMs += delta;
     for (const b of this.badges) {
       b.remainingMs = Math.max(0, b.remainingMs - delta);
       b.popMs = Math.max(0, b.popMs - delta);
@@ -153,6 +162,7 @@ export class BeltBadges {
     const iconAlpha = b.away ? B.iconAlphaAway : 1;
     const iconColor = b.away ? B.colors.iconCooling : B.colors.iconReady;
     if (b.id === 'spin') this.drawSpinIcon(g, iconColor, iconAlpha, !b.away);
+    else if (b.id === 'roll') this.placeRollPicture(b, scale, iconColor);
     else this.drawThrowIcon(g, iconColor, iconAlpha, !b.away);
     if (!b.away && !ready) this.drawSweep(g, b);
 
@@ -321,6 +331,22 @@ export class BeltBadges {
       g.lineStyle(s.buckle.lineW + extra, outline ? B.colors.outline : B.colors.buckle, alpha);
       g.strokePoints(corners, true);
     }
+  }
+
+  /** The roll badge shows a picture (Varu rolling over): size it with the badge, rock it a little, dim it while the roll recharges. */
+  private placeRollPicture(b: Badge, badgeScale: number, iconColor: number): void {
+    const R = B.icon.roll;
+    const img = b.picture;
+    if (!img) return;
+    const cooling = b.remainingMs > 0 || b.away;
+    const k = (R.sizePx / 64) * badgeScale * b.k;
+    img
+      .setPosition(b.cx, b.cy)
+      .setScale(k)
+      .setRotation(R.rockDeg * DEG * Math.sin((this.clockMs / R.rockMs) * Math.PI * 2))
+      .setAlpha(b.away ? B.iconAlphaAway : cooling ? R.coolAlpha : 1);
+    if (cooling) img.setTint(iconColor);
+    else img.clearTint();
   }
 
   private drawThrowIcon(g: Phaser.GameObjects.Graphics, color: number, alpha: number, ready: boolean): void {

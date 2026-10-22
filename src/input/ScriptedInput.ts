@@ -14,6 +14,7 @@ export class ScriptedInput implements InputSource {
   readonly attackHeld = false;
   readonly spinPressed = false;
   readonly throwPressed = false;
+  readonly dodgePressed = false;
 
   setLaserAiming(_on: boolean): void {}
 

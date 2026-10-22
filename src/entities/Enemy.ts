@@ -9,6 +9,8 @@ import { ENEMIES, LASER, SURRENDER, type EnemyStats, type EnemyType } from '../c
 import type { ArenaQuery } from '../core/arena';
 import { bus, Events, type CatPoppedPayload, type CatSurrenderPayload, type EnemyKilledPayload } from '../core/events';
 import { HIDEOUT } from '../config/props';
+import { ICE_CREAM } from '../config/iceCream';
+import { markSeen } from '../core/almanac';
 import { gameClock } from '../core/clock';
 import { CULL } from '../config/culling';
 import type { FlowField } from '../core/flowField';
@@ -115,6 +117,7 @@ export abstract class Enemy extends Actor {
     const stats: EnemyStats = ENEMIES[type];
     super(scene, x, y, texture, { maxHp: stats.hp, size: stats.size, hitRadius: stats.hitRadius });
     this.enemyType = type;
+    markSeen(type); // the almanac unlocks this cat
     this.stats = stats;
     this.baseScale = this.scaleX; // Actor already fitted the sprite to its size
   }
@@ -163,7 +166,7 @@ export abstract class Enemy extends Actor {
 
   /** Damage dealt to Varu when this cat touches him. */
   get contactDamage(): number {
-    return this.giveUp || this.cagedIn ? 0 : this.stats.contactDamage;
+    return this.giveUp || this.cagedIn || this.frozenUntil > 0 ? 0 : this.stats.contactDamage; // a frozen cat is harmless
   }
 
   /** Multiplier on damage from the belt and crows. Bosses use it for armor. */
@@ -250,7 +253,7 @@ export abstract class Enemy extends Actor {
   protected onCullChange(_out: boolean): void {}
 
   private canSkipFrame(): boolean {
-    return this.giveUp === null && !this.cagedIn && !this.isKnockedBack && this.slipUntil === 0 && this.slowApplied === 1 && this.terrainSlow === 1 && this.fadeAlpha === 1;
+    return this.giveUp === null && !this.cagedIn && !this.isKnockedBack && this.slipUntil === 0 && this.slowApplied === 1 && this.terrainSlow === 1 && this.fadeAlpha === 1 && this.frozenUntil === 0;
   }
 
   tick(time: number, delta: number, ctx: EnemyContext): void {
@@ -259,6 +262,9 @@ export abstract class Enemy extends Actor {
     this.rotation -= this.swayApplied; // undo last frame's sway so think() steers from the true heading
     this.swayApplied = 0;
     if (this.giveUp) this.surrenderStep(); // a cat that gave up never thinks again: no chase, no fuse, no teleport, no shots
+    else if (this.frozenUntil > 0 && this.holdFrozen()) {
+      // frozen solid: no thinking (no chase, fuse, shots or teleport) until the ice melts
+    }
     else if (!this.isKnockedBack) this.think(time, delta, ctx);
     // think() may destroy the cat (kamikaze explosion), and so may the end of the surrender fade: body and shadow are gone then.
     if (!this.active || !this.body) return;
@@ -273,6 +279,7 @@ export abstract class Enemy extends Actor {
     this.animate(delta, body.speed);
     this.syncShadow();
     this.refreshAlpha();
+    if (this.ice) this.placeIce();
   }
 
   /**
@@ -352,6 +359,7 @@ export abstract class Enemy extends Actor {
    */
   surrender(exit: Phaser.Types.Math.Vector2Like): void {
     if (!this.alive || this.giveUp || this.isBoss || this.cagedIn) return;
+    this.thaw(); // a frozen cat that gives up walks away free
     this.knockbackUntil = 0; // no longer flying through the air (so pinball ignores it too)
     this.setVelocity(0, 0);
     this.clearTint(); // a lit kamikaze fuse blinks red: stop that
@@ -428,9 +436,104 @@ export abstract class Enemy extends Actor {
   }
 
   override destroy(fromScene?: boolean): void {
+    this.ice?.destroy(); // so is the ice block of a frozen cat
+    this.ice = null;
     this.giveUp?.flag.pole.destroy(); // the flag is two scene objects of their own: they must not outlive the cat
     this.giveUp?.flag.cloth.destroy();
     super.destroy(fromScene);
+  }
+
+  /** Ice cream: game time (ms) the cat stays frozen solid until. 0 = not frozen. */
+  private frozenUntil = 0;
+  /** The ice block drawn over a frozen cat (made when it freezes, gone when it melts, hit or not). */
+  private ice: Phaser.GameObjects.Image | null = null;
+  /** Whether the body was already immovable before the freeze, so the melt puts it back as it was. */
+  private iceWasImmovable = false;
+
+  /** True while the cat is frozen solid (systems/IceCreamSystem.ts): it does not move or think, cannot bite, but can still be hit. */
+  get frozenSolid(): boolean {
+    return this.frozenUntil > 0;
+  }
+
+  /**
+   * Freeze the cat in place for `ms` (the ice cream). It stops where it is (even in mid-fling), gets an ice block, cannot think, move or bite,
+   * and cannot be pushed by other cats, but the belt still hits it (a hit still knocks it back; it freezes again where it lands, until the time is up).
+   * A cat that is already frozen only has its time extended. Returns false for bosses (too big and too busy), cats that gave up or are caged, and dead cats.
+   */
+  freezeFor(ms: number): boolean {
+    if (this.isBoss || !this.alive || !this.body || this.giveUp || this.cagedIn) return false;
+    const now = gameClock.now;
+    const wasFrozen = this.frozenUntil > 0;
+    const before = wasFrozen ? this.frozenUntil : now;
+    this.frozenUntil = Math.max(before, now + ms);
+    if (!wasFrozen) {
+      const body = this.body as Phaser.Physics.Arcade.Body;
+      this.iceWasImmovable = body.immovable;
+      body.setImmovable(true);
+      this.knockbackUntil = 0; // a cat in mid-fling stops dead
+      this.setVelocity(0, 0);
+      this.makeIce();
+    }
+    this.onFrozen(this.frozenUntil - before);
+    return true;
+  }
+
+  /** Called when a freeze starts or is extended, with how many ms it added. A cat with a clock of its own (the kamikaze's fuse) overrides it to keep that clock still. */
+  protected onFrozen(_extraMs: number): void {}
+
+  /** One frame of being frozen. Returns true while it lasts (the cat is held still), false once it has melted (the cat thinks again this very frame). */
+  private holdFrozen(): boolean {
+    if (gameClock.now >= this.frozenUntil) {
+      this.thaw(true);
+      return false;
+    }
+    if (!this.isKnockedBack && this.body) this.setVelocity(0, 0);
+    return true;
+  }
+
+  /** The ice melts (time is up, or the cat gave up or was caged): the body is as before, the block is gone. `flash` adds a bright blink on the cat. */
+  private thaw(flash = false): void {
+    if (this.frozenUntil === 0) return;
+    this.frozenUntil = 0;
+    (this.body as Phaser.Physics.Arcade.Body | null)?.setImmovable(this.iceWasImmovable);
+    this.ice?.destroy();
+    this.ice = null;
+    if (flash) this.flash(ICE_CREAM.thawFlash.color, ICE_CREAM.thawFlash.ms);
+  }
+
+  private makeIce(): void {
+    const B = ICE_CREAM.block;
+    const size = this.stats.size * B.sizeShare;
+    const ice = this.scene.add.image(this.x, this.y, ...texArgs(Tex.IceBlock)).setDepth(B.depth).setAlpha(B.alpha);
+    ice.setDisplaySize(size, size);
+    const full = ice.scaleX;
+    ice.setScale(full * B.popFrom);
+    this.scene.tweens.add({ targets: ice, scale: full, duration: B.popMs, ease: 'Back.easeOut' });
+    this.ice = ice;
+  }
+
+  /** The ice block follows the cat; the last stretch blinks (it is about to melt). */
+  private placeIce(): void {
+    const ice = this.ice;
+    if (!ice) return;
+    const B = ICE_CREAM.block;
+    ice.setPosition(this.x, this.y);
+    const left = this.frozenUntil - gameClock.now;
+    const dim = left < B.blinkMs && Math.floor(left / B.blinkEveryMs) % 2 === 0;
+    ice.setAlpha(dim ? B.alpha * 0.45 : B.alpha);
+  }
+
+  /**
+   * The scooter bumps this cat (systems/ScooterSystem.ts): damage like a pinball bump, then a long shove away that counts as a fling (so the
+   * cat can bump others), cut by the cat's knockback resist. Returns true if the bump landed (bosses, and a cat bumped a moment ago, are left alone).
+   */
+  scooterBump(damage: number, fromX: number, fromY: number, dirX: number, dirY: number, force: number, flyMs: number, gapMs: number): boolean {
+    if (!this.takeBump(damage, fromX, fromY, 0, gapMs)) return false;
+    if (!this.active || !this.alive || !this.body) return true; // the bump killed it
+    const push = force * (1 - this.stats.knockbackResist);
+    this.setVelocity(dirX * push, dirY * push);
+    this.knockbackUntil = gameClock.now + flyMs;
+    return true;
   }
 
   /** Locked in a bed cage (`cage` / `release`). */
@@ -612,6 +715,7 @@ export abstract class Enemy extends Actor {
 
   /** Locked in a bed cage at (x, y): the body is switched off, the cat and its shadow are hidden. It stays `active` so the wave keeps waiting for it. */
   cage(x: number, y: number): void {
+    this.thaw();
     this.cagedIn = true;
     this.knockbackUntil = 0;
     this.popAt = 0;

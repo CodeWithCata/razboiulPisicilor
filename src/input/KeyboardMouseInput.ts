@@ -1,4 +1,4 @@
-/** @file Desktop controls: WASD / arrows, mouse aim, click / Space swing, Shift / right click spin, E throw. */
+/** @file Desktop controls: WASD / arrows, mouse aim, click swing, Shift / right click spin, E throw, Space dodge roll. */
 import Phaser from 'phaser';
 import { debugState } from '../core/debugState';
 import type { InputSource } from './InputSource';
@@ -7,8 +7,8 @@ import type { InputSource } from './InputSource';
 const RIGHT_BUTTON = 2;
 
 /**
- * Desktop controls: WASD / arrows to move, mouse to aim, hold left click or Space to swing,
- * Shift or right click to spin, E to throw the belt.
+ * Desktop controls: WASD / arrows to move, mouse to aim, hold left click to swing,
+ * Shift or right click to spin, E to throw the belt, Space to dodge roll.
  */
 export class KeyboardMouseInput implements InputSource {
   readonly move = new Phaser.Math.Vector2();
@@ -17,6 +17,7 @@ export class KeyboardMouseInput implements InputSource {
   attackHeld = false;
   spinPressed = false;
   throwPressed = false;
+  dodgePressed = false;
 
   private rightWasDown = false;
 
@@ -53,9 +54,10 @@ export class KeyboardMouseInput implements InputSource {
     // Right click is the spin, so it must not count as a swing too.
     const rightDown = (pointer.buttons & RIGHT_BUTTON) !== 0;
     const onCard = debugState.overPanel; // dev debug card: clicking it is not a swing
-    this.attackHeld = (pointer.isDown && !rightDown && !onCard) || k.space.isDown;
+    this.attackHeld = (pointer.isDown && !rightDown && !onCard);
     this.spinPressed = Phaser.Input.Keyboard.JustDown(k.shift) || (rightDown && !this.rightWasDown && !onCard);
     this.throwPressed = Phaser.Input.Keyboard.JustDown(k.e);
+    this.dodgePressed = Phaser.Input.Keyboard.JustDown(k.space);
     this.rightWasDown = rightDown;
   }
 }

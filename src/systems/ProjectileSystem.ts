@@ -7,11 +7,12 @@ import { FIREBALL_FX } from '../config/animation';
 import { PROJECTILES, type ProjectileKind, type ProjectileStats } from '../config/balance';
 import { fitToSize, setCircleHitbox } from '../core/sprite';
 import type { ArenaQuery } from '../core/arena';
-import { bus, Events, listen, type ProjectileSmashPayload, type RallyHitPayload, type SpawnProjectilePayload } from '../core/events';
+import { bus, Events, listen, type PointPayload, type ProjectileSmashPayload, type RallyHitPayload, type SpawnProjectilePayload } from '../core/events';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import { gameClock } from '../core/clock';
 import { snapshotInto } from '../core/snapshot';
+import { swatProjectile } from './belt/swat';
 
 /** Placeholder texture per kind. */
 const TEXTURES: Record<ProjectileKind, TexKey> = { yarn: Tex.Yarn, tennis: Tex.Tennis, fireball: Tex.Fireball, heart: Tex.Heart, sparkle: Tex.Star };
@@ -171,7 +172,7 @@ export class ProjectileSystem {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly player: Player,
-    enemies: Phaser.Physics.Arcade.Group,
+    private readonly enemies: Phaser.Physics.Arcade.Group,
     private readonly arena: ArenaQuery,
   ) {
     this.group = scene.physics.add.group();
@@ -194,10 +195,14 @@ export class ProjectileSystem {
       this.group,
       (_p, proj) => {
         const p = proj as Projectile;
+        if (player.umbrella) {
+          this.umbrellaStop(p); // the umbrella bounces balls back and swallows everything else
+          return;
+        }
         player.takeDamage(p.damage, p.x, p.y, p.kind);
         p.destroy();
       },
-      (_p, proj) => !(proj as Projectile).friendly,
+      (_p, proj) => !(proj as Projectile).friendly && !player.rolling, // a roll lets shots fly through (they are not spent)
     );
 
     // Deflected projectiles hurt whatever they hit. Bosses get stunned by them.
@@ -222,6 +227,17 @@ export class ProjectileSystem {
       }),
     );
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off.forEach((f) => f()));
+  }
+
+  /** The umbrella meets a shot: a ball that can be deflected flies back like a belt swat, anything else (yarn, hearts, fireballs) is stopped. */
+  private umbrellaStop(p: Projectile): void {
+    const at: PointPayload = { x: p.x, y: p.y };
+    bus.emit(Events.UmbrellaBlock, at);
+    if (p.deflectable && !p.indestructible) {
+      swatProjectile(p, this.enemies, true);
+    } else {
+      p.destroy();
+    }
   }
 
   /** Dev (boss duel): every shot in the air vanishes. */

@@ -1,4 +1,4 @@
-/** @file Code-drawn projectiles (yarn, tennis ball, broken heart, thrown belt), pickup icons (crochete, the loose cigarettes and the vape (the crochete's other looks), lapte, the milk bottle (the lapte's second look), monster, the Red Bull can (the Monster's second look), golden belt, laser, mystery question mark, a 3D block letter; the roulette wheel (its second look); the bad snail, dumbbell, emo hood, rusty belt, big Varu and smoke break) and the fans' petard. */
+/** @file Code-drawn projectiles (yarn, tennis ball, broken heart, thrown belt), pickup icons (crochete, the loose cigarettes and the vape (the crochete's other looks), lapte, the milk bottle (the lapte's second look), monster, the Red Bull can (the Monster's second look), golden belt, laser, umbrella (and its canopy seen from above), mystery question mark, a 3D block letter; the roulette wheel (its second look); the bad snail, dumbbell, emo hood, rusty belt, big Varu and smoke break) and the fans' petard. */
 import { GOLD_BELT } from '../../config/animation';
 import { COLORS } from '../../config/style';
 import { C, E, NAVY, P, R, S, T, dense, ellipsePts, flat, heart, ink, layer, smooth, sparkle, type G, type Pt, type Shape } from './shapes';
@@ -850,4 +850,69 @@ export function drawPetard(g: G): void {
   ink(g, [[7.5, 17], [12, 14], [15, 15.4]], 1.3, pinkDark);
   ink(g, [[25, 17], [20.5, 14.6], [17.6, 16.4]], 1.3, pinkDark);
   ink(g, [[12, 18.6], [15.6, 16.6], [19.6, 18.6]], 1.2, pinkDark);
+}
+
+/** Panel colors of the umbrella (blue, yellow, red: a nod to the flag). */
+const UMBRELLA_PANELS = [0x2f7bff, 0xffd23f, 0xe5484d] as const;
+
+/**
+ * The umbrella pickup (64x64): an open umbrella seen from the side, four panels in blue / yellow / red, a brown hooked handle,
+ * a tiny tip on top and two raindrops falling off the left edge.
+ */
+export function drawPickupUmbrella(g: G): void {
+  const apexX = 32;
+  const apexY = 11;
+  const hemY = 37;
+  const tips = [7, 19.5, 32, 44.5, 57];
+  /** A rib: from the apex to its hem tip, bulging like a dome. */
+  const rib = (tipX: number, steps = 8): Pt[] => {
+    const out: Pt[] = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = (i / steps) * (Math.PI / 2);
+      out.push([apexX + (tipX - apexX) * Math.sin(t), apexY + (hemY - apexY) * (1 - Math.cos(t))]);
+    }
+    return out;
+  };
+  // raindrops (behind everything)
+  flat(g, [E(4, 49, 3, 5), E(12, 57, 2.6, 4.4)], 0x7fc4ff);
+  // the handle and the tip
+  layer(g, [T([[32, 5], [32, 12]], 3)], 0x6b4a2b, 2);
+  layer(g, [T([[32, 34], [32, 54], [36, 59], [42, 56]], 3.6)], 0x6b4a2b, 2.4);
+  // the four panels, each with its own outline so the ribs read as seams
+  for (let k = 0; k < 4; k++) {
+    const left = rib(tips[k]!);
+    const right = rib(tips[k + 1]!).reverse();
+    const hemMid: Pt = [(tips[k]! + tips[k + 1]!) / 2, hemY - 3.5]; // the hem scoops up between two tips
+    layer(g, [P([...left, hemMid, ...right])], UMBRELLA_PANELS[k % UMBRELLA_PANELS.length]!, 2.2);
+  }
+  // a soft highlight on the upper left
+  flat(g, [E(22, 20, 8, 3.4)], 0xffffff, 0.45);
+}
+
+/**
+ * The open umbrella seen from ABOVE (128x128), held over Varu while the buff runs: six wedges (blue, yellow, red, twice),
+ * seams from the center to the rim, a brown knob in the middle and a highlight.
+ */
+export function drawUmbrellaCanopy(g: G): void {
+  const cx = 64;
+  const cy = 64;
+  const rim = 60;
+  layer(g, [C(cx, cy, rim)], 0xffffff, 3);
+  const wedges = 6;
+  for (let k = 0; k < wedges; k++) {
+    const a0 = (k / wedges) * Math.PI * 2 - Math.PI / 2;
+    const a1 = ((k + 1) / wedges) * Math.PI * 2 - Math.PI / 2;
+    const pts: Pt[] = [[cx, cy]];
+    for (let i = 0; i <= 6; i++) {
+      const a = a0 + ((a1 - a0) * i) / 6;
+      pts.push([cx + Math.cos(a) * (rim - 2), cy + Math.sin(a) * (rim - 2)]);
+    }
+    flat(g, [P(pts)], UMBRELLA_PANELS[k % UMBRELLA_PANELS.length]!);
+  }
+  for (let k = 0; k < wedges; k++) {
+    const a = (k / wedges) * Math.PI * 2 - Math.PI / 2;
+    ink(g, [[cx, cy], [cx + Math.cos(a) * (rim - 2), cy + Math.sin(a) * (rim - 2)]], 2.2);
+  }
+  flat(g, [E(44, 40, 20, 9)], 0xffffff, 0.3);
+  layer(g, [C(cx, cy, 6)], 0x6b4a2b, 2.2);
 }

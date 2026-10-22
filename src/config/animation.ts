@@ -245,6 +245,26 @@ export const RUST_FX = {
   depth: 22,
 } as const;
 
+/** The numbers a somersault needs (Player.advanceBackflip): the energy drink's back flip (`ENERGY_FLIP`) and the dodge roll (`DODGE.anim`). */
+export interface FlipLook {
+  ms: number;
+  jumpPx: number;
+  hop: number;
+  takeoff: number;
+  touchdown: number;
+  launch: number;
+  crouch: { x: number; y: number };
+  stretch: { x: number; y: number };
+  landing: { x: number; y: number };
+  turns: number;
+  minLength: number;
+  /** Optional: how small the body gets at the top of the turn (1 = same size, 0.8 = a tucked ball). Default 1. */
+  tuck?: number;
+  shadowSize: number;
+  shadowAlpha: number;
+  ghost: { everyMs: number; lifeMs: number; alpha: number; tint: number; depth: number };
+}
+
 /**
  * The energy drink back flip: the moment Varu grabs the can he plants his feet, crouches, springs UP the screen and does one full
  * somersault, then lands with a squash, a green shockwave ring, a puff of dust and a small shake. He keeps full control the whole time

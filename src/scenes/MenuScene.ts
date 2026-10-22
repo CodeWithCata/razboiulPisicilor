@@ -4,6 +4,7 @@ import { AUDIO } from '../config/audio';
 import { GAME } from '../config/balance';
 import { MENU } from '../config/menu';
 import { FONT } from '../config/style';
+import { ALMANAC_TEXT } from '../content/almanac';
 import { ENDLESS_TEXT, MENU_TEXT, TOUCH_TEXT } from '../content/lines';
 import { TOUCH } from '../config/touch';
 import { usesTouchControls } from '../core/device';
@@ -47,6 +48,10 @@ export class MenuScene extends Phaser.Scene {
       const E = MENU.endless;
       endlessButton = createMenuButton(this, { x: width / 2, y: E.y, w: E.w, h: touch ? E.touchH : E.h, size: E.size, label: touch ? ENDLESS_TEXT.unlockedMenu : ENDLESS_TEXT.menuButton, interactive: true });
     }
+
+    // The almanac button (top left): opens the almanac instead of starting the game.
+    const A = MENU.almanac;
+    const almanacButton = createMenuButton(this, { x: A.x, y: A.y, w: touch ? A.touchW : A.w, h: touch ? A.touchH : A.h, size: A.size, label: ALMANAC_TEXT.menuButton, interactive: true });
 
     // Bottom line: the records, and the key reminders on desktop.
     const parts: string[] = [];
@@ -104,12 +109,20 @@ export class MenuScene extends Phaser.Scene {
     const onTap = (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void => {
       if (isPwaUiEvent(pointer.event)) return; // a tap on the install button must not start the game
       this.input.off(startEvent, onTap);
+      if (over.includes(almanacButton)) {
+        this.scene.start('AlmanacScene'); // the almanac button: not a start
+        return;
+      }
       go(endlessButton && over.includes(endlessButton) ? { mode: 'endless' } : undefined);
     };
     this.input.on(startEvent, onTap);
     // The mute key must not start the game; Enter starts endless mode once it is unlocked.
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
       // Only a real "start" key counts: not the mute key, and not Shift / Ctrl / Alt, F-keys or shortcuts like Ctrl+R.
+      if (event.code === 'KeyA' && !started) {
+        this.scene.start('AlmanacScene'); // A opens the almanac
+        return;
+      }
       if (event.code === AUDIO.muteKeyCode || event.ctrlKey || event.metaKey || event.altKey || IGNORED_START_KEYS.test(event.code)) return;
       const endless = endlessUnlocked && (event.code === 'Enter' || event.code === 'NumpadEnter');
       go(endless ? { mode: 'endless' } : undefined);

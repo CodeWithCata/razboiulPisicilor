@@ -7,7 +7,7 @@ import { BELT, ENEMIES, WAVE_TIMING, isBossType, type EnemyType, type PickupKind
 import { TOUCH } from '../config/touch';
 import type { PropKind } from '../config/props';
 import { SLOW_MO } from '../config/slowMo';
-import { FOG_LINES, RAIN_LINES, VARU_LINES, WAVE_CLEARED_LINES, pick } from '../content/lines';
+import { FOG_LINES, RAINBOW_LINES, RAIN_LINES, VARU_LINES, WAVE_CLEARED_LINES, pick } from '../content/lines';
 import { usesTouchControls } from '../core/device';
 import { readRun, type RunOptions } from '../core/run';
 import { gameClock } from '../core/clock';
@@ -37,6 +37,7 @@ import { DebugCheats } from '../systems/DebugCheats';
 import { FanThrowSystem } from '../systems/FanThrowSystem';
 import { Fog } from '../systems/Fog';
 import { Rain } from '../systems/Rain';
+import { Rainbow } from '../systems/Rainbow';
 import { CostlyRewards } from '../systems/CostlyRewards';
 import { COSTLY } from '../config/curses';
 import { Weather } from '../systems/Weather';
@@ -54,6 +55,10 @@ import { SurrenderSystem } from '../systems/SurrenderSystem';
 import { announcePickup, applyPickup } from '../systems/pickupEffects';
 import { CurseSystem } from '../systems/CurseSystem';
 import { PowerUpSystem } from '../systems/PowerUpSystem';
+import { DodgeSystem } from '../systems/DodgeSystem';
+import { UmbrellaSystem } from '../systems/UmbrellaSystem';
+import { ScooterSystem } from '../systems/ScooterSystem';
+import { IceCreamSystem } from '../systems/IceCreamSystem';
 import { BarrelSystem } from '../systems/props/BarrelSystem';
 import { Obstacles } from '../systems/props/Obstacles';
 import { LampSystem } from '../systems/LampSystem';
@@ -91,6 +96,9 @@ export class GameScene extends Phaser.Scene {
   private waves!: WaveSystem;
   private score!: ScoreSystem;
   private powerUps!: PowerUpSystem;
+  private umbrella!: UmbrellaSystem;
+  private scooter!: ScooterSystem;
+  private dodge!: DodgeSystem;
   /** Bad luck gate. Null until it is built in `create` (the barrels are built before it and ask `canCurse`). */
   private curses: CurseSystem | null = null;
   private crowRain!: CrowRainSystem;
@@ -102,6 +110,7 @@ export class GameScene extends Phaser.Scene {
   private blackout!: Blackout;
   private fog!: Fog;
   private rain!: Rain;
+  private rainbow!: Rainbow;
   private weatherCurses!: WeatherCurses;
   private slowMo!: SlowMoSystem;
   private cutscene!: CutsceneSystem;
@@ -164,6 +173,7 @@ export class GameScene extends Phaser.Scene {
     this.arena.collideEnemies(this.enemies, (enemy) => !(enemy as Enemy).flies); // flying cats pass over walls
     this.obstacles = new Obstacles(this, this.arena.grid, this.player, this.enemies); // barrels and lamps are solid too (not map tiles)
     this.projectiles = new ProjectileSystem(this, this.player, this.enemies, this.arena.grid);
+    this.dodge = new DodgeSystem(this.player); // the dodge roll: Space / the Tumbă button, 2 s cooldown
     this.belt = new BeltSystem(this, this.player, this.enemies, this.projectiles.group, this.arena.grid);
     // On a phone Varu turns to the nearest cat and swings by himself (and swats balls that fly at him): only the walking is up to the thumb.
     if (this.touchInput) {
@@ -181,6 +191,9 @@ export class GameScene extends Phaser.Scene {
     this.score = new ScoreSystem(this, this.run.mode);
     this.hitStop = new HitStop(this);
     this.powerUps = new PowerUpSystem(this, this.player);
+    this.umbrella = new UmbrellaSystem(this, this.player); // the umbrella buff: canopy over Varu, stops petards and the ball rain
+    this.scooter = new ScooterSystem(this, this.player, this.enemies); // the scooter buff: scooter under Varu, bumps the cats that touch him
+    new IceCreamSystem(this, this.enemies); // the ice cream: freezes the cats around him
     new JokeSystem(this, () => ({ x: this.player.x, y: this.player.y }));
     this.lowHp = new LowHpSystem(this); // heartbeat while Varu is low on health
     this.pinball = new PinballSystem(); // a flung cat hurts the cat it slams into
@@ -197,6 +210,14 @@ export class GameScene extends Phaser.Scene {
     this.crowRain = new CrowRainSystem(this, this.enemies, this.arena.grid);
     new BallLobSystem(this); // the tennis cat's ball rain: flies the balls, then tells us where they landed
     this.pickups = new PickupSystem(this, this.player, this.arena.grid, (kind) => this.applyToVaru(kind));
+    // The wave after rain is clear with a rainbow over the screen and 2-3 bonus pickups under it.
+    this.rainbow = new Rainbow(this, this.player, {
+      rollKind: () => this.pickups.pickKind(),
+      spawnPickup: (kind, x, y) => {
+        this.pickups.spawnAt(kind, x, y);
+      },
+      announce: () => this.effects.floatText(this.player.x, this.player.y - 60, pick(RAINBOW_LINES), '#ffe066', 28),
+    });
     this.enemyContext = { player: this.player, lure: null, projectiles: this.projectiles.group, enemies: this.enemies };
     this.flow = new FlowField(this.arena.grid);
     this.waves = new WaveSystem((type) => this.spawnWaveCat(type), () => this.waveCatCount(), this.run.mode);
@@ -262,6 +283,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.enemies, (_p, e) => {
       if (this.cutscene.active) return; // a held-still cat must not bite during a scene
       const enemy = e as Enemy;
+      if (this.player.scooter && !enemy.isBoss) return; // on the scooter the cat is bumped away (ScooterSystem) instead of biting
       if (enemy.contactDamage > 0) this.player.takeDamage(enemy.contactDamage, enemy.x, enemy.y, enemy.enemyType);
     });
 
@@ -379,15 +401,19 @@ export class GameScene extends Phaser.Scene {
     this.perf.record(time, this.player.x, this.player.y, this.input_.move.lengthSq() > 0);
     this.touchOverlay?.update();
     this.barrels.update(now); // puddle slow is set first, so Varu and the cats move slower this very frame
+    this.dodge.update(now, this.input_); // before tick: the roll moves him this frame
     this.player.tick(this.input_);
     this.belt.update(now, dt, this.input_);
     this.pinball.update();
     this.powerUps.update(now, this.input_);
+    this.umbrella.update(delta);
+    this.scooter.update();
     this.enemyContext.lure = this.openLure(this.powerUps.lure);
     this.enemyContext.wave = this.waves.wave;
     const chased = this.enemyContext.lure ?? this.player;
     this.flow.setTarget(chased.x ?? 0, chased.y ?? 0);
     this.rain.update(dt);
+    this.rainbow.update(dt);
     this.fog.update(dt); // sets each cat's fogAlpha, before the cats draw themselves this frame
     // A copy, because cats can add or remove cats while they think (summons, explosions).
     const cats = snapshotInto(this.enemies.getChildren(), this.catScratch);
@@ -520,7 +546,10 @@ export class GameScene extends Phaser.Scene {
   private onExplosion({ x, y, radius, damage, harmsPlayer, source }: ExplosionPayload): void {
     if (this.cutscene.active) return;
     const dist = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
-    if (harmsPlayer !== false && dist <= radius + this.player.hitRadius) this.player.takeDamage(damage, x, y, source);
+    if (harmsPlayer !== false && dist <= radius + this.player.hitRadius) {
+      if (this.umbrella.stopsBlast(source)) this.umbrella.announceBlock(); // a petard goes off on the umbrella: no damage
+      else this.player.takeDamage(damage, x, y, source);
+    }
   }
 
   /** What a pickup does to Varu (the same for the floor, the question mark, the debug card and bad luck). */
@@ -538,7 +567,9 @@ export class GameScene extends Phaser.Scene {
   private onBallLanded({ x, y, radius, damage }: BallLandedPayload): void {
     if (this.gameOver || this.cutscene.active) return;
     const dist = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
-    if (dist <= radius + this.player.hitRadius) this.player.takeDamage(damage, x, y);
+    if (dist > radius + this.player.hitRadius) return;
+    if (this.umbrella.stopsBallRain()) this.umbrella.announceBlock(); // the ball rain bounces off the umbrella
+    else this.player.takeDamage(damage, x, y);
   }
 
   private onPlayerDied(): void {

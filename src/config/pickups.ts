@@ -9,6 +9,9 @@ export const PICKUP_VISUALS: Record<PickupKind, { tex: TexKey; color: number; si
   monster: { tex: Tex.PickupMonster, looks: [Tex.PickupMonster, Tex.PickupRedBull], color: 0xb4ff1a, size: 60 }, // a detailed can, drawn a bit bigger. Looks like a Monster or like a Red Bull (50 / 50, visual only)
   goldenBelt: { tex: Tex.PickupGoldenBelt, color: 0xf5c518 },
   laser: { tex: Tex.PickupLaser, color: 0xff4d4d },
+  umbrella: { tex: Tex.PickupUmbrella, color: 0x4aa8ff, size: 60 }, // blue glow: rain of balls, shots and petards bounce off it
+  scooter: { tex: Tex.PickupScooter, color: 0x22b8a6, size: 60 }, // teal glow: Varu rides a scooter and bumps cats away
+  iceCream: { tex: Tex.PickupIceCream, color: 0x9fe4ff, size: 60 }, // ice-blue glow: freezes the cats around him for 3 s
   crow: { tex: Tex.PickupCrow, color: 0xa88bff, size: 66 }, // the logo is detailed, so it is drawn a bit bigger
   mystery: { tex: Tex.PickupMystery, looks: [Tex.PickupMystery, Tex.PickupRoulette], color: 0xc4c8d0, size: 58 }, // the question mark: a random other pickup, good or bad. Looks like a ? or like a roulette wheel (50 / 50, visual only)
   snail: { tex: Tex.PickupSnail, color: 0xe5484d, size: 58 }, // BAD (slows Varu): red glow like the dumbbell, so the HUD badge reads as a curse

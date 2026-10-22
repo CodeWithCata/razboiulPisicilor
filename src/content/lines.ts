@@ -108,6 +108,21 @@ export const LUCKY_ESCAPE_LINES = ['Pa, pa, bogaților!', 'Mă duc să-mi număr
 /** The word under the wave number when the last cats gave up instead of being beaten (ui/WaveFanfare.ts). Kablammo has ă â î ș ț. */
 export const WAVE_FANFARE_SURRENDER_LINES = ['S-AU PREDAT!', 'AU ZIS PAS!', 'PACE, FRATE!'];
 
+/** The words that pop up when the umbrella stops a ball, a shot or a petard. */
+/** Said when a hit misses because Varu was rolling. */
+export const DODGE_WORDS = ['Ratat!', 'Fâș!', 'Pe lângă!', 'Hopa!', 'Nu-s acasă!'];
+
+/** Said when the rainbow appears after a rainy wave. */
+export const RAINBOW_LINES = ['Curcubeu! Bonusuri!', 'După ploaie, cadouri!', 'Aur la capătul curcubeului!', 'Ploaia a plecat, darurile au venit!'];
+
+/** Said when the scooter bumps a cat out of the way. */
+export const SCOOTER_WORDS = ['Bip, bip!', 'Fă loc!', 'Trece trotineta!', 'Pardon!', 'Aleargă, mă!', 'Cărare!'];
+
+/** Said over Varu when the ice cream freezes the cats around him. */
+export const ICE_WORDS = ['Brrr!', 'Stați locului!', 'Înghețată!', 'Rece, mă!', 'Răcoare!'];
+
+export const UMBRELLA_WORDS = ['Pa, mingea!', 'Nu mă udă!', 'Umbrela e boss!', 'Plouă pe lângă!', 'Ferit!'];
+
 /** Shown when Varu grabs a pickup. */
 export const PICKUP_LABELS: Record<PickupKind, string> = {
   crochete: 'Crochete! +viață',
@@ -115,6 +130,9 @@ export const PICKUP_LABELS: Record<PickupKind, string> = {
   monster: 'Monster! Forță!',
   goldenBelt: 'CUREAUA DE AUR!',
   laser: 'Laser! Pisicile înnebunesc!',
+  umbrella: 'Umbrela! Plouă cu mingi? Nu și cu noi!',
+  scooter: 'Trotineta! Faceți loc!',
+  iceCream: 'Înghețată! Pisicile îngheață!',
   crow: 'PLOAIA DE CIORI!',
   mystery: 'Semn de întrebare... ce-o fi?',
   snail: 'Melc! Încet ca melcul...',
@@ -137,6 +155,8 @@ export const BUFF_NAMES: Record<BuffKind, string> = {
   monster: 'Monster',
   goldenBelt: 'Cureaua de aur',
   laser: 'Laser',
+  umbrella: 'Umbrelă',
+  scooter: 'Trotinetă',
   snail: 'Melc',
   dumbbell: 'Gantera',
   emo: 'Emo',
@@ -148,6 +168,7 @@ export const BUFF_NAMES: Record<BuffKind, string> = {
 export const BELT_LABELS = {
   spin: { key: 'Shift', name: 'Învârtită' },
   throw: { key: 'E', name: 'Aruncă' },
+  roll: { key: 'Space', name: 'Tumbă' },
 } as const;
 
 /**
@@ -274,7 +295,7 @@ export const MENU_TEXT = {
   start: 'Click sau orice tastă',
   record: 'Record',
   recordEndless: 'Infinit',
-  keys: 'N = sunet  •  Esc = pauză', // desktop only
+  keys: 'A = almanah  •  N = sunet  •  Esc = pauză', // desktop only
 } as const;
 
 /** Installing the game as an app and offline play (ui/PwaUi.ts). */
@@ -292,13 +313,14 @@ export const TOUCH_TEXT = {
   attack: 'Lovește',
   spin: 'Învârte',
   throw: 'Aruncă',
+  roll: 'Tumbă',
   moveHint: 'MIȘCARE',
   /** Shown in the laser tap zone until the first tap. */
   laserHint: 'Atinge aici ca să pui laserul',
   start: 'Atinge ecranul ca să începi',
-  help: 'stânga: mișcare  •  dreapta: lovește / învârte / aruncă',
+  help: 'stânga: mișcare  •  dreapta: lovește / învârte / aruncă / tumbă',
   /** The help line when auto-attack is switched on in the pause menu. */
-  helpAuto: 'stânga: mișcare  •  Varu lovește singur  •  dreapta: învârte / aruncă',
+  helpAuto: 'stânga: mișcare  •  Varu lovește singur  •  dreapta: învârte / aruncă / tumbă',
 } as const;
 
 /** The prompts on the game over and victory screens (keyboard version and touch version). */
@@ -319,6 +341,7 @@ export const TUTORIAL_TEXT = {
     { id: 'swing', keyboard: 'Țintește cu mouse-ul și dă click ca să lovești', touch: 'Apasă „Lovește” ca să dai cu cureaua' },
     { id: 'spin', keyboard: 'Ești încercuit? Apasă Shift ca să te învârți', touch: 'Ești încercuit? Apasă „Învârte”' },
     { id: 'throw', keyboard: 'Apasă E ca să arunci cureaua', touch: 'Apasă „Aruncă” ca să arunci cureaua' },
+    { id: 'dodge', keyboard: 'Apasă Space ca să faci o tumbă: nimic nu te atinge', touch: 'Apasă „Tumbă” ca să te rostogolești' },
   ],
   done: ['Așa!', 'Bravo!', 'Perfect!', 'Bine!'],
   tip: 'Fugi din cercurile de pe jos și adună bonusurile. Succes, Varule!',
@@ -334,7 +357,7 @@ export const HUD_TEXT = {
   hideKey: 'H',
   hideControls: 'ascunde controalele',
   showControls: 'arată controalele',
-  helpKeyboard: 'WASD mișcare  •  mouse țintește  •  click lovește  •  Shift învârtește  •  E aruncă  •  Esc pauză  •  N sunet',
+  helpKeyboard: 'WASD mișcare  •  mouse țintește  •  click lovește  •  Shift învârtește  •  E aruncă  •  Space tumbă  •  Esc pauză  •  N sunet',
 } as const;
 
 /**

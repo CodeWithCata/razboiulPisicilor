@@ -38,6 +38,11 @@ export class KamikazeCat extends Enemy {
     if (time - this.fuseStartedAt >= KAMIKAZE.fuseMs) this.explode();
   }
 
+  /** Frozen with the fuse lit: the fuse waits too (otherwise it would blow the moment the ice melts). */
+  protected override onFrozen(extraMs: number): void {
+    if (this.fuseStartedAt >= 0) this.fuseStartedAt += extraMs;
+  }
+
   private explode(): void {
     const payload: ExplosionPayload = { x: this.x, y: this.y, radius: KAMIKAZE.blastRadius, damage: KAMIKAZE.blastDamage, shockwave: true, source: 'kamikaze' };
     bus.emit(Events.Explosion, payload);
