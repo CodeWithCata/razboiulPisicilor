@@ -6,6 +6,9 @@ import { poly } from '../paint';
 export const FX_BUBBLE_R = 120;
 export const FX_RING_R = 120;
 export const FX_SHOCK_R = 120;
+/** The flat white disc (128 px square) and the thin ring (256 px square): the atlas stand-ins for a filled / outlined `add.circle`. Edge radius in texture px. */
+export const FX_DISC_R = 62;
+export const FX_HOOP_R = 126;
 /** Width of the water of the puddle picture (texture px), without its dark lip: scale = wantedWidth / this. */
 export const FX_PUDDLE_W = 114;
 /** The scream flood picture: its square size and the width of its water (texture px), so code can scale it to a game radius: scale = 2 * radius / FX_FLOOD_W. */
@@ -214,6 +217,17 @@ export function drawFxRing(g: G): void {
     const a = (i / 6) * TAU;
     g.fillStyle(GOLD, 0.9).fillCircle(c + Math.cos(a) * (R - 44), c + Math.sin(a) * (R - 44), 3);
   }
+}
+
+/** A flat white disc. Tinted and scaled by code (`systems/flatShapes.ts`) it replaces a filled `add.circle`, which would break the sprite batch. */
+export function drawFxDisc(g: G): void {
+  g.fillStyle(0xffffff, 1).fillCircle(64, 64, FX_DISC_R);
+}
+
+/** A thin white ring with a very faint fill (the outline of a ground warning). The stroke is 5 px at this size, so it stays thin when scaled to a warning's radius (70-210 px). */
+export function drawFxHoop(g: G): void {
+  g.fillStyle(0xffffff, 0.11).fillCircle(128, 128, FX_HOOP_R - 2);
+  g.lineStyle(5, 0xffffff, 1).strokeCircle(128, 128, FX_HOOP_R - 2.5);
 }
 
 /** A white shockwave ring with a navy edge and a soft inner fade (tinted by code per attack). */

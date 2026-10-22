@@ -104,6 +104,8 @@ export class Player extends Actor {
   private readonly flipBody: Phaser.GameObjects.Image;
   private beltIsGold = false;
   private readonly tipPoint = new Phaser.Math.Vector2();
+  /** One scratch point for the event effects (exhale, golden flourish, rust flakes): each use fills it and reads it at once, so they can share it. */
+  private readonly scratchPoint = new Phaser.Math.Vector2();
   /** False while the belt swings or flies: the belt in his fist is hidden then (BeltSystem sets it). */
   beltInHand = true;
   /** Extra turn (radians) while the belt spins him around (BeltSystem sets it). */
@@ -387,7 +389,7 @@ export class Player extends Actor {
   goldenBeltFlourish(): void {
     if (!GOLD_BELT.enabled || !this.alive) return;
     const f = GOLD_BELT.flourish;
-    const at = this.bodyPoint(f.burstOffset, new Phaser.Math.Vector2());
+    const at = this.bodyPoint(f.burstOffset, this.scratchPoint);
     this.gooBurst.explode(f.drops, at.x, at.y);
     this.heldBelt.setTint(f.flashTint).setTintMode(Phaser.TintModes.FILL);
     this.scene.time.delayedCall(f.flashMs, () => {
@@ -442,7 +444,7 @@ export class Player extends Actor {
   /** A stream of smoke puffs out of his mouth, in the direction he faces. Tweened images, no emitter, so they can be aimed. */
   private exhale(): void {
     const e = SMOKE_BREAK.exhale;
-    const mouth = new Phaser.Math.Vector2();
+    const mouth = this.scratchPoint; // refilled at the start of every puff's callback and read in the same call
     for (let i = 0; i < e.puffs; i++) {
       this.scene.time.delayedCall(i * e.staggerMs, () => {
         if (!this.active) return;
@@ -566,11 +568,11 @@ export class Player extends Actor {
     const t = Math.random();
     const [ax, ay] = path[seg]!;
     const [bx, by] = path[seg + 1]!;
-    const at = this.strapPoint(ax + (bx - ax) * t, ay + (by - ay) * t, new Phaser.Math.Vector2());
+    const at = this.strapPoint(ax + (bx - ax) * t, ay + (by - ay) * t, this.scratchPoint);
     const x = at.x + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
     const y = at.y + Phaser.Math.FloatBetween(-cfg.jitterPx, cfg.jitterPx);
     const size = Phaser.Math.Between(cfg.sizePx.min, cfg.sizePx.max);
-    const color = Phaser.Utils.Array.GetRandom([...cfg.colors]);
+    const color = cfg.colors[Phaser.Math.Between(0, cfg.colors.length - 1)]!; // no array copy per flake
     const flake = this.scene.add
       .image(x, y, ...texArgs(Tex.Chip))
       .setDisplaySize(size * cfg.popScale, size * cfg.popScale)

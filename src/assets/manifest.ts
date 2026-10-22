@@ -22,6 +22,12 @@ export const IMAGE_MANIFEST: Partial<Record<TexKey, string>> = {
 };
 
 /**
+ * Loaded images that are copied into an atlas page right after the load (`adoptLoadedImage`), so they batch with the sprites around them.
+ * Only small pictures that are shown with `texArgs(key)`. NOT the grass (a repeating tileSprite), the tileset (the tilemap) or the campus text (`CampusMilk` reads its pixels).
+ */
+export const ATLAS_IMAGES: readonly TexKey[] = [Tex.PickupCrow];
+
+/**
  * FRIEND PHOTOS (boss intro cards, game over screen, ending):
  *  1. Drop the PNG/JPG into  public/assets/photos/
  *  2. Add its line below. Without a file the slot shows a silhouette labeled "FOTO".

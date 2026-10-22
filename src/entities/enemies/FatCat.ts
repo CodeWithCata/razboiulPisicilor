@@ -9,6 +9,10 @@ export class FatCat extends Enemy {
     super(scene, x, y, 'fat', Tex.CatFat);
   }
 
+  protected override get thinksRarely(): boolean {
+    return true; // a straight chase with nothing to time: it can think every few frames while far off screen
+  }
+
   protected think(_time: number, _delta: number, ctx: EnemyContext): void {
     this.chase(ctx, this.stats.speed);
   }

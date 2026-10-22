@@ -96,6 +96,8 @@ export const Tex = {
   FxCarpetTile: 'fx_carpet_tile',
   FxDiamond: 'fx_diamond',
   FxShock: 'fx_shock',
+  FxDisc: 'fx_disc', // v200 flat disc + thin ring: tinted atlas images instead of `add.circle` shapes
+  FxHoop: 'fx_hoop',
   FxCarpetPad: 'fx_carpet_pad',
   FxPuff: 'fx_puff',
   FxDrop: 'fx_drop',

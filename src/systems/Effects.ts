@@ -1,5 +1,6 @@
 /** @file The juice: screen shake, particles, floating words (listens to the bus). */
-import { texRef } from '../assets/atlas';
+import { texArgs, texRef } from '../assets/atlas';
+import { FX_SHOCK_R } from '../assets/art/fx';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { BALL_FX, ENERGY_FLIP, GOLD_BELT, IDLE_HABITS, KAMIKAZE_BLAST, MILK_FX, NINJA_POOF, SMOKE_BREAK, TENNIS_RETURN_FX } from '../config/animation';
@@ -28,6 +29,7 @@ import {
 import { gameClock } from '../core/clock';
 import { JAIL_WORDS, BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, pick } from '../content/lines';
 import { createDrops, createPuddles } from './belt/gooEmitters';
+import { flatDisc } from './flatShapes';
 
 /**
  * All the "juice": screen shake, particles, floating words.
@@ -224,9 +226,9 @@ export class Effects {
   /** Varu lands his back flip: a green ring spreads on the floor, a puff of dust, a small shake and a word. */
   private backflipLand({ x, y }: PointPayload): void {
     const L = ENERGY_FLIP.land;
-    const ring = this.scene.add.circle(x, y, L.ring.startPx, L.ring.color, 0.12).setStrokeStyle(L.ring.width, L.ring.color, L.ring.alpha).setDepth(11);
+    const ring = this.scene.add.image(x, y, ...texArgs(Tex.FxShock)).setTint(L.ring.color).setAlpha(L.ring.alpha).setDepth(11).setScale(L.ring.startPx / FX_SHOCK_R);
     this.scene.tweens.add({
-      targets: ring, scale: L.ring.endPx / L.ring.startPx, alpha: 0, duration: L.ring.ms, ease: 'Cubic.easeOut',
+      targets: ring, scale: L.ring.endPx / FX_SHOCK_R, alpha: 0, duration: L.ring.ms, ease: 'Cubic.easeOut',
       onComplete: () => ring.destroy(),
     });
     this.dust.explode(L.dust.count, x, y);
@@ -283,9 +285,9 @@ export class Effects {
       this.floatText(x, y - 30, 'BUM!', '#ffd166', 38);
     }
 
-    const ring = this.scene.add.circle(x, y, 10, 0xfff3d6, 0.25).setStrokeStyle(6, 0xfff3d6, 1).setDepth(45);
+    const ring = this.scene.add.image(x, y, ...texArgs(Tex.FxShock)).setTint(0xfff3d6).setDepth(45).setScale(10 / FX_SHOCK_R);
     this.scene.tweens.add({
-      targets: ring, scale: radius / 10, alpha: 0, duration: 380, ease: 'Cubic.easeOut',
+      targets: ring, scale: radius / FX_SHOCK_R, alpha: 0, duration: 380, ease: 'Cubic.easeOut',
       onComplete: () => ring.destroy(),
     });
   }
@@ -311,7 +313,7 @@ export class Effects {
   /** A dark mark on the floor where the blast was. It fades away. */
   private scorch(x: number, y: number, radius: number): void {
     const S = KAMIKAZE_BLAST.scorch;
-    const mark = this.scene.add.circle(x, y, radius * S.radiusFactor, S.color, S.alpha).setDepth(ARENA.depth.decor + 0.3);
+    const mark = flatDisc(this.scene, x, y, radius * S.radiusFactor, S.color, S.alpha).setDepth(ARENA.depth.decor + 0.3);
     this.scene.tweens.add({ targets: mark, alpha: 0, duration: S.fadeMs, ease: 'Quad.easeIn', onComplete: () => mark.destroy() });
   }
 
@@ -323,8 +325,8 @@ export class Effects {
     }
     const P = NINJA_POOF;
     this.smoke.explode(P.smokeCount, x, y);
-    const puff = this.scene.add.circle(x, y, P.puff.radius, P.puff.color, P.puff.alpha).setDepth(44);
-    this.scene.tweens.add({ targets: puff, scale: P.puff.grow, alpha: 0, duration: P.puff.ms, ease: 'Cubic.easeOut', onComplete: () => puff.destroy() });
+    const puff = flatDisc(this.scene, x, y, P.puff.radius, P.puff.color, P.puff.alpha).setDepth(44);
+    this.scene.tweens.add({ targets: puff, scale: puff.scale * P.puff.grow, alpha: 0, duration: P.puff.ms, ease: 'Cubic.easeOut', onComplete: () => puff.destroy() });
     const now = gameClock.now;
     if (ninja === 'in' && now - this.lastPoofAt >= P.wordGapMs) {
       this.lastPoofAt = now;

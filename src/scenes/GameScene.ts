@@ -1,6 +1,7 @@
 /** @file The run: builds the arena, player, systems and collisions, and wires them together. Rules live in the systems. */
 import Phaser from 'phaser';
 import { ARENA_RULES, CAMERA, WORLD } from '../config/arena';
+import { CULL } from '../config/culling';
 import { PAUSE, PAUSE_KEYS } from '../config/pause';
 import { BELT, ENEMIES, WAVE_TIMING, isBossType, type EnemyType, type PickupKind } from '../config/balance';
 import { TOUCH } from '../config/touch';
@@ -79,6 +80,9 @@ export class GameScene extends Phaser.Scene {
   private readonly perf = new PerfMonitor();
   /** Reused copy of the cat list for the per-frame loop (see `snapshotInto`). */
   private readonly catScratch: Phaser.GameObjects.GameObject[] = [];
+  /** The camera view widened by `CULL.catsThink.marginPx` (refilled every frame) and a frame counter: far walking cats think every few frames (`Enemy.tickThrottled`). */
+  private readonly catView = new Phaser.Geom.Rectangle();
+  private catFrame = 0;
   private belt!: BeltSystem;
   private effects!: Effects;
   private projectiles!: ProjectileSystem;
@@ -385,11 +389,15 @@ export class GameScene extends Phaser.Scene {
     this.fog.update(dt); // sets each cat's fogAlpha, before the cats draw themselves this frame
     // A copy, because cats can add or remove cats while they think (summons, explosions).
     const cats = snapshotInto(this.enemies.getChildren(), this.catScratch);
+    const seen = this.cameras.main.worldView;
+    const pad = CULL.catsThink.marginPx;
+    this.catView.setTo(seen.x - pad, seen.y - pad, seen.width + pad * 2, seen.height + pad * 2);
+    this.catFrame++;
     for (let i = 0; i < cats.length; i++) {
       const enemy = cats[i] as Enemy;
       if (!enemy.active) continue;
       if (this.debug?.frozen) enemy.setVelocity(0, 0); // dev: "Pisici înghețate"
-      else enemy.tick(now, dt, this.enemyContext);
+      else enemy.tickThrottled(now, dt, this.enemyContext, this.catFrame, this.catView);
     }
     cats.length = 0;
     this.keepOutOfWalls();

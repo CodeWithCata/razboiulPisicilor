@@ -8,6 +8,7 @@ import type { ArenaQuery } from '../core/arena';
 import { bus, Events, type CatPoppedPayload, type CatSurrenderPayload, type EnemyKilledPayload } from '../core/events';
 import { HIDEOUT } from '../config/props';
 import { gameClock } from '../core/clock';
+import { CULL } from '../config/culling';
 import type { FlowField } from '../core/flowField';
 import { hasClearLine, steerAround } from '../core/steering';
 import { NO_OBSTACLES } from '../world/SolidGrid';
@@ -97,6 +98,9 @@ export abstract class Enemy extends Actor {
   private slipCooldownMs = 0;
   private slipTurns = 0;
   private slipDir: 1 | -1 = 1;
+  /** Far off-screen walkers think every few frames (`tickThrottled`): which frame of the cycle is this cat's, and the time it skipped since it last ran. */
+  private readonly thinkSlot = Math.floor(Math.random() * CULL.catsThink.everyFrames);
+  private thinkOwedMs = 0;
   /** Extra turn (degrees) drawn on top of the cat's heading while it slips. */
   private slipAngle = 0;
 
@@ -180,8 +184,33 @@ export abstract class Enemy extends Actor {
     return true;
   }
 
+  /** True for a plain walker (a straight chase: no windup, fuse, teleport or shots), which may think less often while it is far off screen (`tickThrottled`). Opt in per cat; default is every frame. */
+  protected get thinksRarely(): boolean {
+    return false;
+  }
+
   /** Movement / attack logic. Runs every frame unless the cat is being knocked back. */
   protected abstract think(time: number, delta: number, ctx: EnemyContext): void;
+
+  /**
+   * What `GameScene` calls for every cat each frame: `tick`, except that a plain walker outside `view` (the camera view plus a margin) only
+   * ticks on its own slot of every `CULL.catsThink.everyFrames` frames, with the time it skipped added to `delta` (see `config/culling.ts`).
+   * A cat that is flung, slipping, slowed, fading or caged always ticks, so nothing that needs a fresh step is ever skipped.
+   */
+  tickThrottled(time: number, delta: number, ctx: EnemyContext, frame: number, view: Phaser.Geom.Rectangle): void {
+    const T = CULL.catsThink;
+    if (T.enabled && this.thinksRarely && this.canSkipFrame() && !view.contains(this.x, this.y) && (frame + this.thinkSlot) % T.everyFrames !== 0) {
+      this.thinkOwedMs += delta;
+      return;
+    }
+    const owed = this.thinkOwedMs;
+    this.thinkOwedMs = 0;
+    this.tick(time, delta + owed, ctx);
+  }
+
+  private canSkipFrame(): boolean {
+    return this.giveUp === null && !this.cagedIn && !this.isKnockedBack && this.slipUntil === 0 && this.slowApplied === 1 && this.terrainSlow === 1 && this.fadeAlpha === 1;
+  }
 
   tick(time: number, delta: number, ctx: EnemyContext): void {
     if (!this.alive || this.cagedIn) return; // a caged cat does nothing (it stays `active`, so the wave still counts it)

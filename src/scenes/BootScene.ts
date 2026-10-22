@@ -3,7 +3,8 @@ import Phaser from 'phaser';
 import { musicKey, sfxKey, type MusicId, type SoundId } from '../assets/audioKeys';
 import { AUDIO_MANIFEST, MUSIC_MANIFEST } from '../assets/audioManifest';
 import { photoKey, type PhotoId } from '../assets/keys';
-import { IMAGE_MANIFEST, PHOTO_MANIFEST } from '../assets/manifest';
+import { adoptLoadedImage } from '../assets/atlas';
+import { ATLAS_IMAGES, IMAGE_MANIFEST, PHOTO_MANIFEST } from '../assets/manifest';
 import { generatePlaceholders } from '../assets/placeholders';
 import { loadGameFont } from '../core/fonts';
 import { AudioSystem } from '../systems/AudioSystem';
@@ -37,6 +38,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    for (const key of ATLAS_IMAGES) adoptLoadedImage(this, key); // real small images join the atlas pages (one texture switch less per crow pickup)
     generatePlaceholders(this);
     new AudioSystem(this.game); // lives as long as the game, so the music carries across scenes
     // The font must be ready before any text is drawn (it never blocks for long: see FONT_LOADING).

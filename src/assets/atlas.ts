@@ -62,6 +62,20 @@ export function queueDrawn(scene: Phaser.Scene, key: string, w: number, h: numbe
   pending.push({ scene, key, w: Math.ceil(w), h: Math.ceil(h), draw });
 }
 
+/**
+ * Moves a real image that was loaded under `key` (a PNG from the manifest) into an atlas page, so sprites that show it batch with the rest
+ * instead of switching texture. Call it once after the load, before the first `texArgs(key)`. The loaded texture is dropped (no second copy on the GPU).
+ * Does nothing if the image is missing, already packed, or too big for a page. Not for images something else reads by key (a tileSprite, the tilemap, `CampusMilk`).
+ */
+export function adoptLoadedImage(scene: Phaser.Scene, key: string): void {
+  if (placed.has(key) || queued.has(key) || !scene.textures.exists(key)) return;
+  const source = scene.textures.get(key).getSourceImage() as unknown as CanvasImageSource & { width: number; height: number };
+  const { width, height } = source;
+  if (!width || !height || width + ATLAS.gutter > ATLAS.pageSize || height + ATLAS.gutter > ATLAS.pageSize) return;
+  scene.textures.remove(key); // the element in `source` stays valid: the draw below copies from it at flush time
+  queueDrawn(scene, key, width, height, (ctx, x, y) => ctx.drawImage(source, x, y));
+}
+
 /** Queues a picture painted with Graphics. */
 export function queuePainted(scene: Phaser.Scene, key: string, w: number, h: number, paint: Painter): void {
   const pw = Math.ceil(w);

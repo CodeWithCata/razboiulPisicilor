@@ -5,7 +5,7 @@ import { Tex } from './keys';
 import { drawBossMafia } from './art/bosses';
 import { drawEmoBack, drawEmoSide, drawFedererFront, drawFedererSide, drawQueenBack, drawQueenSide } from './art/views';
 import { drawBallMachine, drawBossFederer, drawFedererArm, drawFedererFootL, drawFedererFootR, drawFedererRacket, drawFedererTail } from './art/federer';
-import { FX_FLOOD_SIZE, drawFxBubbleEmo, drawFxBubbleQueen, drawFxCarpetPad, drawFxCarpetTile, drawFxDiamond, drawFxDrop, drawFxFlood, drawFxPuddle, drawFxPuff, drawFxRing, drawFxShock } from './art/fx';
+import { FX_FLOOD_SIZE, drawFxBubbleEmo, drawFxBubbleQueen, drawFxCarpetPad, drawFxCarpetTile, drawFxDiamond, drawFxDisc, drawFxDrop, drawFxFlood, drawFxHoop, drawFxPuddle, drawFxPuff, drawFxRing, drawFxShock } from './art/fx';
 import { drawBarrel, drawBarrelBroken, drawBarrelPuddle } from './art/barrel';
 import { CROW_GOLD, CROW_KAMIKAZE, CROW_NORMAL, POSE_FLAP, POSE_FOLD, POSE_OPEN, drawCrow, drawFeather } from './art/crows';
 import { drawBossQueen, drawQueenCape, drawQueenCrown, drawQueenFootL, drawQueenFootR, drawQueenScepter } from './art/queen';
@@ -145,6 +145,8 @@ export function generatePlaceholders(scene: Phaser.Scene): void {
   make(scene, Tex.FxRing, 256, 256, drawFxRing);
   make(scene, Tex.FxDiamond, 24, 32, drawFxDiamond);
   make(scene, Tex.FxShock, 256, 256, drawFxShock);
+  make(scene, Tex.FxDisc, 128, 128, drawFxDisc);
+  make(scene, Tex.FxHoop, 256, 256, drawFxHoop);
   make(scene, Tex.FxCarpetPad, 80, 80, drawFxCarpetPad);
   makeRepeating(scene, Tex.FxCarpetTile, 64, 64, drawFxCarpetTile);
   make(scene, Tex.FxPuff, 64, 64, drawFxPuff);

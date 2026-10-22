@@ -1,5 +1,6 @@
 /** @file Ground warning visuals for boss attacks (`telegraphCircle`, `telegraphLine`, `telegraphLineAimed`, `telegraphRect`) that can be cancelled early. */
 import type Phaser from 'phaser';
+import { flatDisc, flatHoop } from './flatShapes';
 
 /** Something that can be cancelled early (when a boss gets stunned, for example). */
 export interface Telegraph {
@@ -20,10 +21,13 @@ export function telegraphCircle(
   durationMs: number,
   color = RED,
 ): Telegraph {
-  const outline = scene.add.circle(x, y, radius, color, 0.1).setStrokeStyle(4, color, 0.9).setDepth(telegraphDepth.value);
-  const fill = scene.add.circle(x, y, radius, color, 0.3).setDepth(telegraphDepth.value).setScale(0.05);
+  // Atlas images, not `add.circle` shapes: a shape between sprites splits the draw batch (see flatShapes.ts).
+  const outline = flatHoop(scene, x, y, radius, color, 0.9).setDepth(telegraphDepth.value);
+  const fill = flatDisc(scene, x, y, radius, color, 0.3).setDepth(telegraphDepth.value);
+  const full = fill.scale;
+  fill.setScale(full * 0.05);
   const tween = scene.tweens.add({
-    targets: fill, scale: 1, duration: durationMs, ease: 'Linear',
+    targets: fill, scale: full, duration: durationMs, ease: 'Linear',
     onComplete: () => { outline.destroy(); fill.destroy(); },
   });
   return {
