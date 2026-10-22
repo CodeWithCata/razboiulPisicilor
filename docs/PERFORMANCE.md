@@ -42,7 +42,3 @@ Still open: Vite chunk split, `powerPreference`, the surrender flag Graphics.
 ## v195: first-draw hitch fix (written WITHOUT a browser: the owner reported a freeze at wave starts after v194)
 - Cause (likely, not measured): a picture is uploaded to the GPU the first time it is drawn. v194 kept the fog's edge image and the laser zone hidden until they were needed, so the big upload landed mid-wave (fog starts in about 30% of waves).
 - Fix: `PERF.warm` (`config/perf.ts`): both pictures are drawn at alpha 0.001 (invisible) for 2 frames when the run starts. Rule: a big picture that is first shown later must be warmed the same way.
-
-## v196: MSAA off, GPU hint (not measured; test with Date debug)
-- `PERF.render` (`config/perf.ts`) is now passed to Phaser in `main.ts`: `antialias: false`, `powerPreference: 'high-performance'`. Before, the `antialias` value was never read and Phaser's default applied.
-- Compare the fps and worst-frame numbers with v195 in the same fight. If there is no gain, put `antialias: true` back.

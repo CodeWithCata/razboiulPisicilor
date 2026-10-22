@@ -1,7 +1,6 @@
 /** @file Entry point: starts PWA + font loading, then creates the Phaser game (Scale.EXPAND, 1280x720 base) and registers all scenes. */
 import Phaser from 'phaser';
 import { bindGameSize, GAME_BASE_HEIGHT, GAME_BASE_WIDTH } from './config/balance';
-import { PERF } from './config/perf';
 import { usesTouchControls } from './core/device';
 import { loadGameFont } from './core/fonts';
 import { initPwa, markBootSuccess } from './core/pwa';
@@ -37,8 +36,6 @@ const game = new Phaser.Game({
   backgroundColor: '#14182b',
   // The canvas is a block (no stray text-line gap under it) and every touch belongs to the game, never to the browser's scroll or zoom.
   canvasStyle: 'display: block; touch-action: none;',
-  // Canvas settings (MSAA off, GPU hint): config/perf.ts `PERF.render`.
-  render: PERF.render,
   // smoothStep off: Phaser normally hands the game an AVERAGE of the last frame times. On a phone whose frames come unevenly
   // (8, 8, 16 ms...) that makes Varu advance the same distance every frame, so his speed on screen wobbles. Raw times fix it.
   fps: { smoothStep: false },
