@@ -139,7 +139,7 @@ HUD and menu pieces (Phaser objects). `ui/pause/` = pause rows, `ui/debug/` = de
 - CatMeter.ts (~350 lines) - Varu's health meter: cat face (mood) + heart + health bar. Exports: CatMeter
 - ControlsHint.ts - Keyboard controls reminder at the bottom, with a keycap button that hides it. Exports: ControlsHint
 - DebugPanel.ts (~200 lines) - Dev-only cheat sheet card (dev build): keys, toggles, live numbers. Exports: DebugPanel
-- IntroVideo.ts - DOM video player for the opening clips (backstory + intro): preloads the next clip, "Sari peste" button, never hangs. Exports: shouldPlayIntro, playIntroVideos
+- IntroVideo.ts (~350 lines) - DOM video player for the opening clips (backstory + intro): preloads the next clip, "Sari peste" button, never hangs. Exports: shouldPlayIntro, unlockIntroVideo, IntroHandle, playIntroVideos
 - LowHpVignette.ts - The red screen edge that glows when Varu is low on health and flashes with every heartbeat. Exports: LowHpVignette
 - MenuButton.ts - A menu button (`createMenuButton`) with a hover pop. Exports: MenuButtonOptions, createMenuButton
 - MenuStage.ts - Varu wobbling in the middle of the main menu. Exports: createMenuVaru, createCatRing

@@ -44,7 +44,20 @@ function addStyle(): void {
   document.head.appendChild(style);
 }
 
-function makeVideo(src: string): HTMLVideoElement {
+/**
+ * iPhone (Safari / WebKit) only lets a <video> play WITH SOUND if that very element was started by a tap.
+ * A fresh element per clip, started later from a timer, is muted by iOS (only the first clip used to work).
+ * So ONE element is created and unlocked inside the tap, and every clip is played by changing its `src`.
+ */
+let shared: HTMLVideoElement | null = null;
+/** True while the tap-time unlock play is still settling; a clip that starts meanwhile cancels the pause that follows it. */
+let unlocking = false;
+
+function clipUrl(src: string): string {
+  return `${import.meta.env.BASE_URL}${src}`;
+}
+
+function makeSharedVideo(): HTMLVideoElement {
   const video = document.createElement('video');
   video.playsInline = true; // iPhone: play inside the page, not in the system player
   video.setAttribute('playsinline', '');
@@ -52,8 +65,36 @@ function makeVideo(src: string): HTMLVideoElement {
   video.preload = 'auto';
   video.disablePictureInPicture = true;
   video.controls = false;
-  video.src = `${import.meta.env.BASE_URL}${src}`;
   return video;
+}
+
+/**
+ * Call this SYNCHRONOUSLY inside the start tap (before any await / timer). It starts the shared element once with sound allowed,
+ * which is what makes iOS accept every later clip with sound. Safe to call on any browser; does nothing if the intro is off.
+ */
+export function unlockIntroVideo(): void {
+  if (shared) return;
+  const first = INTRO_VIDEO.sequence.find((item): item is { clip: string } => 'clip' in item);
+  if (!first) return;
+  const video = makeSharedVideo();
+  shared = video;
+  video.muted = isMuted();
+  video.src = clipUrl(first.clip);
+  unlocking = true;
+  const back = (): void => {
+    if (shared !== video || !unlocking) return;
+    unlocking = false;
+    video.pause();
+    video.currentTime = 0;
+  };
+  void video.play().then(back).catch(() => {
+    unlocking = false;
+  }); // the unlock: started by the tap, stopped right away
+}
+
+/** Warm the HTTP cache for a clip so it starts fast when its turn comes (the shared element can only load one file at a time). */
+function warm(src: string): void {
+  void fetch(clipUrl(src)).then((r) => r.blob()).catch(() => undefined);
 }
 
 function release(video: HTMLVideoElement): void {
@@ -101,7 +142,7 @@ export function playIntroVideos(): Promise<IntroHandle> {
   return new Promise<IntroHandle>((resolve) => {
     let index = 0;
     let current: HTMLVideoElement | null = null;
-    let upcoming: { index: number; video: HTMLVideoElement } | null = null;
+    const warmed = new Set<number>();
     let stallTimer = 0;
     let finished = false;
     const timers: number[] = [];
@@ -138,10 +179,10 @@ export function playIntroVideos(): Promise<IntroHandle> {
       offMute();
       window.removeEventListener('keydown', onKey, true);
       document.removeEventListener('visibilitychange', onHidden);
-      if (current) release(current);
-      if (upcoming) release(upcoming.video);
+      if (shared) release(shared);
+      unlocking = false;
       current = null;
-      upcoming = null;
+      shared = null;
       for (const el of root.querySelectorAll('video, .card, button, .bars')) el.remove(); // nothing but black is left
       // Do NOT fade out here: the menu is still underneath and would flash. The overlay stays black until the game is ready.
       resolve({
@@ -172,11 +213,10 @@ export function playIntroVideos(): Promise<IntroHandle> {
       for (let j = from + 1; j < items.length; j += 1) {
         const item = items[j];
         if (!('clip' in item)) continue;
-        if (upcoming?.index === j) return;
-        if (upcoming) release(upcoming.video);
-        const video = makeVideo(item.clip);
-        video.muted = true;
-        upcoming = { index: j, video };
+        if (!warmed.has(j)) {
+          warmed.add(j);
+          warm(item.clip);
+        }
         return;
       }
     }
@@ -199,7 +239,7 @@ export function playIntroVideos(): Promise<IntroHandle> {
       index += 1;
       prepareAhead(at);
       if ('card' in item) showCard(item.card, item.ms, fills[at]);
-      else playClip(item.clip, at, fills[at]);
+      else playClip(item.clip, fills[at]);
     }
 
     function showCard(key: string, ms: number, fill: HTMLElement): void {
@@ -229,18 +269,19 @@ export function playIntroVideos(): Promise<IntroHandle> {
       }, ms);
     }
 
-    function playClip(src: string, at: number, fill: HTMLElement): void {
-      let video: HTMLVideoElement;
-      if (upcoming?.index === at) {
-        video = upcoming.video;
-        upcoming = null;
-      } else {
-        video = makeVideo(src);
-      }
+    function playClip(src: string, fill: HTMLElement): void {
+      unlocking = false;
+      const video = shared ?? makeSharedVideo(); // normally the one unlocked inside the tap
+      shared = video;
       current = video;
+      const life = new AbortController(); // every listener of this clip dies with it, the element is reused
+      const { signal } = life;
+      video.classList.remove('on');
       video.muted = isMuted();
-      video.volume = 0; // fades up once it plays
-      root.insertBefore(video, bars);
+      video.volume = 0; // fades up once it plays (iPhone ignores volume: no fade there, but sound works)
+      video.src = clipUrl(src);
+      video.load();
+      if (video.parentNode !== root) root.insertBefore(video, bars);
       let over = false;
       let fadedOut = false;
       const watch = window.setInterval(() => {
@@ -256,10 +297,12 @@ export function playIntroVideos(): Promise<IntroHandle> {
       const done = (pause: boolean): void => {
         if (over || finished) return;
         over = true;
+        life.abort();
         window.clearInterval(watch);
         window.clearTimeout(stallTimer);
         if (current === video) current = null;
-        release(video);
+        video.pause();
+        video.classList.remove('on');
         if (pause) afterItem();
         else runItem(); // a broken clip: straight on, no pause
       };
@@ -270,23 +313,24 @@ export function playIntroVideos(): Promise<IntroHandle> {
         window.clearTimeout(stallTimer);
         video.classList.add('on');
         ramp(video, 0, 1);
-      }, { once: true });
+      }, { once: true, signal });
       video.addEventListener('timeupdate', () => {
         if (video.duration > 0) fill.style.width = `${Math.min(100, (video.currentTime / video.duration) * 100)}%`;
-      });
+      }, { signal });
       video.addEventListener('ended', () => {
         fill.style.width = '100%';
         done(true);
-      }, { once: true });
-      video.addEventListener('error', () => done(false), { once: true });
-      // Sound is allowed (we are inside a tap). If a browser still refuses, try again silent rather than skipping the story.
+      }, { once: true, signal });
+      video.addEventListener('error', () => done(false), { once: true, signal });
+      // The element was unlocked by the tap, so sound is allowed. If a browser still refuses, try again silent rather than skipping the story.
       void video.play().catch(() => {
         video.muted = true;
         void video.play().catch(() => done(false));
       });
     }
 
-    prepareAhead(-1); // the first clip starts downloading right away, during the black wait
+    warmed.add(items.findIndex((item) => 'clip' in item)); // the first clip is already loading in the unlocked element
+    prepareAhead(-1); // the next clip warms the cache right away, during the black wait
     later(runItem, INTRO_VIDEO.startDelayMs);
   });
 }

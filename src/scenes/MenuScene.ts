@@ -17,7 +17,7 @@ import { createCatRing, createMenuVaru } from '../ui/MenuStage';
 import { isPwaUiEvent, mountInstallButton } from '../ui/PwaUi';
 import { MuteBadge } from '../ui/MuteBadge';
 import { createTitleLogo } from '../ui/TitleLogo';
-import { playIntroVideos, shouldPlayIntro } from '../ui/IntroVideo';
+import { playIntroVideos, shouldPlayIntro, unlockIntroVideo } from '../ui/IntroVideo';
 
 /** Keys that must not start the game: modifiers and the F1-F12 keys. */
 const IGNORED_START_KEYS = /^(Shift|Control|Alt|Meta|CapsLock|Tab|F\d+)/;
@@ -79,6 +79,7 @@ export class MenuScene extends Phaser.Scene {
       if (touch && TOUCH.fullscreenOnStart) enterFullscreenLandscape(this); // inside the tap, as browsers require (it also keeps the screen awake)
       // Fullscreen changes the canvas size a moment after the tap: build the run only once the size has settled.
       const playVideos = shouldPlayIntro(); // decided inside the tap: sound is allowed then
+      if (playVideos) unlockIntroVideo(); // iPhone: the video element must be started by THIS tap to get sound for every clip
       void whenScaleSettled(this)
         .then(() => (playVideos ? playIntroVideos() : undefined)) // backstory + intro, with a skip button
         .then((intro) => {
