@@ -8,7 +8,7 @@ import { ENDLESS_TEXT, MENU_TEXT, TOUCH_TEXT } from '../content/lines';
 import { TOUCH } from '../config/touch';
 import { usesTouchControls } from '../core/device';
 import { enterFullscreenLandscape, whenScaleSettled } from '../core/fullscreen';
-import type { RunOptions } from '../core/run';
+import { isStartingRun, setStartingRun, type RunOptions } from '../core/run';
 import { loadBest, loadEndlessUnlocked } from '../core/storage';
 import { bus, Events, type MusicPayload } from '../core/events';
 import { createMenuButton } from '../ui/MenuButton';
@@ -68,21 +68,27 @@ export class MenuScene extends Phaser.Scene {
     // "Instalează jocul" (a page button, only when installing is possible). Gone as soon as the menu closes.
     const removeInstallButton = mountInstallButton();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, removeInstallButton);
-    const music: MusicPayload = { track: 'menu' };
+    const music: MusicPayload = { track: isStartingRun() ? null : 'menu' }; // never bring the menu song back once the start tap happened
     bus.emit(Events.MusicTrack, music);
 
     let started = false;
     const go = (run?: RunOptions): void => {
       if (started) return;
       started = true;
+      setStartingRun(true);
       removeInstallButton();
       if (touch && TOUCH.fullscreenOnStart) enterFullscreenLandscape(this); // inside the tap, as browsers require (it also keeps the screen awake)
       // Fullscreen changes the canvas size a moment after the tap: build the run only once the size has settled.
       const playVideos = shouldPlayIntro(); // decided inside the tap: sound is allowed then
-      if (playVideos) unlockIntroVideo(); // iPhone: the video element must be started by THIS tap to get sound for every clip
+      if (playVideos) {
+        unlockIntroVideo(); // iPhone: the video element must be started by THIS tap to get sound for every clip
+        const silence: MusicPayload = { track: null };
+        bus.emit(Events.MusicTrack, silence); // the menu song stops with the tap, not only when the first clip appears
+      }
       void whenScaleSettled(this)
         .then(() => (playVideos ? playIntroVideos() : undefined)) // backstory + intro, with a skip button
         .then((intro) => {
+          setStartingRun(false);
           this.scene.start('GameScene', run);
           if (!intro) return;
           // The black overlay keeps covering the menu until the game has been created and drawn, so the title never flashes.

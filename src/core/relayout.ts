@@ -1,6 +1,7 @@
 /** @file Rebuilds Menu / GameOver / Victory when the canvas size changes (fullscreen, rotation). */
 import type Phaser from 'phaser';
 import { RELAYOUT } from '../config/viewport';
+import { isStartingRun } from './run';
 
 /**
  * With Scale.EXPAND the canvas size can change while the game runs (fullscreen, turning the phone). Scenes place their things
@@ -20,6 +21,7 @@ export function watchRelayout(game: Phaser.Game): void {
     laidOut = { width, height };
     for (const key of RELAYOUT.sceneKeys) {
       const scene = game.scene.getScene(key);
+      if (key === 'MenuScene' && isStartingRun()) continue; // the start tap is already being handled: rebuilding would bring the menu music back
       if (scene && game.scene.isActive(key)) scene.scene.restart();
     }
   };
