@@ -1,5 +1,4 @@
-/** @file The belt combo finisher: swing, swing, then a bigger third hit. Rhythm numbers, finisher shape, feel, HUD dots. No Phaser. */
-import { shiftDown, shiftRight } from './balance';
+/** @file The belt combo finisher: swing, swing, then a bigger third hit. Rhythm numbers, finisher shape, feel. No Phaser. */
 
 /**
  * The swing chain. Two plain swings in rhythm, then the THIRD swing is the finisher: a wide, heavy arc that flings cats.
@@ -31,27 +30,6 @@ export const BELT_CHAIN = {
     trailDeg: 130,
     back: 1.2,
   },
-  /** The word over Varu when the finisher swings, and the HUD pips that show the chain. */
+  /** The word over Varu when the finisher swings. (The three HUD dots that showed the chain were removed in v235.) */
   word: { color: '#ffd166', size: 40 },
-  pips: {
-    r: 7,
-    gap: 20,
-    y: 150,
-    doneColor: 0xf5c518,
-    readyColor: 0xff7a59,
-    emptyColor: 0x4a5275,
-    outlineColor: 0x1b2340,
-    /** Phones: the dots sit up-left of the attack button (this is the DEFAULT spot, 1280x720; they follow the button when the player moves or resizes it, see `chainPipsSpot`). */
-    touch: { get x() { return shiftRight(1086); }, get y() { return shiftDown(516); }, rScale: 1.25 },
-    /** The ready dot pulses; after the finisher all dots flash and clear. */
-    readyPulse: { scale: 0.35, ms: 380 },
-    flashMs: 260,
-    /** How visible the dots are when there is no chain: 0 = hidden until the first swing that hits a cat. */
-    idleAlpha: 0,
-    /** A dot that was just filled pops from this scale. */
-    popFrom: 1.7,
-    popMs: 150,
-    /** The whole row of dots shakes up and down when a dot fills or the finisher fires (`px` at first, fading out over `ms`, `hz` shakes a second). */
-    wobble: { ms: 260, px: 3, hz: 14 },
-  },
 } as const;

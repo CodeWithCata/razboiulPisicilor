@@ -22,7 +22,6 @@ import { tutorialWanted } from '../core/tutorial';
 import { BeltBadges } from '../ui/BeltBadges';
 import { BuffBadges } from '../ui/BuffBadges';
 import { CatMeter } from '../ui/CatMeter';
-import { ChainPips } from '../ui/ChainPips';
 import { ComboMeter } from '../ui/ComboMeter';
 import { MuteBadge } from '../ui/MuteBadge';
 import { showBossIntroCard } from '../ui/BossIntroCard';
@@ -37,7 +36,6 @@ import { Tutorial } from '../ui/Tutorial';
 import {
   Events,
   listen,
-  type BeltChainPayload,
   type BeltCooldownPayload,
   type DodgeCooldownPayload,
   type BossHealthPayload,
@@ -67,7 +65,6 @@ export class UIScene extends Phaser.Scene {
   private bossBar!: BossBar;
   private buffBadges!: BuffBadges;
   private beltBadges!: BeltBadges;
-  private chainPips!: ChainPips;
   /** The cats gave up in this wave (Events.CatSurrender): the fanfare then says so instead of "CURĂȚAT!". */
   private surrenderedWave = false;
 
@@ -93,7 +90,6 @@ export class UIScene extends Phaser.Scene {
     this.buffBadges = new BuffBadges(this);
     this.comboMeter = new ComboMeter(this, touch);
     this.beltBadges = new BeltBadges(this);
-    this.chainPips = new ChainPips(this);
     this.bossBar = new BossBar(this);
     this.add.text(HUD.name.x, HUD.name.y, 'VARU', { ...style, fontSize: `${HUD.name.size}px` });
     this.scoreText = this.add.text(GAME.width - HUD.margin, HUD.score.y, 'Scor: 0', { ...style, fontSize: `${HUD.score.size}px` }).setOrigin(1, 0);
@@ -153,7 +149,6 @@ export class UIScene extends Phaser.Scene {
         this.comboMeter.set(p);
         if (p.tierUp) this.banner(`${p.tierUp.word} x${p.tierUp.mult}`, p.tierUp.color, GAME.height / 2 + COMBO.hud.bannerYOffset, COMBO.hud.bannerSize);
       }),
-      listen<BeltChainPayload>(Events.BeltChain, (p) => this.chainPips.set(p)),
       listen<BeltCooldownPayload>(Events.BeltCooldown, ({ attack, durationMs }) => {
         if (attack === 'swing') return; // the plain swing has no HUD badge
         this.beltBadges.startCooldown(attack, durationMs);
@@ -207,7 +202,6 @@ export class UIScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     this.beltBadges.update(delta);
     this.comboMeter.update(delta);
-    this.chainPips.update(delta);
     this.buffBadges.update(delta);
     this.bossBar.update(delta);
   }

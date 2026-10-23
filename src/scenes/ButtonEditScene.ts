@@ -1,20 +1,18 @@
 /** @file Screen (opened from the pause menu, phones) where the attack, spin, throw and roll buttons are dragged to better spots, resized, or all put back to default. */
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
-import { BELT_CHAIN } from '../config/finisher';
 import { COLORS, FONT } from '../config/style';
 import { MOVABLE_BUTTON_IDS, TOUCH, type MovableButtonId } from '../config/touch';
 import { BUTTON_EDIT_TEXT } from '../content/pause';
 import { hyp } from '../core/hyp';
-import { chainPipsSpot, clampSpot, cycleButtonSize, getButtonSize, resetAllButtons, setButtonSpot, spotIsFree, touchButton } from '../core/touchLayout';
+import { clampSpot, cycleButtonSize, getButtonSize, resetAllButtons, setButtonSpot, spotIsFree, touchButton } from '../core/touchLayout';
 
 const E = TOUCH.layoutEditor;
 
 /**
  * The button editor. GameScene and UIScene stay paused underneath; the pause menu sleeps and wakes when this closes.
  * Tap a button to pick it (gold), drag it anywhere; "Mărime" cycles the size of the picked button; "Resetează tot" puts every
- * button back to its default spot and size. While dragging, the circle turns red on top of another button (or the pause button, or the
- * chain dots, which ride with the attack button) and snaps back on release (`setButtonSpot` refuses a spot that is not free).
+ * button back to its default spot and size. While dragging, the circle turns red on top of another button (or the pause button) and snaps back on release (`setButtonSpot` refuses a spot that is not free).
  * Everything is saved the moment it changes (core/touchLayout.ts) and the HUD follows through `Events.TouchLayoutChanged`.
  */
 export class ButtonEditScene extends Phaser.Scene {
@@ -125,17 +123,6 @@ export class ButtonEditScene extends Phaser.Scene {
       g.fillStyle(color, picked ? 0.3 : 0.16).fillCircle(x, y, r);
       g.lineStyle(picked ? E.ringWidth : E.ringWidth - 2, color, picked ? 1 : 0.7).strokeCircle(x, y, r);
       this.labels[id].setPosition(x, y).setFontSize(Math.round(r * 0.36)).setColor(picked ? '#ffffff' : '#c9cfe6');
-    }
-    // The chain dots ride with the attack button: shown as three small circles where they will be.
-    const a = this.spots.attack;
-    const home = touchButton('attack');
-    const pips = chainPipsSpot();
-    const P = BELT_CHAIN.pips;
-    const k = P.touch.rScale;
-    const px = a.x + (pips.x - home.x);
-    const py = a.y + (pips.y - home.y);
-    for (let i = 0; i < BELT_CHAIN.steps; i++) {
-      g.fillStyle(P.doneColor, 0.8).fillCircle(px + (i - (BELT_CHAIN.steps - 1) / 2) * P.gap * k, py, P.r * k);
     }
     this.warning.setVisible(this.dragging !== null && !this.dragFree);
     this.sizeLabel?.setText(BUTTON_EDIT_TEXT.size(BUTTON_EDIT_TEXT.names[this.selected], BUTTON_EDIT_TEXT.sizeNames[getButtonSize(this.selected)]));

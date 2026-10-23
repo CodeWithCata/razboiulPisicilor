@@ -20,7 +20,7 @@ Phaser scenes. GameScene only WIRES systems together; UIScene is the HUD; Pause 
 - GameScene.ts (~750 lines) - The run: builds the arena, player, systems and collisions, and wires them together. Rules live in the systems. Exports: GameScene
 - MenuScene.ts - Main menu: logo, Varu, tap to start (endless button once unlocked), mute badge, install button. Exports: MenuScene
 - PauseScene.ts (~250 lines) - Pause menu on top of the run: resume, volumes, toggles, restart, menu. Esc opens and closes it. Exports: PauseScene
-- UIScene.ts (~250 lines) - The HUD, running in parallel on top of GameScene; it only listens to events. Exports: UIScene
+- UIScene.ts (~200 lines) - The HUD, running in parallel on top of GameScene; it only listens to events. Exports: UIScene
 - UpgradeScene.ts - Belt upgrade screen between waves: three cards (plus a rare synergy card) over the frozen game, pick one (keys 1-4, arrows + Enter, mouse or tap). Exports: UpgradeSceneData, UpgradeScene
 - VictoryScene.ts - Ending screen after the final boss: hidden message, endless-mode unlock, again / menu input. Exports: VictoryScene
 
@@ -157,10 +157,10 @@ HUD and menu pieces (Phaser objects). `ui/pause/` = pause rows, `ui/debug/` = de
 - BuffBadges.ts - Round badges for active power-ups: a ring that drains clockwise, seconds left underneath. Exports: BuffBadges
 - CatBubble.ts (~250 lines) - A cream thought-cloud bubble for a cat that talks in the arena: puffy inked edge, cel shading, shine and hatch ticks, two dots trailing to the speaker, jelly pop out of the tail tip, stays inside the screen. Exports: CatBubble
 - CatMeter.ts (~400 lines) - Varu's health meter: cat face (mood) + heart + health bar. Exports: CatMeter
-- ChainPips.ts - HUD dots for the belt swing chain (swing, swing, finisher): done, ready and empty dots, a pop on each new swing, a flash on the finisher. Exports: ChainPips
 - ComboMeter.ts - The combo counter on the HUD (right side): multiplier, kills in a row and a time bar that drains. Exports: ComboMeter
 - ControlsHint.ts - Keyboard controls reminder at the bottom, with a keycap button that hides it. Exports: ControlsHint
 - DebugPanel.ts (~200 lines) - Dev-only cheat sheet card (dev build): keys, toggles, live numbers. Exports: DebugPanel
+- DifficultyCat.ts - The difficulty button on the main menu, shaped like a cat's head: pointy ears, whiskers on the cheeks, the level name on the face. Same navy look and hover pop as `createMenuButton`. Exports: DifficultyCatOptions, difficultyCatHeight, createDifficultyCat
 - IntroVideo.ts (~350 lines) - DOM video player for the opening clips (backstory + intro): preloads the next clip, "Sari peste" button, never hangs. Exports: shouldPlayIntro, unlockIntroVideo, IntroHandle, playIntroVideos
 - LowHpVignette.ts - The red screen edge that glows when Varu is low on health and flashes with every heartbeat. Exports: LowHpVignette
 - MenuButton.ts - A menu button (`createMenuButton`) with a hover pop. Exports: MenuButtonOptions, createMenuButton
@@ -221,10 +221,10 @@ NUMBERS ONLY (no magic numbers in code). `balance.ts` = all gameplay. Layout and
 - cutscene.ts - Cutscene numbers: cinema bars, dialogue box, typewriter, skip, camera, walking and emotes. No Phaser. Exports: BOSS_LAST_WORDS, CUTSCENE
 - dayNight.ts - Day-night numbers: the sky tint keyframes, how fast it changes, and the lamps that rise out of the floor and light up at night. No Phaser. Exports: DAY_NIGHT
 - debug.ts - Dev-only cheats (`pnpm dev`). Exports: DebugId, DEBUG, BOSS_LAB
-- difficulty.ts - Difficulty presets (Ușor / Normal / Greu / Coșmar): the multipliers every run reads. No Phaser. Exports: DifficultyId, DifficultyStats, DIFFICULTIES, DIFFICULTY_ORDER, DEFAULT_DIFFICULTY, isDifficultyId, DIFFICULTY_MENU
+- difficulty.ts - Difficulty presets (Ușor / Normal / Greu / Coșmar): the multipliers every run reads. No Phaser. Exports: DifficultyId, DifficultyStats, DIFFICULTIES, DIFFICULTY_ORDER, DEFAULT_DIFFICULTY, isDifficultyId, DIFFICULTY_MENU, DIFFICULTY_CAT
 - dodge.ts - Dodge roll numbers: key, cooldown, distance, i-frames and the look of the somersault. No Phaser. Exports: DODGE
 - fanThrow.ts - Numbers for the fans' throws: how often, which fan, where it lands, the flight, the gift and the petard. No Phaser. Exports: FAN_THROW
-- finisher.ts - The belt combo finisher: swing, swing, then a bigger third hit. Rhythm numbers, finisher shape, feel, HUD dots. No Phaser. Exports: BELT_CHAIN
+- finisher.ts - The belt combo finisher: swing, swing, then a bigger third hit. Rhythm numbers, finisher shape, feel. No Phaser. Exports: BELT_CHAIN
 - hitFeel.ts - Hit feel: screen shake and tiny freezes per kind of hit, scaled by the combo tier. No Phaser. Exports: HIT_FEEL
 - hitstop.ts - Hit-stop (tiny freeze on strong hits) timings per enemy type. Exports: HIT_STOP
 - hud.ts - HUD layout and colors (score, wave, boss bar, fanfare, debug card), in game pixels. Exports: HUD
@@ -309,7 +309,7 @@ Small helpers with no gameplay rules: event bus, game clock, storage, viewport, 
 - storage.ts (~250 lines) - Guarded localStorage: best scores, mute, volumes, hints, unlocks, vibration, roll button spot. Exports: loadAlmanacSeen, saveAlmanacSeen, loadBest, saveBest, loadBestCombo, saveBestCombo, loadLifetime, addLifetime, loadMuted, saveMuted, loadVolume, saveVolume, loadEndlessUnlocked, saveEndlessUnlocked, loadHelpHidden, saveHelpHidden, loadAutoAttack, saveAutoAttack, loadVibration, saveVibration, SavedButton, loadTouchLayout, saveTouchLayout, loadDifficulty, saveDifficulty, loadDebugInfo, saveDebugInfo, loadSeenCutscenes, saveSeenCutscene, loadTutorialDone, saveTutorialDone, loadIntroSeen, saveIntroSeen
 - streak.ts - Counts kills that follow each other quickly. Exports: KillStreak
 - sweep.ts - Pure math for the belt. Exports: normalizeAngle, isSwept, distToSegment
-- touchLayout.ts (~200 lines) - Where the touch buttons are: attack, spin, throw and roll can be moved and resized by the player (saved); pause stays put. Also the spot of the chain dots. Exports: ButtonSpot, getButtonSize, radiusFor, defaultSpot, clampSpot, spotIsFree, touchButton, chainPipsSpot, isLayoutCustom, setButtonSpot, cycleButtonSize, resetButton, resetAllButtons
+- touchLayout.ts - Where the touch buttons are: attack, spin, throw and roll can be moved and resized by the player (saved); pause stays put. Exports: ButtonSpot, getButtonSize, radiusFor, defaultSpot, clampSpot, spotIsFree, touchButton, isLayoutCustom, setButtonSpot, cycleButtonSize, resetButton, resetAllButtons
 - tutorial.ts - Does this run show the first-run tutorial? (campaign only, first time on this device, or `?tutorial=1`.) Shared by GameScene (holds the first wave) and UIScene (shows the card). Exports: tutorialWanted
 - viewport.ts - Keeps the page and the Phaser canvas the right size when phone browser bars slide in and out. Exports: watchViewport
 

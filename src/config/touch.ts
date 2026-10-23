@@ -142,7 +142,7 @@ export const TOUCH = {
    * `sizes` multiply the radius in `buttons`; `defaultSize` is the size a button has until it is changed (roll was made bigger in v224).
    * A spot is saved as an offset from the default spot (so it keeps hugging the same corner on any screen). A button stays inside the
    * right part of the screen, `edgeMargin` from the edges, below `topLimit` (the pause button and the combo counter live above), and
-   * never on top of another button or the chain dots (`gap` px between circles). The dots follow the attack button.
+   * never on top of another button (`gap` px between circles).
    */
   layout: {
     sizes: [

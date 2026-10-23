@@ -75,4 +75,28 @@ export const DEFAULT_DIFFICULTY: DifficultyId = 'normal';
 export const isDifficultyId = (value: unknown): value is DifficultyId => typeof value === 'string' && value in DIFFICULTIES;
 
 /** The difficulty button on the main menu (under the almanac button). `touchW` / `touchH`: bigger on phones. */
-export const DIFFICULTY_MENU = { x: 118, y: 110, w: 188, h: 50, touchW: 220, touchH: 62, size: 24 } as const;
+export const DIFFICULTY_MENU = { x: 118, y: 132, w: 188, h: 50, touchW: 220, touchH: 62, size: 24 } as const;
+
+/** The cat-head shape of that button (`ui/DifficultyCat.ts`). Sizes in game pixels. `y` above is the middle of head + ears together. */
+export const DIFFICULTY_CAT = {
+  /** How far the ears stand above the head, how wide each ear is at its foot, and how far its tip leans outward. */
+  earH: 22,
+  earW: 38,
+  tipLean: 11,
+  /** Corner roundness of the head (share of half its height; 1 = a full pill). */
+  cornerShare: 0.95,
+  borderColor: 0x4a5275,
+  /** The lighter inside of the ears. */
+  innerEar: 0x3a4370,
+  earInset: 8,
+  /** Three whiskers per cheek: [offset from the middle line (px), how much the outer end drops (px)]. */
+  whiskers: [
+    [-7, -3],
+    [0, 0],
+    [7, 3],
+  ] as readonly (readonly [number, number])[],
+  whiskerColor: 0x6a74a0,
+  whiskerWidth: 2,
+  whiskerFromEdge: 9,
+  whiskerLen: 24,
+} as const;

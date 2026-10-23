@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { AUDIO } from '../config/audio';
 import { GAME } from '../config/balance';
 import { DIFFICULTY_MENU } from '../config/difficulty';
+import { createDifficultyCat, difficultyCatHeight } from '../ui/DifficultyCat';
 import { MENU } from '../config/menu';
 import { FONT } from '../config/style';
 import { ALMANAC_TEXT } from '../content/almanac';
@@ -62,9 +63,9 @@ export class MenuScene extends Phaser.Scene {
     const buildDifficultyButton = (): void => {
       difficultyButton?.destroy();
       const d = getDifficulty();
-      difficultyButton = createMenuButton(this, { x: DM.x, y: DM.y, w: touch ? DM.touchW : DM.w, h: touch ? DM.touchH : DM.h, size: DM.size, label: `${d.name}`, interactive: true, textColor: d.color });
+      difficultyButton = createDifficultyCat(this, { x: DM.x, y: DM.y, w: touch ? DM.touchW : DM.w, h: touch ? DM.touchH : DM.h, size: DM.size, label: `${d.name}`, textColor: d.color }); // a cat's head
       this.add
-        .text(DM.x, DM.y + (touch ? DM.touchH : DM.h) / 2 + 8, d.blurb, { fontFamily: FONT, fontSize: '16px', color: '#ffffff', stroke: '#1b2340', strokeThickness: 4, align: 'center', wordWrap: { width: touch ? DM.touchW : DM.w } })
+        .text(DM.x, DM.y + difficultyCatHeight(touch ? DM.touchH : DM.h) / 2 + 6, d.blurb, { fontFamily: FONT, fontSize: '16px', color: '#ffffff', stroke: '#1b2340', strokeThickness: 4, align: 'center', wordWrap: { width: touch ? DM.touchW : DM.w } })
         .setOrigin(0.5, 0)
         .setAlpha(0.9)
         .setDepth(MENU.button.depth)

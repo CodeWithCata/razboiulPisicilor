@@ -1,6 +1,5 @@
-/** @file Where the touch buttons are: attack, spin, throw and roll can be moved and resized by the player (saved); pause stays put. Also the spot of the chain dots. */
+/** @file Where the touch buttons are: attack, spin, throw and roll can be moved and resized by the player (saved); pause stays put. */
 import { GAME } from '../config/balance';
-import { BELT_CHAIN } from '../config/finisher';
 import { MOVABLE_BUTTON_IDS, TOUCH, type MovableButtonId, type TouchButtonId, type TouchSizeId } from '../config/touch';
 import { bus, Events } from './events';
 import { hyp } from './hyp';
@@ -34,8 +33,6 @@ const settings = {} as Record<MovableButtonId, Setting>;
 /** The answers are cached in objects made once and filled in place, so asking for a spot every frame allocates nothing. */
 const cache = {} as Record<MovableButtonId, ButtonSpot>;
 for (const id of MOVABLE_BUTTON_IDS) cache[id] = { x: 0, y: 0, r: 0 };
-const pipsCache = { x: 0, y: 0 };
-const scratch = { x: 0, y: 0 };
 let dirty = true;
 let cachedW = -1;
 let cachedH = -1;
@@ -59,22 +56,7 @@ export function clampSpot(x: number, y: number, r: number): { x: number; y: numb
   return { x: Math.min(Math.max(x, minX), Math.max(minX, maxX)), y: Math.min(Math.max(y, minY), Math.max(minY, maxY)) };
 }
 
-/** Where the chain dots go when the attack button is at (ax, ay) with radius ar: up-left of it, as far out as they were by default. Written into `out`. */
-function pipsAt(ax: number, ay: number, ar: number, out: { x: number; y: number }): void {
-  const a = TOUCH.buttons.attack;
-  const P = BELT_CHAIN.pips.touch;
-  const ux = P.x - a.x;
-  const uy = P.y - a.y;
-  const len = hyp(ux, uy);
-  const dist = ar + (len - a.r);
-  out.x = ax + (ux / len) * dist;
-  out.y = ay + (uy / len) * dist;
-}
-
-/** Radius of the chain dots as an obstacle for the buttons. */
-const pipsRadius = (): number => (BELT_CHAIN.pips.gap * (BELT_CHAIN.steps - 1) * 0.5 + BELT_CHAIN.pips.r) * BELT_CHAIN.pips.touch.rScale + 4;
-
-/** Would a circle at (x, y) with radius r be clear of every other button, the pause button and the chain dots (`TOUCH.layout.gap` px apart)? */
+/** Would a circle at (x, y) with radius r be clear of every other button and the pause button (`TOUCH.layout.gap` px apart)? */
 export function spotIsFree(id: MovableButtonId, x: number, y: number, r: number): boolean {
   refresh();
   const gap = TOUCH.layout.gap;
@@ -85,19 +67,7 @@ export function spotIsFree(id: MovableButtonId, x: number, y: number, r: number)
   }
   const p = TOUCH.buttons.pause;
   if (hyp(x - p.x, y - p.y) < p.r + r + gap) return false;
-  if (id === 'attack') pipsAt(x, y, r, scratch); // the dots move with the attack button: they must not land on another one
-  const px = id === 'attack' ? scratch.x : pipsCache.x;
-  const py = id === 'attack' ? scratch.y : pipsCache.y;
-  const pr = pipsRadius();
-  if (id === 'attack') {
-    for (const other of MOVABLE_BUTTON_IDS) {
-      if (other === id) continue;
-      const o = cache[other];
-      if (hyp(px - o.x, py - o.y) < o.r + pr + gap) return false;
-    }
-    return true;
-  }
-  return hyp(x - px, y - py) >= r + pr + gap;
+  return true;
 }
 
 /** Fill the cache from the settings (when something changed or the screen size did). A button that would land on another one goes back to its default spot. */
@@ -131,7 +101,6 @@ function refresh(): void {
       c.y = home.y;
     }
   }
-  pipsAt(cache.attack.x, cache.attack.y, cache.attack.r, pipsCache);
 }
 
 /** Where a button is now. Pause (and any other fixed button) reads config/touch.ts. Allocation-free. */
@@ -139,12 +108,6 @@ export function touchButton(id: TouchButtonId): Readonly<ButtonSpot> {
   if (id === 'pause') return TOUCH.buttons.pause;
   refresh();
   return cache[id];
-}
-
-/** Where the centre of the chain dots is on phones (up-left of the attack button, wherever it is). */
-export function chainPipsSpot(): Readonly<{ x: number; y: number }> {
-  refresh();
-  return pipsCache;
 }
 
 const isCustom = (id: MovableButtonId): boolean => settings[id].dx !== 0 || settings[id].dy !== 0 || settings[id].size !== TOUCH.layout.defaultSize[id];

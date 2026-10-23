@@ -107,7 +107,7 @@ export const Events = {
   MusicTrack: 'audio:music', // MusicPayload (scenes ask for the background track)
   PauseRequest: 'game:pause-request', // touch pause button (the keyboard uses Esc directly)
   TouchPress: 'touch:press', // TouchPressPayload (a touch spin / throw button was tapped: its badge squashes)
-  TouchLayoutChanged: 'touch:layout', // no payload (a touch button was moved, resized or reset in the pause menu: the HUD badges and chain dots follow)
+  TouchLayoutChanged: 'touch:layout', // no payload (a touch button was moved, resized or reset in the pause menu: the HUD badges follow)
   VolumeChanged: 'audio:volume', // VolumePayload (pause menu sliders)
   DebugAction: 'debug:action', // DebugActionPayload (dev only: a cheat just ran, the debug card flashes it)
   DebugStats: 'debug:stats', // DebugStatsPayload (dev only: live numbers for the debug card)
