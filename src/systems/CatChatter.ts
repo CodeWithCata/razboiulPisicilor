@@ -3,8 +3,10 @@ import Phaser from 'phaser';
 import { isBossType } from '../config/balance';
 import type { BubbleKind } from '../config/bubble';
 import { CHATTER } from '../config/chatter';
+import { READING } from '../config/reading';
 import { CAT_BUMPED_LINES, CAT_CHATTER, HIDEOUT_SLEEPY_TAUNTS, HIDEOUT_TAUNTS, pick } from '../content/lines';
 import { gameClock } from '../core/clock';
+import { readMs } from '../core/readingTime';
 import { Events, listen, type CatBumpPayload, type CatPoppedPayload, type ShoutPayload } from '../core/events';
 import type { Enemy } from '../entities/Enemy';
 import { CatBubble } from '../ui/CatBubble';
@@ -160,7 +162,7 @@ export class CatChatter {
       lift,
       bornAt: now,
       goneAt: -1,
-      lifeMs: shout ? CHATTER.shout.lifeMs : CHATTER.lifeMs,
+      lifeMs: readMs(line, shout ? CHATTER.shout.lifeMs : CHATTER.lifeMs, READING.bubbleMaxMs), // long lines stay long enough to be read
       fadeMs: shout ? CHATTER.shout.fadeMs : CHATTER.fadeMs,
     };
     this.bubbles.push(bubble);

@@ -4,6 +4,7 @@ import { GAME } from '../config/balance';
 import { COMBO } from '../config/combo';
 import { CUTSCENE } from '../config/cutscene';
 import { HUD } from '../config/hud';
+import { READING } from '../config/reading';
 import { TOUCH } from '../config/touch';
 import { ENDLESS } from '../config/waves';
 import { MARTI_13 } from '../config/curses';
@@ -11,6 +12,7 @@ import { showWaveFanfare } from '../ui/WaveFanfare';
 import { FONT } from '../config/style';
 import { ENDLESS_TEXT, LUCKY_TEXT, MARTI_13_TEXT, PICKUP_LABELS, TOUCH_TEXT } from '../content/lines';
 import { usesTouchControls } from '../core/device';
+import { readMs } from '../core/readingTime';
 import { getAutoAttack } from '../core/settings';
 import { readRun, type RunOptions } from '../core/run';
 import { getDifficulty, getDifficultyId } from '../core/difficulty';
@@ -219,7 +221,7 @@ export class UIScene extends Phaser.Scene {
       .setAlpha(0);
     this.tweens.add({
       targets: label, alpha: 1, scale: { from: b.fromScale, to: 1 }, duration: b.popInMs, ease: 'Back.easeOut',
-      onComplete: () => this.tweens.add({ targets: label, alpha: 0, delay: b.holdMs, duration: b.fadeOutMs, onComplete: () => label.destroy() }),
+      onComplete: () => this.tweens.add({ targets: label, alpha: 0, delay: text.length > READING.bannerFromChars ? readMs(text, b.holdMs, READING.bannerMaxMs) : b.holdMs, duration: b.fadeOutMs, onComplete: () => label.destroy() }),
     });
   }
 }

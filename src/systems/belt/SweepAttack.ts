@@ -47,6 +47,8 @@ export class SweepAttack {
   private bursts = 0;
   private lap = 0;
   private readonly alreadyHit = new Set<Enemy>();
+  /** Cats this attack has hit so far (0 = it has only hit air). The swing chain only grows on a real hit (BeltSystem). */
+  private catsHit = 0;
   /** Cats that already flinched in this lap (they flinch once per pass). */
   private readonly warned = new Set<Enemy>();
   /** Reused copies of the cat and shot lists for the per-frame loops (see `snapshotInto`). */
@@ -68,6 +70,11 @@ export class SweepAttack {
 
   get running(): boolean {
     return this.def !== null;
+  }
+
+  /** Cats the current (or last) attack has hit so far. */
+  get hits(): number {
+    return this.catsHit;
   }
 
   /** How far the body has turned with the belt (radians). Only the spin turns him; 0 otherwise. */
@@ -109,6 +116,7 @@ export class SweepAttack {
     // The aim is locked for the whole attack: only the start angle is kept.
     this.startAngle = def.centered ? aimAngle - this.arcRad / 2 : aimAngle;
     this.alreadyHit.clear();
+    this.catsHit = 0;
     this.warned.clear();
     this.lap = 0;
     this.lastTurn = 0;
@@ -179,6 +187,7 @@ export class SweepAttack {
       }
 
       this.alreadyHit.add(enemy);
+      this.catsHit += 1;
       enemy.takeDamage(damage, px, py, knockback); // armor is applied inside takeDamage
       if (def.finisher) bus.emit(Events.FinisherHit, { x: enemy.x, y: enemy.y }); // HitFeel: shake and a tiny freeze
     }

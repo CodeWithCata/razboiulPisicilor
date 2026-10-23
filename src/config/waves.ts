@@ -11,8 +11,8 @@ export type WaveDef = Partial<Record<EnemyType, number>>;
 export const WAVES: readonly WaveDef[] = [
   { normal: 8 },
   { normal: 12 },
-  { normal: 10, kamikaze: 3 }, // kamikaze debut (v186: was 5, a +58% jump on wave 3)
-  { normal: 11, fat: 2 }, // fat cat debut
+  { normal: 12, kamikaze: 3 }, // kamikaze debut (v186: was 5, a +58% jump on wave 3; v233: 12 normal, wave 3 used to be easier than wave 2)
+  { normal: 10, fat: 2 }, // fat cat debut (v233: 10 normal, was 11: eased the spike)
   { normal: 11, ninja: 5 }, // ninja debut
   { normal: 10, flying: 5 }, // flying debut
   { queen: 1, normal: 7 }, // MID BOSS: Queen Cat

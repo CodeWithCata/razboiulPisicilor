@@ -2,8 +2,10 @@
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
 import { TOAST } from '../config/jokes';
+import { READING } from '../config/reading';
 import { COLORS, FONT } from '../config/style';
 import { usesTouchControls } from '../core/device';
+import { readMs } from '../core/readingTime';
 
 interface ToastItem {
   text: string;
@@ -58,6 +60,9 @@ export class Toast {
       .setStroke('#1b2340', Math.round(size * TOAST.strokeFactor));
     this.drawDrips(item.color);
 
+    // The line stays long enough to be read (a long joke used to vanish after the same 2.3 s as a short one); when others wait, a bit less.
+    const read = readMs(item.text, TOAST.holdMs);
+    const hold = this.queue.length > 0 ? Math.max(TOAST.holdMs, read * READING.toastBackedUpShare) : read;
     const restY = this.restY;
     this.lean = -this.lean;
     this.box.setPosition(GAME.width / 2, restY).setAlpha(0).setScale(TOAST.popFromScale).setAngle(this.lean * TOAST.tiltDeg);
@@ -72,7 +77,7 @@ export class Toast {
           targets: this.box,
           alpha: 0,
           y: restY + 8,
-          delay: TOAST.holdMs,
+          delay: hold,
           duration: TOAST.fadeOutMs,
           onComplete: () => this.next(),
         }),

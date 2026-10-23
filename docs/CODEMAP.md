@@ -53,7 +53,7 @@ Game rules, one system per concern (belt, waves, score, projectiles, pickups, ef
 - DayNight.ts - Day to night: a colored sheet over the arena that follows the wave number, plus floor lamps that rise out of the floor when it gets dark. Exports: nightProgress, DayNight
 - DebugCheats.ts (~450 lines) - Dev-only cheats behind the debug card and its keys: spawn cats / bosses (also at the cursor), waves, speed, health, pickups, bad luck, fan throws. Exports: DebugSources, DebugCheats
 - DodgeSystem.ts - Varu's dodge roll: reads the roll press, keeps the 2 s cooldown (with a short input buffer) and starts the roll on the player. Exports: DodgeSystem
-- Effects.ts (~400 lines) - The juice: screen shake, particles, floating words (listens to the bus). Exports: Effects
+- Effects.ts (~450 lines) - The juice: screen shake, particles, floating words (listens to the bus). Exports: Effects
 - FanThrowSystem.ts (~550 lines) - The fans (and the bomber cat) throw something into the arena now and then: a gift (a normal pickup) or a bad item (a petard with a burning fuse, or a cursed item that curses Varu if he stands in its ring). Decides WHEN, flies the item and lands it. Exports: FanThrowSources, FanThrowSystem
 - FloorLamp.ts (~300 lines) - One retractable street lamp: by day it is gone, at night a pole grows out of the floor with the lantern on top, dust puffs and the light comes on. Exports: FloorLamp
 - Fog.ts - Fog weather: some waves start in a mist. Cats far from Varu fade out (they walk out of the fog at him) and a soft sheet covers the arena and the screen edges go thick and white (you see less at the sides). Exports: Fog
@@ -88,7 +88,7 @@ Game rules, one system per concern (belt, waves, score, projectiles, pickups, ef
 ## systems/belt/
 The belt: swing / spin sweeps, thrown boomerang, strap drawing, goo particles.
 
-- SweepAttack.ts (~250 lines) - Runs one swing or spin: the tip arcs around Varu, each cat is hit once, projectiles are swatted. Exports: SweepAttack
+- SweepAttack.ts (~300 lines) - Runs one swing or spin: the tip arcs around Varu, each cat is hit once, projectiles are swatted. Exports: SweepAttack
 - ThrownBelt.ts - The thrown belt as a boomerang: out, pierce, turn at range or wall, back. Exports: ThrownBelt
 - attacks.ts - Sweep attacks as data (swing, spin): add an attack by adding an object here. Exports: SweepId, SweepDef, SWING, SPIN, FINISHER
 - beltVisual.ts - Draws the leather strap with its buckle for the swing / spin. Exports: StrapPose, drawStrap, drawTrail
@@ -240,6 +240,7 @@ NUMBERS ONLY (no magic numbers in code). `balance.ts` = all gameplay. Layout and
 - props.ts (~450 lines) - Living-arena numbers: prop springs, FX, kickables, rock cracks, hide-and-seek, bed cages, hp / smash, gold leaf, fence splinters. Exports: PropKind, SpringKind, KickKind, FxId, AmbientAction, PROP_TUNING, PropFeel, PROP_FEEL, PropLook, PROP_LOOK, FxDef, PROP_FX, PROP_AMBIENT, KickDef, KICKABLE, KICK_HIT, ROCK_CRACKS, HIDEOUT, BED_CAGE, PROP_HP, BUSH_STATES, BUSH_REGROW, SMASH, PROP_DEBRIS, PROP_LAYER_NAME, BushVariant, BUSH_VARIANTS, bushVariantFor, GOLD_LEAF, FENCE_SPLINTERS
 - pwa.ts - PWA numbers: service worker path, icon, update re-check, boot self-repair flag. Exports: PWA
 - rainbow.ts - Rainbow event numbers: when it comes, how it looks, how many bonus pickups drop under it. No Phaser. Exports: RAINBOW
+- reading.ts - How long a written line must stay on screen to be read in the middle of a fight (reading-time numbers). No Phaser. Exports: READING
 - scooter.ts - The scooter power-up: how hard it bumps cats, how the scooter under Varu looks and moves. Duration and speed live in BUFFS (balance.ts). Exports: SCOOTER
 - slowMo.ts - Slow-mo numbers for the last cat of a wave (Clone Drone style: long crawl, hard push-in on the final kill). No Phaser. Exports: SLOW_MO, BossKillBurstDef, BOSS_KILL, CONFETTI
 - stands.ts - Look of the stands outside the fence (numbers and colors only, no Phaser): terraces, ad barrier, aisles, balcony boxes, bunting, fans. Exports: FanSpec, STANDS
@@ -297,6 +298,7 @@ Small helpers with no gameplay rules: event bus, game clock, storage, viewport, 
 - pwa.ts - Service worker registration, update detection and the install prompt (built game only). Exports: InstallMode, isInstalledApp, installMode, onInstallModeChange, onOfflineReady, updateReady, onUpdateReady, applyUpdate, markBootSuccess, initPwa
 - random.ts - Pick a key with probability proportional to its weight. Exports: weightedPick
 - reach.ts - Pure geometry for "did the belt reach that prop?". Exports: Box, nearestOnBox, sweepTouchesBox, segmentTouchesBox
+- readingTime.ts - `readMs`: how long a line of text should stay on screen so it can be read (see config/reading.ts). No Phaser. Exports: readMs
 - relayout.ts - Rebuilds Menu / GameOver / Victory when the canvas size changes (fullscreen, rotation). Exports: watchRelayout
 - rotateHint.ts - The "turn your phone" page (index.html) used to be a dead end: it covers the game and swallowed every tap, so a phone with auto-rotate OFF (or any iPhone with the orie... Exports: watchRotateHint
 - run.ts - Which way the game is being played. Exports: RunMode, RunOptions, DEFAULT_RUN, readRun, isStartingRun, setStartingRun

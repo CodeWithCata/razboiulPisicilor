@@ -18,7 +18,7 @@ export const DODGE = {
   enabled: true,
   /** Phaser key name of the desktop key. (Space no longer swings the belt: click does.) */
   key: 'SPACE',
-  cooldownMs: 2000,
+  cooldownMs: 2300, // v233: was 2000 (the roll made boss lanes, petards and ball rain too easy once the belt upgrades arrived)
   /** The three phases (ms) and the whole move. Cannot be hit from `safeFromMs` (inside the wind-up) until the end of the roll + `graceMs`. */
   windupMs: WINDUP_MS,
   rollMs: ROLL_MS,

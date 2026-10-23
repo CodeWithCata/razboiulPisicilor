@@ -14,6 +14,7 @@ export class SynergyCard implements PickCard {
   private readonly texts: { name: Phaser.GameObjects.Text; body: Phaser.GameObjects.Text; fuse: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; key: Phaser.GameObjects.Text | null };
   private selected = false;
   private baseScale = 1;
+  private scaleTween: Phaser.Tweens.Tween | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -61,8 +62,8 @@ export class SynergyCard implements PickCard {
     if (this.selected === on) return;
     this.selected = on;
     this.redraw();
-    this.scene.tweens.killTweensOf(this.box);
-    this.scene.tweens.add({ targets: this.box, scale: this.baseScale * (on ? L.card.selectedScale : 1), duration: 140, ease: 'Sine.easeOut' });
+    this.scaleTween?.stop(); // only the grow/shrink: killing ALL tweens here would also kill the slide-in (intro) and leave the card see-through
+    this.scaleTween = this.scene.tweens.add({ targets: this.box, scale: this.baseScale * (on ? L.card.selectedScale : 1), duration: 140, ease: 'Sine.easeOut' });
   }
 
   /** The cards slide up one after the other when the screen opens. */

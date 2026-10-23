@@ -25,7 +25,7 @@ export const BELT_UPGRADE_OFFER = {
    */
   afterWaves: [3, 6, 9, 12, 14] as readonly number[],
   /** Endless mode (waves past the campaign): a pick after every this-many waves. */
-  endlessEvery: 3,
+  endlessEvery: 4, // v233: was 3 (endless maxed every upgrade too fast)
   /** How many cards are offered (fewer when most upgrades are at their top level). */
   choices: 3,
   /** The screen opens this long after the wave is cleared, so the fanfare and the heal are seen first (game time passes meanwhile). */
@@ -46,7 +46,7 @@ export const BELT_UPGRADE_LOOK = {
   subtitle: { y: 158, size: 26 },
   card: {
     w: 296,
-    h: 416,
+    h: 396,
     gap: 28,
     top: 205,
     radius: 24,

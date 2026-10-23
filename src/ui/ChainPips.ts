@@ -9,7 +9,7 @@ import { Events, listen, type BeltChainPayload } from '../core/events';
 /**
  * `BELT_CHAIN.steps` dots, centered on desktop at `pips.y` and on phones up-left of the attack button, wherever the player put it
  * (`chainPipsSpot`, moved again on `Events.TouchLayoutChanged`).
- * Done = gold, the next one when `ready` = orange and pulsing, the rest = grey; faint (`idleAlpha`) when there is no chain.
+ * Done = gold, the next one when `ready` = orange and pulsing, the rest = grey; faint or hidden (`idleAlpha`, 0 = hidden) when there is no chain.
  * The dots are made once; `update` only sets the scale of each (no allocations per frame).
  */
 export class ChainPips {
@@ -107,7 +107,7 @@ export class ChainPips {
     const alpha = idle ? P.idleAlpha : 1;
     for (let i = 0; i < this.dots.length; i++) {
       const color = flashing ? P.doneColor : i < this.step ? P.doneColor : i === this.step && this.ready ? P.readyColor : P.emptyColor;
-      this.dots[i]!.setFillStyle(color, alpha).setStrokeStyle(2, P.outlineColor, alpha);
+      this.dots[i]!.setFillStyle(color, alpha).setStrokeStyle(2, P.outlineColor, alpha).setVisible(alpha > 0);
     }
   }
 }

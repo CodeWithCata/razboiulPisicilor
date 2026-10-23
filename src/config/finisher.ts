@@ -46,8 +46,8 @@ export const BELT_CHAIN = {
     /** The ready dot pulses; after the finisher all dots flash and clear. */
     readyPulse: { scale: 0.35, ms: 380 },
     flashMs: 260,
-    /** The dots are faint when there is no chain (never fully hidden: the player learns what they are). */
-    idleAlpha: 0.45,
+    /** How visible the dots are when there is no chain: 0 = hidden until the first swing that hits a cat. */
+    idleAlpha: 0,
     /** A dot that was just filled pops from this scale. */
     popFrom: 1.7,
     popMs: 150,

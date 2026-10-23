@@ -34,6 +34,8 @@ import {
   type TeleportPayload,
 } from '../core/events';
 import { gameClock } from '../core/clock';
+import { readMs } from '../core/readingTime';
+import { READING } from '../config/reading';
 import { JAIL_WORDS, BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, MONSTER_STACK_WORDS, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, UMBRELLA_WORDS, DODGE_WORDS, SCOOTER_WORDS, ICE_WORDS, pick } from '../content/lines';
 import { BELT_CHAIN } from '../config/finisher';
 import { WEAK_POINT } from '../config/weakPoint';
@@ -265,8 +267,10 @@ export class Effects {
       .setAlpha(1)
       .setActive(true)
       .setVisible(true);
+    // A long line (a joke, not a "PAF!") stays put long enough to be read; short words keep their quick float.
+    const hold = text.length > READING.floatFromChars ? Math.max(holdMs, readMs(text, 0, READING.floatMaxMs)) : holdMs;
     this.scene.tweens.add({
-      targets: label, y: y - 46, alpha: 0, duration: 650, delay: holdMs, ease: 'Cubic.easeOut',
+      targets: label, y: y - 46, alpha: 0, duration: 650, delay: hold, ease: 'Cubic.easeOut',
       onComplete: () => this.recycleText(label),
     });
   }

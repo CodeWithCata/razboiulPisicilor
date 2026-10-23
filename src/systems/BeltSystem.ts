@@ -30,8 +30,10 @@ export class BeltSystem {
   private queued: { id: SpecialId; until: number } | null = null;
 
   // ---- the swing chain (config/finisher.ts) ----
-  /** Swings done in the current chain (0 = none). */
+  /** Swings that HIT a cat in the current chain (0 = none). A swing in the air does not count. */
   private chainStep = 0;
+  /** The plain swing that is running has not hit a cat yet: its first hit adds one to the chain. */
+  private awaitingHit = false;
   /** The chain breaks if the next swing starts after this game time. */
   private chainDeadline = 0;
   /** When the last swing started and how long its pause is: a fresh tap inside the first part of it is mashing. */
@@ -72,6 +74,7 @@ export class BeltSystem {
     this.startNext(time, input);
 
     if (this.sweep.running) this.sweep.update(time);
+    this.creditHit();
     if (this.thrown && this.thrown.update(delta)) this.onCaught(time);
     this.player.beltInHand = !this.sweep.running && !this.thrown;
     this.player.spinTurn = this.sweep.bodyTurn;
@@ -121,18 +124,26 @@ export class BeltSystem {
     if (!BELT_CHAIN.enabled) return SWING;
     if (this.chainStep > 0 && (this.mashed || time > this.chainDeadline)) this.chainStep = 0;
     this.mashed = false;
-    this.chainStep += 1;
-    if (this.chainStep >= BELT_CHAIN.steps) {
+    if (this.chainStep >= BELT_CHAIN.steps - 1) {
+      this.awaitingHit = false;
       this.setChain(0, true); // the finisher is the end of the chain
       return FINISHER;
     }
-    this.setChain(this.chainStep);
+    this.awaitingHit = true; // this plain swing only fills a dot if it hits a cat (see `creditHit`)
     return SWING;
+  }
+
+  /** A plain swing that touched a cat fills the next dot, the moment it lands. A swing that only cuts air fills nothing. */
+  private creditHit(): void {
+    if (!this.awaitingHit || this.sweep.hits === 0) return;
+    this.awaitingHit = false;
+    this.setChain(this.chainStep + 1);
   }
 
   /** Spin, throw, death or a cheat: the count starts over. */
   private breakChain(): void {
     this.mashed = false;
+    this.awaitingHit = false;
     if (this.chainStep !== 0) this.setChain(0);
   }
 

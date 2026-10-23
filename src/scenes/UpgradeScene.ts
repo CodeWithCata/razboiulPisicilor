@@ -91,10 +91,10 @@ export class UpgradeScene extends Phaser.Scene {
       this.cards.push(card);
     };
     const cardY = C.top + C.h / 2;
-    this.choices.forEach((id, i) => place(new UpgradeCard(this, id, first + i * step, cardY, touch ? null : `[ ${i + 1} ]`), i));
+    this.choices.forEach((id, i) => place(new UpgradeCard(this, id, first + i * step, cardY, null), i));
     if (this.synergy) {
       const i = this.choices.length;
-      place(new SynergyCard(this, this.synergy, first + i * step, cardY, touch ? null : `[ ${i + 1} ]`), i);
+      place(new SynergyCard(this, this.synergy, first + i * step, cardY, null), i);
     }
     this.select(0);
 
