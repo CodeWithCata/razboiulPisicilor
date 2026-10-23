@@ -49,9 +49,9 @@ export class UpgradeCard implements PickCard {
       .text(0, top + L.text.y, words.text, { ...style(L.text.size, L.colors.dim), strokeThickness: 3, lineSpacing: L.text.lineSpacing, wordWrap: { width: C.w - L.text.wrapPad * 2 } })
       .setOrigin(0.5, 0);
     const next = Math.min(beltUpgradeMaxLevel(id), this.level + 1);
-    const change = scene.add.text(0, top + L.pips.y - 36, `${percent(id, this.level)}  →  ${percent(id, next)}`, style(30, L.colors.up)).setOrigin(0.5);
-    const level = scene.add.text(0, top + L.pips.y + 28, BELT_UPGRADE_UI.level(this.level, next), { ...style(L.key.size, L.colors.dim), strokeThickness: 3 }).setOrigin(0.5);
-    const key = keyLabel ? scene.add.text(0, top + C.h - 26, keyLabel, { ...style(L.key.size, L.colors.dim), strokeThickness: 3 }).setOrigin(0.5) : null;
+    const change = scene.add.text(0, top + L.change.y, `${percent(id, this.level)}  →  ${percent(id, next)}`, style(L.change.size, L.colors.up)).setOrigin(0.5);
+    const level = scene.add.text(0, top + L.levelText.y, BELT_UPGRADE_UI.level(this.level, next), { ...style(L.key.size, L.colors.dim), strokeThickness: 3 }).setOrigin(0.5);
+    const key = keyLabel ? scene.add.text(0, top + C.h - L.key.fromBottom, keyLabel, { ...style(L.key.size, L.colors.dim), strokeThickness: 3 }).setOrigin(0.5) : null;
     this.texts = { name, body, change, level, key };
 
     this.box = scene.add.container(x, y, [this.back, this.pips, badge, name, body, change, level, ...(key ? [key] : [])]).setDepth(L.depth + 2);

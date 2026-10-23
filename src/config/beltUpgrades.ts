@@ -46,7 +46,7 @@ export const BELT_UPGRADE_LOOK = {
   subtitle: { y: 158, size: 26 },
   card: {
     w: 296,
-    h: 372,
+    h: 416,
     gap: 28,
     top: 205,
     radius: 24,
@@ -68,8 +68,11 @@ export const BELT_UPGRADE_LOOK = {
   badge: { y: 70, radius: 52, fill: 0x232c52, ring: COLORS.gold, ringWidth: 4, valueSize: 40 },
   name: { y: 158, size: 34, wrapPad: 26 },
   text: { y: 206, size: 22, lineSpacing: 2, wrapPad: 34 },
-  pips: { y: 322, w: 40, h: 12, gap: 10, radius: 5, offColor: 0x4a5275 },
-  key: { y: 348, size: 20 },
+  /** The "0% -> +12%" line sits under the (up to 3-line) description, then the pips, then the level text, then the key; all offsets from the card top. */
+  change: { y: 308, size: 30 },
+  pips: { y: 336, w: 40, h: 12, gap: 10, radius: 5, offColor: 0x4a5275 },
+  levelText: { y: 366 },
+  key: { fromBottom: 20, size: 20 },
   hint: { y: 664, size: 22 },
   colors: { normal: '#fff3d6', selected: '#1b2340', dim: '#c9cfe6', up: '#9be28f', upSelected: '#1d6b2f' },
 } as const;

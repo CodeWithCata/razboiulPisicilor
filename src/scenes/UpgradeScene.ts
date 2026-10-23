@@ -131,6 +131,7 @@ export class UpgradeScene extends Phaser.Scene {
     const id = this.choices[index];
     if (!isSynergy && !id) return;
     this.leaving = true;
+    this.select(index); // a number key picks without moving the selection: the picked card must look picked (gold), the rest dark while they fade
     if (isSynergy && this.synergy) {
       addBeltSynergy(this.synergy);
       const payload: BeltSynergyPayload = { id: this.synergy };

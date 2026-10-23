@@ -42,7 +42,7 @@ export const BELT_SYNERGY_LOOK = {
   /** The pink "SINERGIE" pill that straddles the top edge of the card. */
   tag: { y: 0, w: 150, h: 34, size: 22, radius: 17, fill: 0xff5ac8, ink: '#1b2340' },
   /** The two fused upgrades, as two lines in the spot where a plain card shows its level numbers (offset from the card top). */
-  fuse: { y: 306, size: 22 },
+  fuse: { y: 326, size: 22 },
   colors: { fuse: '#ff9bdc', fuseSelected: '#8a1260' },
   /** With a 4th card the cards shrink to fit: never wider than this share of the screen. */
   maxRowShare: 0.96,

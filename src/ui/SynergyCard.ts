@@ -37,7 +37,7 @@ export class SynergyCard implements PickCard {
       .setOrigin(0.5, 0);
     const fuse = scene.add.text(0, top + S.fuse.y, `${needA}\n+ ${needB}`, { ...style(S.fuse.size, S.colors.fuse), strokeThickness: 4 }).setOrigin(0.5);
     const tag = scene.add.text(0, top + S.tag.y, BELT_SYNERGY_UI.tag, { ...style(S.tag.size, S.tag.ink), strokeThickness: 0 }).setOrigin(0.5);
-    const key = keyLabel ? scene.add.text(0, top + C.h - 26, keyLabel, { ...style(L.key.size, L.colors.dim), strokeThickness: 3 }).setOrigin(0.5) : null;
+    const key = keyLabel ? scene.add.text(0, top + C.h - L.key.fromBottom, keyLabel, { ...style(L.key.size, L.colors.dim), strokeThickness: 3 }).setOrigin(0.5) : null;
     this.texts = { name, body, fuse, tag, key };
 
     this.box = scene.add.container(x, y, [this.back, badge, name, body, fuse, tag, ...(key ? [key] : [])]).setDepth(L.depth + 2);
