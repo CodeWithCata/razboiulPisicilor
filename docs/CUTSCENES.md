@@ -45,7 +45,7 @@ queenIntro: {
 And in `CUTSCENE_TRIGGERS`: `{ when: { on: 'bossSpawned', boss: 'queen' }, play: 'queenIntro', repeat: 'run' }`.
 
 Triggers: `runStart`, `waveStart`/`waveCleared` (+ `wave`), `bossSpawned`/`bossDefeated` (+ optional `boss`), `victory`
-(plays BEFORE the victory screen). `repeat`: `'always'` (default), `'run'`, `'save'` (once per device). `mode`: campaign / endless.
+(plays BEFORE the victory screen), `bossLastWords` (+ optional `boss`: the killing blow landed, the boss stands on 1 HP and talks; when the scene ends or is skipped it falls). `repeat`: `'always'` (default), `'run'`, `'save'` (once per device). `mode`: campaign / endless.
 
 ## Rules for writing scenes
 - Walk Varu with `walk` (it stops after `maxMs` and just places him, so a scene never hangs on a wall); glide cats with `move`.

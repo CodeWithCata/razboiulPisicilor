@@ -5,6 +5,7 @@ import { FLINCH, GOLD_BELT, MILK_FX } from '../../config/animation';
 import { easeInOutBack } from '../../core/ease';
 import { gameClock } from '../../core/clock';
 import { bus, Events, type BeltSweepPayload } from '../../core/events';
+import { synergyEffect } from '../../core/beltSynergies';
 import { snapshotInto } from '../../core/snapshot';
 import { isSwept, normalizeAngle } from '../../core/sweep';
 import type { Enemy } from '../../entities/Enemy';
@@ -81,7 +82,24 @@ export class SweepAttack {
 
   /** Reach, including power-ups (golden belt). */
   private get range(): number {
-    return (this.def?.range ?? 0) * this.player.rangeMultiplier;
+    return (this.def?.range ?? 0) * this.player.rangeMultiplier * this.synergyRange(this.def);
+  }
+
+  /** Synergies (core/beltSynergies.ts) that change how far this attack reaches. */
+  private synergyRange(def: SweepDef | null): number {
+    if (!def) return 1;
+    if (def.ring) return synergyEffect('spinRange');
+    return synergyEffect('swingRange'); // the plain swing and the finisher (the cowboy synergy)
+  }
+
+  /** Synergies that change how hard this attack hits and throws. */
+  private synergyDamage(def: SweepDef): number {
+    if (def.ring) return synergyEffect('spinDamage');
+    return def.finisher ? synergyEffect('finisherDamage') : 1;
+  }
+
+  private synergyKnock(def: SweepDef): number {
+    return def.finisher ? synergyEffect('finisherKnock') : 1;
   }
 
   begin(def: SweepDef, time: number, aimAngle: number): void {
@@ -143,7 +161,8 @@ export class SweepAttack {
   private hitEnemies(def: SweepDef, swept: number): void {
     const px = this.player.x;
     const py = this.player.y;
-    const damage = def.damage * this.player.damageMultiplier;
+    const damage = def.damage * this.player.damageMultiplier * this.synergyDamage(def);
+    const knockback = def.knockback * this.player.knockbackMultiplier * this.synergyKnock(def);
 
     // A copy: a cat that dies is removed from the group in the middle of the loop, which would skip the next one.
     const cats = snapshotInto(this.enemies.getChildren(), this.catScratch);
@@ -160,7 +179,8 @@ export class SweepAttack {
       }
 
       this.alreadyHit.add(enemy);
-      enemy.takeDamage(damage, px, py, def.knockback); // armor is applied inside takeDamage
+      enemy.takeDamage(damage, px, py, knockback); // armor is applied inside takeDamage
+      if (def.finisher) bus.emit(Events.FinisherHit, { x: enemy.x, y: enemy.y }); // HitFeel: shake and a tiny freeze
     }
     this.catScratch.length = 0;
     // EnemyHit / EnemyKilled events fire from the enemy, so effects and score react on their own.
@@ -234,7 +254,7 @@ export class SweepAttack {
     this.lastTip = tip;
     this.lastLength = length;
     const alpha = 1 - t * BELT_FX.fadeAmount;
-    const buffed = this.player.damageMultiplier > 1;
+    const buffed = def.finisher || this.player.damageMultiplier > this.player.upgradeDamage + 0.001; // timed buffs only, the permanent upgrade does not light the streak
     const golden = GOLD_BELT.enabled && this.player.goldenBelt;
 
     this.gfx.clear();

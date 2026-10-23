@@ -1,5 +1,6 @@
 /** @file Sweep attacks as data (swing, spin): add an attack by adding an object here. */
 import { BELT, BELT_SPIN, type BeltAttackId } from '../../config/balance';
+import { BELT_CHAIN } from '../../config/finisher';
 import { BELT_FX } from '../../config/style';
 import { Events } from '../../core/events';
 
@@ -31,6 +32,8 @@ export interface SweepDef {
   readonly ring: boolean;
   /** Event emitted when the attack starts (so audio and jokes can react later). */
   readonly event: string;
+  /** The third swing of a rhythm chain (config/finisher.ts): wider, heavier, flings cats. It shares the swing's cooldown slot. */
+  readonly finisher: boolean;
 }
 
 export const SWING: SweepDef = {
@@ -48,6 +51,7 @@ export const SWING: SweepDef = {
   milk: false,
   ring: false,
   event: Events.BeltSwing,
+  finisher: false,
 };
 
 export const SPIN: SweepDef = {
@@ -65,4 +69,26 @@ export const SPIN: SweepDef = {
   milk: true,
   ring: true,
   event: Events.BeltSpin,
+  finisher: false,
+};
+
+const F = BELT_CHAIN.finisher;
+
+/** The finisher: swing, swing, THIS. Same belt, but a wide arc, more reach and a shove that flings cats across the arena. */
+export const FINISHER: SweepDef = {
+  id: 'swing',
+  range: BELT.range * F.rangeFactor,
+  arcDeg: F.arcDeg,
+  durationMs: F.durationMs,
+  cooldownMs: F.cooldownMs,
+  damage: BELT.damage * F.damageFactor,
+  knockback: BELT.knockback * F.knockbackFactor,
+  centered: true,
+  trailDeg: F.trailDeg,
+  back: F.back,
+  spinsBody: false,
+  milk: false,
+  ring: false,
+  event: Events.BeltFinisher,
+  finisher: true,
 };

@@ -6,23 +6,30 @@ import { clampToArena } from '../../core/arena';
 import { type BossType, type EnemyType } from '../../config/balance';
 import { ANIM } from '../../config/animation';
 import { BOSS, FINAL_BOSS, LIGHTS_OUT } from '../../config/bosses';
+import { WEAK_POINT } from '../../config/weakPoint';
+import { BOSS_LAST_WORDS, CUTSCENE } from '../../config/cutscene';
+import { synergyEffect } from '../../core/beltSynergies';
 import { BOSS_TEXT, LIGHTS_OUT_LINES } from '../../content/bosses';
 import {
   bus,
   Events,
   type BossDefeatedPayload,
   type BossHealthPayload,
+  type BossLastWordsPayload,
   type BossPhasePayload,
   type BossSpawnedPayload,
   type BossStunnedPayload,
+  type BossWeakPayload,
   type ShoutPayload,
   type SpawnEnemyPayload,
 } from '../../core/events';
 import type { Telegraph } from '../../systems/Telegraph';
 import { Enemy, type EnemyContext } from '../Enemy';
 import { gameClock } from '../../core/clock';
+import { getDifficulty } from '../../core/difficulty';
 import { BossFightLog } from '../../core/bossLog';
 import { lookFor, type BossLook, type BossLooks } from './BossViews';
+import { WeakPoint } from './WeakPoint';
 
 /**
  * One boss attack. The Boss class runs it through:
@@ -65,6 +72,10 @@ export abstract class Boss extends Enemy {
   readonly bossKey: BossType;
   /** Counters for the dev boss lab (time per mode, attacks used, damage). Cheap, always on. */
   readonly log: BossFightLog;
+  /** Saying its last words (see `beginLastWords`). */
+  private speaking = false;
+  /** The last words were said (the next killing blow kills for real). */
+  private lastWordsDone = false;
   /** Dev (boss lab): when set, the boss only ever picks this attack. */
   debugOnly: string | null = null;
   protected phase = 1;
@@ -97,6 +108,8 @@ export abstract class Boss extends Enemy {
   private comboNext: { id: string; gapMs: number } | null = null;
   private telegraphs: Telegraph[] = [];
   private stunStars: Phaser.GameObjects.Image[] = [];
+  /** The weak-point window after a big attack (`openWeakPoint`): extra damage while it is open, and the ring that shows it. */
+  private readonly weak: WeakPoint;
 
   protected constructor(scene: Phaser.Scene, x: number, y: number, key: BossType, texture: TexKey) {
     super(scene, x, y, key, texture);
@@ -106,6 +119,7 @@ export abstract class Boss extends Enemy {
     (this.body as Phaser.Physics.Arcade.Body).setImmovable(true);
     this.setCollideWorldBounds(true);
     this.setDepth(15);
+    this.weak = new WeakPoint(scene, (this.stats.size * WEAK_POINT.marker.sizeFactor) / 2);
 
     const payload: BossSpawnedPayload = { boss: key, name: BOSS_TEXT[key].name, hp: this.hp, maxHp: this.maxHp };
     bus.emit(Events.BossSpawned, payload);
@@ -177,11 +191,55 @@ export abstract class Boss extends Enemy {
   }
 
   override get contactDamage(): number {
+    if (this.speaking) return 0; // saying its last words: harmless
     return this.contactOverride ?? this.stats.contactDamage;
   }
 
+  /** The boss took its killing blow and is talking (see `BOSS_LAST_WORDS`): it cannot be hurt and cannot hurt until `finishLastWords`. */
+  get isSpeaking(): boolean {
+    return this.speaking;
+  }
+
+  /** The killing blow is held back: 1 HP, no attack, no movement, and the scene that makes it talk is asked for. */
+  private beginLastWords(): void {
+    this.speaking = true;
+    this.hp = 1;
+    this.cancelAttack();
+    this.clearTelegraphs();
+    this.clearStars();
+    this.mode = 'stunned';
+    this.modeUntil = Infinity;
+    this.setVelocity(0, 0);
+    this.flash(0xffffff, 300);
+    const health: BossHealthPayload = { hp: this.hp, maxHp: this.maxHp };
+    bus.emit(Events.BossHealth, health);
+    const words: BossLastWordsPayload = { boss: this.bossKey, x: this.x, y: this.y };
+    bus.emit(Events.BossLastWords, words);
+  }
+
+  /** The scene is over (or skipped): now the boss really falls, through the normal kill (BossDefeated, K.O., slow-mo). */
+  finishLastWords(): void {
+    if (!this.speaking || !this.alive) return;
+    this.speaking = false;
+    this.lastWordsDone = true;
+    this.applyHit(this.hp, this.x, this.y, 0);
+  }
+
   protected override get damageFactor(): number {
-    return (this.mode === 'stunned' ? BOSS.stunnedDamageFactor : BOSS.armor[this.bossKey]) * this.damageMult;
+    const weak = this.weak.isOpen(gameClock.now) ? WEAK_POINT.damageFactor[this.bossKey] : 1;
+    return (this.mode === 'stunned' ? BOSS.stunnedDamageFactor : BOSS.armor[this.bossKey]) * this.damageMult * weak;
+  }
+
+  /**
+   * Call right after the boss's big attack: for a short while every hit does extra damage (`WEAK_POINT`), a ring pulses on it and a word says so.
+   * A synergy (Ochi de vultur) keeps the window open longer. Does nothing when `WEAK_POINT.enabled` is false.
+   */
+  protected openWeakPoint(): void {
+    if (!WEAK_POINT.enabled || !this.alive) return;
+    const ms = WEAK_POINT.windowMs[this.bossKey] * synergyEffect('weakWindow');
+    this.weak.open(gameClock.now, ms, this.x, this.y);
+    const payload: BossWeakPayload = { x: this.x, y: this.y, boss: this.bossKey, durationMs: ms };
+    bus.emit(Events.BossWeakPoint, payload);
   }
 
   protected override get facesVelocity(): boolean {
@@ -212,7 +270,18 @@ export abstract class Boss extends Enemy {
   }
 
   protected override applyHit(effective: number, fromX: number, fromY: number, knockback: number): boolean {
+    if (this.speaking) return false; // last words: nothing touches it
+    if (!this.lastWordsDone && BOSS_LAST_WORDS.enabled && CUTSCENE.enabled && effective >= this.hp) {
+      this.beginLastWords(); // the blow that would kill it is held back; a scene lets it talk first
+      return false;
+    }
     this.log.bossHit(effective);
+    const wasWeak = this.weak.isOpen(gameClock.now);
+    if (wasWeak) {
+      this.weak.hit(gameClock.now);
+      const hit: BossWeakPayload = { x: this.x, y: this.y, boss: this.bossKey, durationMs: 0 };
+      bus.emit(Events.BossWeakHit, hit);
+    }
     const killed = super.applyHit(effective, fromX, fromY, knockback);
     if (killed) {
       const payload: BossDefeatedPayload = { boss: this.bossKey, x: this.x, y: this.y, final: this.bossKey === FINAL_BOSS };
@@ -227,6 +296,7 @@ export abstract class Boss extends Enemy {
   override tick(time: number, delta: number, ctx: EnemyContext): void {
     super.tick(time, delta, ctx);
     this.updateLook();
+    this.weak.update(time, this.x, this.y);
     this.stunStars.forEach((star, i) => {
       const a = time / 260 + (i * Math.PI * 2) / 3;
       star.setPosition(this.x + Math.cos(a) * 46, this.y - this.stats.size * 0.45 + Math.sin(a) * 12).setAngle(time / 4);
@@ -235,6 +305,7 @@ export abstract class Boss extends Enemy {
 
   override destroy(fromScene?: boolean): void {
     this.clearTelegraphs();
+    this.weak.destroy();
     this.stunStars.forEach((s) => s.destroy());
     this.stunStars = [];
     if (this.lightsOff && !fromScene) bus.emit(Events.LightsOut, { on: false });
@@ -244,6 +315,10 @@ export abstract class Boss extends Enemy {
   // ---- the state machine ---------------------------------------------------
   protected think(time: number, delta: number, ctx: EnemyContext): void {
     this.ctx = ctx;
+    if (this.speaking) {
+      this.setVelocity(0, 0); // no phase change, no attack while it waits for its scene
+      return;
+    }
     this.frameMs = Math.min(delta, 50);
     this.log.tick(this.mode, delta, this.logTier());
     this.attackList ??= this.defineAttacks();
@@ -271,7 +346,7 @@ export abstract class Boss extends Enemy {
         break;
       case 'recover':
         this.brake(delta);
-        if (time >= this.modeUntil) this.enterIdle(time, this.comboNext ? 0 : this.cooldown() * this.mercyStretch());
+        if (time >= this.modeUntil) this.enterIdle(time, this.comboNext ? 0 : this.cooldown() * this.mercyStretch() * getDifficulty().bossPace);
         break;
       case 'stunned':
         this.setVelocity(0, 0);
@@ -342,7 +417,7 @@ export abstract class Boss extends Enemy {
     this.contactOverride = null;
     this.setVelocity(0, 0);
     this.mode = 'recover';
-    this.modeUntil = time + (this.comboNext ? this.comboNext.gapMs : resolve(this.current?.recoverMs ?? 800));
+    this.modeUntil = time + (this.comboNext ? this.comboNext.gapMs : resolve(this.current?.recoverMs ?? 800) * getDifficulty().bossPace); // harder = she is back sooner (the warnings do not change)
     this.current = null;
   }
 

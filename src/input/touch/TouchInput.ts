@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { GAME } from '../../config/balance';
 import { TOUCH, TOUCH_BUTTON_IDS, type TouchButtonId } from '../../config/touch';
+import { touchButton } from '../../core/touchLayout';
 import { bus, Events, type TouchPressPayload } from '../../core/events';
 import { buzz } from '../../core/haptics';
 import { getAutoAttack } from '../../core/settings';
@@ -150,7 +151,7 @@ export class TouchInput implements InputSource {
 
   private buttonAt(x: number, y: number): TouchButtonId | null {
     for (const id of TOUCH_BUTTON_IDS) {
-      const b = TOUCH.buttons[id];
+      const b = touchButton(id); // the roll button may have been moved or resized by the player
       if (hyp(x - b.x, y - b.y) <= b.r + TOUCH.buttonSlop) return id;
     }
     return null;

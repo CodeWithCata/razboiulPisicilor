@@ -15,6 +15,7 @@ import { gameClock } from '../core/clock';
 import { CIG_SMOKE, ENERGY_FLIP, ENERGY_TRAIL, type FlipLook, EMO_FX, GOLD_BELT, IDLE_HABITS, MILK_FX, MILK_TRAIL, RUST_FX, SMOKE_BREAK, VARU_ANIM, type ZLook } from '../config/animation';
 import { setCircleHitbox } from '../core/sprite';
 import { BELT_FX, css, FONT } from '../config/style';
+import { getDifficulty } from '../core/difficulty';
 import { hyp } from '../core/hyp';
 
 /** Body frames of the cigarette drag: arm down, half way, cigarette at his mouth. */
@@ -33,6 +34,10 @@ export class Player extends Actor {
   /** Slowed by the emo cat's tear puddles (`TearPuddles`, 1 = normal). Separate from `terrainSlow`, which the mustard puddles set every frame. */
   tearSlow = 1;
   damageMultiplier = 1;
+  /** Share of `damageMultiplier` that comes from the permanent belt upgrades (the streak only looks "buffed" for the timed buffs above it). */
+  upgradeDamage = 1;
+  /** Permanent belt upgrade: every belt hit shoves cats this much harder. */
+  knockbackMultiplier = 1;
   rangeMultiplier = 1;
   /** Bad buffs (PowerUpSystem sets them): the pause between plain swings and the spin / throw cooldowns get this many times longer, and the body grows (1 = normal). */
   swingCooldownMultiplier = 1;
@@ -111,6 +116,8 @@ export class Player extends Actor {
   private rollLaunched = false;
   /** How fast he was walking when the roll phase starts (px/s): the roll begins at this speed so he never stops first. */
   private rollStartSpeed = 0;
+  /** His walking momentum during the roll phase (px/s): starts at the walk speed and follows the stick, so the roll never brakes him. */
+  private rollCarry = 0;
   /** The post-roll speed boost runs until this game time (gameClock). */
   private boostUntil = -Infinity;
   /** The way the scooter points (radians, like `rotation`) while he rides; ScooterSystem draws the scooter along it. */
@@ -190,19 +197,34 @@ export class Player extends Actor {
         // Wind-up: he does NOT stop. He keeps walking as before, crouches, and swings round toward the roll (the way can still change).
         if (input.move.x !== 0 || input.move.y !== 0) this.rollDir.set(input.move.x, input.move.y).normalize();
         this.rollStartSpeed = input.move.x !== 0 || input.move.y !== 0 ? walk : 0;
+        this.rollCarry = this.rollStartSpeed;
         if (!this.isKnockedBack) this.setVelocity(input.move.x * walk, input.move.y * walk);
         this.facing.copy(input.aim);
         this.setRotation(this.rotation + Phaser.Math.Angle.Wrap(target - this.rotation) * 0.4);
       } else {
-        // Roll: the speed starts exactly where the walk was (no jerk), swells and eases to 0 at the end. The push (`peak`) is worked out so
-        // the whole roll covers `distancePx` (the walk part gives half its start speed times the time, the sine part 2/pi of the peak times it).
-        const into = Phaser.Math.Clamp((t - DODGE.windupMs) / DODGE.rollMs, 0, 1);
-        const seconds = DODGE.rollMs / 1000;
-        const peak = Math.max(0, DODGE.distancePx / seconds - this.rollStartSpeed * 0.5) * (Math.PI / 2);
-        const speed = this.rollStartSpeed * (1 - Phaser.Math.Easing.Quadratic.InOut(into)) + peak * Math.sin(Math.PI * into);
-        this.setVelocity(this.rollDir.x * speed, this.rollDir.y * speed);
-        this.facing.copy(this.rollDir);
-        this.setRotation(target);
+        const heldNow = input.move.x !== 0 || input.move.y !== 0;
+        const rollEnd = DODGE.windupMs + DODGE.rollMs;
+        if (t < rollEnd) {
+          // Roll: a burst along the roll direction (swells and eases to 0) ON TOP of his walking momentum. The momentum (`rollCarry`) starts at
+          // the walk speed and follows the stick, so he never brakes to a stop: if he keeps a direction held he comes out of the roll walking.
+          // The burst (`peak`) is worked out so the whole roll still covers `distancePx` (carry gives start speed times the time, the sine 2/pi of the peak times it).
+          const into = Phaser.Math.Clamp((t - DODGE.windupMs) / DODGE.rollMs, 0, 1);
+          const seconds = DODGE.rollMs / 1000;
+          const dt = Math.min(gameClock.scaled(this.scene.game.loop.delta), 50) / 1000;
+          this.rollCarry += ((heldNow ? walk : 0) - this.rollCarry) * (1 - Math.exp(-dt * DODGE.carryFollow));
+          const peak = Math.max(0, DODGE.distancePx / seconds - this.rollStartSpeed) * (Math.PI / 2);
+          const burst = peak * Math.sin(Math.PI * into);
+          this.setVelocity(this.rollDir.x * burst + input.move.x * this.rollCarry, this.rollDir.y * burst + input.move.y * this.rollCarry);
+          this.facing.copy(this.rollDir);
+          this.setRotation(target);
+        } else {
+          // Recover: he uncurls but is back in control right away (full steering at the boosted speed), so the roll flows into the run.
+          const speed = walk * (1 + (DODGE.boost.mult - 1) * Phaser.Math.Clamp((t - rollEnd) / DODGE.recoverMs, 0, 1)); // eases up to the boost the roll hands over to
+          if (!this.isKnockedBack) this.setVelocity(input.move.x * speed, input.move.y * speed);
+          this.facing.copy(input.aim);
+          const aimRot = input.aim.angle() + Math.PI / 2;
+          this.setRotation(this.rotation + Phaser.Math.Angle.Wrap(aimRot - this.rotation) * 0.35);
+        }
       }
       this.waddle();
       this.syncShadow();
@@ -832,8 +854,9 @@ export class Player extends Actor {
     }
     if (!this.alive || this.godMode || now < this.invincibleUntil) return false;
 
+    amount *= getDifficulty().damageTaken; // Ușor / Greu / Coșmar: every hit on him is scaled here, one place for cats, shots, bombs and bosses
     this.hp = Math.max(0, this.hp - amount);
-    this.invincibleUntil = now + PLAYER.invincibleMs;
+    this.invincibleUntil = now + PLAYER.invincibleMs * getDifficulty().invincible;
     this.applyKnockback(fromX, fromY, PLAYER.hurtKnockback);
     this.flash(0xff4444, 100);
     this.scene.tweens.add({ targets: this, alpha: 0.35, duration: 70, yoyo: true, repeat: 4, onComplete: () => this.setAlpha(1) });

@@ -9,6 +9,10 @@ export const PAUSE_TEXT = {
   autoAttack: 'Atac automat',
   /** Phones only: shows the fps and a few numbers on the screen, for testing. */
   debugInfo: 'Date debug',
+  /** Phones only: short vibration on dodge, hit and pick. */
+  vibration: 'Vibrație',
+  /** Phones only: opens the screen where the touch buttons are moved and resized. */
+  touchButtons: 'Butoane',
   on: 'PORNIT',
   off: 'OPRIT',
   soundOn: 'PORNIT',
@@ -24,3 +28,19 @@ export const PAUSE_TEXT = {
 
 /** What the fat cat says while waiting for Varu to finish his smoke break (one at random). Varu's own line comes from SMOKE_LINES. */
 export const PAUSE_CAT_LINES = ['Mi-e foame.', 'Hai odată!', 'Miau?', '...'] as const;
+
+/** The screen where the dodge roll button is moved (phones). */
+export const BUTTON_EDIT_TEXT = {
+  title: 'BUTOANELE TALE',
+  help: 'Atinge un buton ca să-l alegi, apoi trage-l unde îți vine mai la îndemână',
+  blocked: 'Nu se poate aici: e peste alt buton',
+  size: (button: string, size: string): string => `${button}: ${size}`,
+  sizeNames: { small: 'MIC', normal: 'NORMAL', big: 'MARE', huge: 'URIAȘ' },
+  reset: 'Resetează tot',
+  done: 'Gata',
+  names: { attack: 'Atac', spin: 'Învârte', throw: 'Aruncă', roll: 'Tumbă' },
+  pause: 'Pauză',
+  /** The pause menu row: has the player changed anything? */
+  custom: 'PERSONALIZAT',
+  default: 'IMPLICIT',
+} as const;

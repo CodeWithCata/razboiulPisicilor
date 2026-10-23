@@ -1,6 +1,7 @@
 /** @file The HUD, running in parallel on top of GameScene; it only listens to events. */
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
+import { COMBO } from '../config/combo';
 import { CUTSCENE } from '../config/cutscene';
 import { HUD } from '../config/hud';
 import { TOUCH } from '../config/touch';
@@ -10,14 +11,17 @@ import { showWaveFanfare } from '../ui/WaveFanfare';
 import { FONT } from '../config/style';
 import { ENDLESS_TEXT, LUCKY_TEXT, MARTI_13_TEXT, PICKUP_LABELS, TOUCH_TEXT } from '../content/lines';
 import { usesTouchControls } from '../core/device';
-import { buzz } from '../core/haptics';
 import { getAutoAttack } from '../core/settings';
 import { readRun, type RunOptions } from '../core/run';
+import { getDifficulty, getDifficultyId } from '../core/difficulty';
+import { DEFAULT_DIFFICULTY } from '../config/difficulty';
 import { loadBest } from '../core/storage';
 import { tutorialWanted } from '../core/tutorial';
 import { BeltBadges } from '../ui/BeltBadges';
 import { BuffBadges } from '../ui/BuffBadges';
 import { CatMeter } from '../ui/CatMeter';
+import { ChainPips } from '../ui/ChainPips';
+import { ComboMeter } from '../ui/ComboMeter';
 import { MuteBadge } from '../ui/MuteBadge';
 import { showBossIntroCard } from '../ui/BossIntroCard';
 import { BossLabPanel } from '../ui/BossLabPanel';
@@ -31,6 +35,7 @@ import { Tutorial } from '../ui/Tutorial';
 import {
   Events,
   listen,
+  type BeltChainPayload,
   type BeltCooldownPayload,
   type DodgeCooldownPayload,
   type BossHealthPayload,
@@ -38,6 +43,7 @@ import {
   type BossSpawnedPayload,
   type BuffsPayload,
   type CatSurrenderPayload,
+  type ComboPayload,
   type HeartbeatPayload,
   type JokePayload,
   type PickupPayload,
@@ -52,12 +58,14 @@ import {
 export class UIScene extends Phaser.Scene {
   private catMeter!: CatMeter;
   private scoreText!: Phaser.GameObjects.Text;
+  private comboMeter!: ComboMeter;
   private bestText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
   private run: RunOptions = readRun(undefined);
   private bossBar!: BossBar;
   private buffBadges!: BuffBadges;
   private beltBadges!: BeltBadges;
+  private chainPips!: ChainPips;
   /** The cats gave up in this wave (Events.CatSurrender): the fanfare then says so instead of "CURĂȚAT!". */
   private surrenderedWave = false;
 
@@ -81,11 +89,13 @@ export class UIScene extends Phaser.Scene {
     if (touch) new MuteBadge(this, HUD.touch.mute.x, HUD.touch.mute.y);
     else new MuteBadge(this, GAME.width - HUD.muteBadge.right, HUD.muteBadge.y);
     this.buffBadges = new BuffBadges(this);
+    this.comboMeter = new ComboMeter(this, touch);
     this.beltBadges = new BeltBadges(this);
+    this.chainPips = new ChainPips(this);
     this.bossBar = new BossBar(this);
     this.add.text(HUD.name.x, HUD.name.y, 'VARU', { ...style, fontSize: `${HUD.name.size}px` });
     this.scoreText = this.add.text(GAME.width - HUD.margin, HUD.score.y, 'Scor: 0', { ...style, fontSize: `${HUD.score.size}px` }).setOrigin(1, 0);
-    this.bestText = this.add.text(GAME.width - HUD.margin, HUD.best.y, loadBest(this.run.mode) > 0 ? `Record: ${loadBest(this.run.mode)}` : '', { ...style, fontSize: `${touch ? HUD.touch.bestSize : HUD.best.size}px`, strokeThickness: HUD.best.strokeThickness }).setOrigin(1, 0).setAlpha(HUD.best.alpha);
+    this.bestText = this.add.text(GAME.width - HUD.margin, HUD.best.y, loadBest(this.run.mode, getDifficultyId()) > 0 ? `Record: ${loadBest(this.run.mode, getDifficultyId())}` : '', { ...style, fontSize: `${touch ? HUD.touch.bestSize : HUD.best.size}px`, strokeThickness: HUD.best.strokeThickness }).setOrigin(1, 0).setAlpha(HUD.best.alpha);
     this.waveText = this.add.text(GAME.width / 2, HUD.wave.y, '', { ...style, fontSize: `${HUD.wave.size}px` }).setOrigin(0.5, 0);
     if (touch) {
       // The reminder is wrapped to fit between the two thumbs and fades away after the first seconds of the run.
@@ -129,8 +139,7 @@ export class UIScene extends Phaser.Scene {
       }),
       listen<HeartbeatPayload>(Events.Heartbeat, ({ intensity }) => lowHp.beat(intensity)),
       listen(Events.PlayerHurt, () => {
-        this.catMeter.hurt();
-        buzz(TOUCH.haptics.hurtMs);
+        this.catMeter.hurt(); // the buzz is in systems/HapticsSystem.ts
       }),
       listen<TouchPressPayload>(Events.TouchPress, ({ button }) => this.beltBadges.press(button)),
       listen<ScorePayload>(Events.ScoreChanged, ({ score, best }) => {
@@ -138,6 +147,11 @@ export class UIScene extends Phaser.Scene {
         this.bestText.setText(best > 0 ? `Record: ${best}` : '');
         this.tweens.add({ targets: this.scoreText, scale: { from: HUD.score.popFromScale, to: 1 }, duration: HUD.score.popMs });
       }),
+      listen<ComboPayload>(Events.ComboChanged, (p) => {
+        this.comboMeter.set(p);
+        if (p.tierUp) this.banner(`${p.tierUp.word} x${p.tierUp.mult}`, p.tierUp.color, GAME.height / 2 + COMBO.hud.bannerYOffset, COMBO.hud.bannerSize);
+      }),
+      listen<BeltChainPayload>(Events.BeltChain, (p) => this.chainPips.set(p)),
       listen<BeltCooldownPayload>(Events.BeltCooldown, ({ attack, durationMs }) => {
         if (attack === 'swing') return; // the plain swing has no HUD badge
         this.beltBadges.startCooldown(attack, durationMs);
@@ -178,7 +192,8 @@ export class UIScene extends Phaser.Scene {
       listen<WavePayload>(Events.WaveStarted, ({ wave }) => {
         this.surrenderedWave = false;
         const endless = this.run.mode === 'endless';
-        this.waveText.setText(endless ? `Valul ${wave} · ${ENDLESS_TEXT.hud}` : `Valul ${wave}`);
+        const tag = getDifficultyId() === DEFAULT_DIFFICULTY ? '' : ` · ${getDifficulty().name}`; // Ușor / Greu / Coșmar shows next to the wave
+        this.waveText.setText((endless ? `Valul ${wave} · ${ENDLESS_TEXT.hud}` : `Valul ${wave}`) + tag);
         this.banner(`VALUL ${wave}`, HUD.banner.color);
         if (wave === MARTI_13.wave) this.banner(MARTI_13_TEXT.banner, HUD.banner.marti13Color, GAME.height / 2 + HUD.banner.marti13YOffset, HUD.banner.marti13Size);
         if (endless && wave === ENDLESS.startWave) this.banner(ENDLESS_TEXT.banner, HUD.banner.endlessColor, GAME.height / 2 + HUD.banner.endlessYOffset, HUD.banner.endlessSize);
@@ -189,6 +204,8 @@ export class UIScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.beltBadges.update(delta);
+    this.comboMeter.update(delta);
+    this.chainPips.update(delta);
     this.buffBadges.update(delta);
     this.bossBar.update(delta);
   }

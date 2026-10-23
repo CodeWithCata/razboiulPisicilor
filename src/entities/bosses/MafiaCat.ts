@@ -256,6 +256,7 @@ export class MafiaCat extends Boss {
           this.puddles.floodAround(this.x, this.y, floodRadius); // v180: the floor around him turns into one big puddle, wider than the ring...
           this.puddles.splash(byPhase(MAFIA.puddle.count, this.phase), this.x, this.y, floodRadius); // ...and v148: he leaves deeper puddles of tears in it
           this.exhaustedUntil = gameClock.now + MAFIA.recoverMs.scream; // and is wide open while he catches his breath
+          this.openWeakPoint(); // the ring and the extra damage on top
         },
       },
       {

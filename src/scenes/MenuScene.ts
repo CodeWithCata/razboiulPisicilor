@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { AUDIO } from '../config/audio';
 import { GAME } from '../config/balance';
+import { DIFFICULTY_MENU } from '../config/difficulty';
 import { MENU } from '../config/menu';
 import { FONT } from '../config/style';
 import { ALMANAC_TEXT } from '../content/almanac';
@@ -9,8 +10,9 @@ import { ENDLESS_TEXT, MENU_TEXT, TOUCH_TEXT } from '../content/lines';
 import { TOUCH } from '../config/touch';
 import { usesTouchControls } from '../core/device';
 import { enterFullscreenLandscape, whenScaleSettled } from '../core/fullscreen';
+import { cycleDifficulty, getDifficulty, getDifficultyId } from '../core/difficulty';
 import { isStartingRun, setStartingRun, type RunOptions } from '../core/run';
-import { loadBest, loadEndlessUnlocked } from '../core/storage';
+import { loadBest, loadEndlessUnlocked, loadLifetime } from '../core/storage';
 import { bus, Events, type MusicPayload } from '../core/events';
 import { createMenuButton } from '../ui/MenuButton';
 import { createMenuBackdrop } from '../ui/menuBackdrop';
@@ -53,21 +55,48 @@ export class MenuScene extends Phaser.Scene {
     const A = MENU.almanac;
     const almanacButton = createMenuButton(this, { x: A.x, y: A.y, w: touch ? A.touchW : A.w, h: touch ? A.touchH : A.h, size: A.size, label: ALMANAC_TEXT.menuButton, interactive: true });
 
-    // Bottom line: the records, and the key reminders on desktop.
-    const parts: string[] = [];
-    const best = loadBest('campaign');
-    if (best > 0) parts.push(`${MENU_TEXT.record}: ${best}`);
-    const bestEndless = endlessUnlocked ? loadBest('endless') : 0;
-    if (bestEndless > 0) parts.push(`${MENU_TEXT.recordEndless}: ${bestEndless}`);
-    if (!touch) parts.push(MENU_TEXT.keys);
-    if (parts.length > 0) {
-      const F = MENU.footer;
+    // The difficulty button (under the almanac button): a tap or D steps Ușor -> Normal -> Greu -> Coșmar. Saved on the device.
+    const DM = DIFFICULTY_MENU;
+    let difficultyButton!: Phaser.GameObjects.Container;
+    let refreshFooter: () => void = () => undefined; // set below, once the footer exists
+    const buildDifficultyButton = (): void => {
+      difficultyButton?.destroy();
+      const d = getDifficulty();
+      difficultyButton = createMenuButton(this, { x: DM.x, y: DM.y, w: touch ? DM.touchW : DM.w, h: touch ? DM.touchH : DM.h, size: DM.size, label: `${d.name}`, interactive: true, textColor: d.color });
       this.add
-        .text(width / 2, F.y, parts.join(F.separator), { fontFamily: FONT, fontSize: `${F.size}px`, color: '#ffffff', stroke: '#1b2340', strokeThickness: F.strokeThickness })
-        .setOrigin(0.5)
-        .setAlpha(F.alpha)
-        .setDepth(MENU.button.depth);
-    }
+        .text(DM.x, DM.y + (touch ? DM.touchH : DM.h) / 2 + 8, d.blurb, { fontFamily: FONT, fontSize: '16px', color: '#ffffff', stroke: '#1b2340', strokeThickness: 4, align: 'center', wordWrap: { width: touch ? DM.touchW : DM.w } })
+        .setOrigin(0.5, 0)
+        .setAlpha(0.9)
+        .setDepth(MENU.button.depth)
+        .setName('difficultyCaption');
+    };
+    const refreshDifficulty = (): void => {
+      this.children.getByName('difficultyCaption')?.destroy();
+      cycleDifficulty();
+      buildDifficultyButton();
+      refreshFooter(); // the records belong to the difficulty
+    };
+    buildDifficultyButton();
+
+    // Bottom line: the records (of the chosen difficulty), the lifetime total and the key reminders on desktop.
+    const footerText = (): string => {
+      const parts: string[] = [];
+      const best = loadBest('campaign', getDifficultyId());
+      if (best > 0) parts.push(`${MENU_TEXT.record}: ${best}`);
+      const bestEndless = endlessUnlocked ? loadBest('endless', getDifficultyId()) : 0;
+      if (bestEndless > 0) parts.push(`${MENU_TEXT.recordEndless}: ${bestEndless}`);
+      const life = loadLifetime();
+      if (!touch && life.kills > 0) parts.push(`${life.kills} pisici învinse`);
+      if (!touch) parts.push(MENU_TEXT.keys);
+      return parts.join(MENU.footer.separator);
+    };
+    const F = MENU.footer;
+    const footer = this.add
+      .text(width / 2, F.y, footerText(), { fontFamily: FONT, fontSize: `${F.size}px`, color: '#ffffff', stroke: '#1b2340', strokeThickness: F.strokeThickness })
+      .setOrigin(0.5)
+      .setAlpha(F.alpha)
+      .setDepth(MENU.button.depth);
+    refreshFooter = () => footer.setText(footerText());
 
     new MuteBadge(this, width - 46, 46);
     // "Instalează jocul" (a page button, only when installing is possible). Gone as soon as the menu closes.
@@ -109,6 +138,11 @@ export class MenuScene extends Phaser.Scene {
     const onTap = (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void => {
       if (isPwaUiEvent(pointer.event)) return; // a tap on the install button must not start the game
       this.input.off(startEvent, onTap);
+      if (over.includes(difficultyButton)) {
+        this.input.on(startEvent, onTap); // not a start: stay on the menu and step to the next difficulty
+        refreshDifficulty();
+        return;
+      }
       if (over.includes(almanacButton)) {
         this.scene.start('AlmanacScene'); // the almanac button: not a start
         return;
@@ -119,6 +153,10 @@ export class MenuScene extends Phaser.Scene {
     // The mute key must not start the game; Enter starts endless mode once it is unlocked.
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
       // Only a real "start" key counts: not the mute key, and not Shift / Ctrl / Alt, F-keys or shortcuts like Ctrl+R.
+      if (event.code === 'KeyD' && !started) {
+        refreshDifficulty(); // D steps the difficulty
+        return;
+      }
       if (event.code === 'KeyA' && !started) {
         this.scene.start('AlmanacScene'); // A opens the almanac
         return;

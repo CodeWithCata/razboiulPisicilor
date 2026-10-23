@@ -8,6 +8,7 @@ import { DODGE } from '../config/dodge';
 import { ICE_CREAM } from '../config/iceCream';
 import { ARENA } from '../config/arena';
 import { LUCKY, SURRENDER } from '../config/balance';
+import { STACK_FX } from '../config/buffStacks';
 import { BAD_PICKUP_FX, PICKUP_VISUALS } from '../config/pickups';
 import { css, FONT, FONT_SFX } from '../config/style';
 import {
@@ -19,6 +20,8 @@ import {
   type CatSurrenderPayload,
   type IdleHabitPayload,
   type BossDefeatedPayload,
+  type BossWeakPayload,
+  type BuffStackedPayload,
   type CrowImpactPayload,
   type DodgeRollPayload,
   type EnemyKilledPayload,
@@ -31,7 +34,10 @@ import {
   type TeleportPayload,
 } from '../core/events';
 import { gameClock } from '../core/clock';
-import { JAIL_WORDS, BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, UMBRELLA_WORDS, DODGE_WORDS, SCOOTER_WORDS, ICE_WORDS, pick } from '../content/lines';
+import { JAIL_WORDS, BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, MONSTER_STACK_WORDS, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, UMBRELLA_WORDS, DODGE_WORDS, SCOOTER_WORDS, ICE_WORDS, pick } from '../content/lines';
+import { BELT_CHAIN } from '../config/finisher';
+import { WEAK_POINT } from '../config/weakPoint';
+import { FINISHER_WORDS, WEAK_POINT_TEXT } from '../content/juice';
 import { createDrops, createPuddles } from './belt/gooEmitters';
 import { flatDisc } from './flatShapes';
 
@@ -61,6 +67,10 @@ export class Effects {
   private readonly off: Array<() => void> = [];
   private lastPoofAt = -Infinity;
   private lastBallWordAt = -Infinity;
+  private lastWeakWordAt = -Infinity;
+  /** Strength and end (scene time) of the camera shake that runs now (see `shake`). */
+  private shakePower = 0;
+  private shakeUntil = 0;
 
   /** `isGolden`: true while the golden belt is active, so hits splash thick yellowish goo instead of milk. */
   constructor(
@@ -92,17 +102,26 @@ export class Effects {
       listen<PointPayload>(Events.EnemyHit, ({ x, y }) => {
         this.sparks.explode(6, x, y);
         if (MILK_FX.enabled) this.splashMilk(x, y);
-        this.floatText(x, y - 24, pick(HIT_WORDS), '#fff3d6', 26, FONT_SFX);
-        this.shake(70, 0.0025);
+        this.floatText(x, y - 24, pick(HIT_WORDS), '#fff3d6', 26, FONT_SFX); // the shake of a hit is in systems/HitFeel.ts
       }),
       listen<EnemyKilledPayload>(Events.EnemyKilled, ({ x, y, type }) => {
         this.fur.explode(14, x, y);
-        this.shake(110, 0.005);
         if (type === 'lucky') {
           this.sparks.explode(LUCKY.fx.catchSparks, x, y); // caught the lucky cat: a golden burst
           this.floatText(x, y - 50, LUCKY_TEXT.catchWord, '#f5c518', 50);
           this.shake(LUCKY.fx.catchShakeMs, LUCKY.fx.catchShake);
         }
+      }),
+      // The finisher swings (a word over Varu) and a boss opens its weak point (a word and a ring of sparks; the ring itself belongs to the boss).
+      listen<PointPayload>(Events.BeltFinisher, ({ x, y }) => this.floatText(x, y - 64, pick(FINISHER_WORDS), BELT_CHAIN.word.color, BELT_CHAIN.word.size)),
+      listen<PointPayload>(Events.FinisherHit, ({ x, y }) => this.sparks.explode(8, x, y)),
+      listen<BossWeakPayload>(Events.BossWeakPoint, ({ x, y }) => this.floatText(x, y - 110, WEAK_POINT_TEXT.open, WEAK_POINT.fx.wordColor, WEAK_POINT.fx.openSize)),
+      listen<BossWeakPayload>(Events.BossWeakHit, ({ x, y }) => {
+        this.sparks.explode(WEAK_POINT.fx.sparks, x, y);
+        const now = gameClock.now;
+        if (now - this.lastWeakWordAt < WEAK_POINT.fx.wordGapMs) return;
+        this.lastWeakWordAt = now;
+        this.floatText(x, y - 90, WEAK_POINT_TEXT.hit, WEAK_POINT.fx.wordColor, WEAK_POINT.fx.wordSize);
       }),
       listen<PointPayload>(Events.BomberArrived, () => this.shake(200, 0.004)), // she is an event
       listen<PointPayload>(Events.LuckySpawn, ({ x, y }) => {
@@ -162,6 +181,13 @@ export class Effects {
         this.sparks.explode(14, x, y);
         this.floatText(x, y - 34, PICKUP_LABELS[kind], css(PICKUP_VISUALS[kind].color), 30);
       }),
+      listen<BuffStackedPayload>(Events.BuffStacked, ({ kind, stacks, max, x, y }) => {
+        const S = STACK_FX;
+        const atMax = stacks >= max;
+        this.sparks.explode(atMax ? S.sparks.max : S.sparks.stack, x, y);
+        const word = kind === 'monster' ? MONSTER_STACK_WORDS[stacks] : undefined;
+        if (word) this.floatText(x, y + S.word.offsetY, word, atMax ? S.word.maxColor : S.word.color, atMax ? S.word.maxSize : S.word.size);
+      }),
       listen<PickupPayload>(Events.BadPickup, ({ kind, x, y }) => {
         const B = BAD_PICKUP_FX;
         const color = css(PICKUP_VISUALS[kind].color);
@@ -214,8 +240,18 @@ export class Effects {
     }
   }
 
+  /**
+   * Camera shake. One arbiter for the whole game: a new shake replaces the one running only when it is at least as strong
+   * (Phaser alone would ignore every new shake while one runs, so a tiny hit shake could swallow a boss's K.O. shake, or the other way round).
+   */
   shake(durationMs: number, intensity: number): void {
-    this.scene.cameras.main.shake(durationMs, intensity);
+    const cam = this.scene.cameras?.main;
+    if (!cam) return;
+    const now = this.scene.time.now;
+    if (now < this.shakeUntil && intensity < this.shakePower) return;
+    this.shakePower = intensity;
+    this.shakeUntil = now + durationMs;
+    cam.shake(durationMs, intensity, true);
   }
 
   /** Floating word. Jokes and big shouts use the normal font; pass FONT_SFX for the small hit / environment words. `holdMs` = how long it stays put, fully visible, before it floats up and fades (a line that must be read). */

@@ -92,8 +92,8 @@ export const MARTI_13 = {
  * the sure one (rust from overuse) goes through `forceWaveState` (no cooldown check, but waves 1-3 and mercy hold).
  */
 export const COSTLY = {
-  /** Energy crash: when Monster (or the Red Bull look of it) runs out, this chance of a SHORT Emo. */
-  crash: { chance: 0.35, durationMs: 3500 },
+  /** Energy crash: when Monster (or the Red Bull look of it) runs out, this chance of a SHORT Emo. Every stack above the first adds `perStack` to the chance and `durationPerStackMs` to the Emo (more energy, harder crash); the chance never goes above `maxChance`. */
+  crash: { chance: 0.35, durationMs: 3500, perStack: 0.1, durationPerStackMs: 700, maxChance: 0.75 },
   /**
    * Golden belt goo: when the golden belt runs out, `chance` of `durationMs` of Snail (never shortens a snail already running).
    * A random roll, so the wave ramp (x0.3 at wave 4, x1 from wave 15) and greed apply: about 18% at wave 4, 37% at wave 9, 60% at wave 15.

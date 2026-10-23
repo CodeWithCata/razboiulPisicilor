@@ -3,6 +3,7 @@ import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { poly } from '../assets/paint';
 import { BUFF_BADGES as B } from '../config/buffBadges';
+import { stackRule } from '../config/buffStacks';
 import { PICKUP_VISUALS } from '../config/pickups';
 import { FONT } from '../config/style';
 import type { Pt } from '../core/polyClip';
@@ -17,6 +18,8 @@ interface Badge {
   icon: Phaser.GameObjects.Sprite;
   iconScale: number;
   seconds: Phaser.GameObjects.Text;
+  /** The "x2" label of a stacked buff (empty at x1). */
+  stackLabel: Phaser.GameObjects.Text;
   /** Counts down while the badge pops in / bumps (0 = idle). */
   popInMs: number;
   bumpMs: number;
@@ -40,14 +43,16 @@ export class BuffBadges {
       const prev = old.get(info.kind);
       if (!prev) return this.create({ ...info });
       old.delete(info.kind);
-      if (info.remainingMs > prev.info.remainingMs + 50) prev.bumpMs = B.bump.ms; // picked up again: more time
+      if (info.remainingMs > prev.info.remainingMs + 50 || info.stacks > prev.info.stacks) prev.bumpMs = B.bump.ms; // picked up again: more time or one more stack
       prev.info = { ...info };
+      this.setStackLabel(prev);
       return prev;
     });
     old.forEach((b) => {
       b.gfx.destroy();
       b.icon.destroy();
       b.seconds.destroy();
+      b.stackLabel.destroy();
     });
     this.badges = next;
     this.draw();
@@ -70,7 +75,19 @@ export class BuffBadges {
     const icon = this.scene.add.sprite(0, 0, ...texArgs(visual.tex));
     fitToSize(icon, B.iconSize);
     const seconds = this.scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: `${B.seconds.size}px`, color: B.colors.seconds, stroke: B.colors.secondsStroke, strokeThickness: B.seconds.strokeThickness }).setOrigin(0.5);
-    return { info, gfx, icon, iconScale: icon.scale, seconds, popInMs: B.popIn.ms, bumpMs: 0 };
+    const stackLabel = this.scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: `${B.stack.size}px`, color: B.stack.color, stroke: B.stack.stroke, strokeThickness: B.stack.strokeThickness }).setOrigin(0.5).setVisible(false);
+    const badge: Badge = { info, gfx, icon, iconScale: icon.scale, seconds, stackLabel, popInMs: B.popIn.ms, bumpMs: 0 };
+    this.setStackLabel(badge);
+    return badge;
+  }
+
+  /** Text and color of the stack label; only when the stack changes (not every frame). Hidden at x1. */
+  private setStackLabel(b: Badge): void {
+    const stacks = b.info.stacks;
+    b.stackLabel.setVisible(stacks > 1);
+    if (stacks <= 1) return;
+    const atMax = stacks >= (stackRule(b.info.kind)?.max ?? Infinity);
+    b.stackLabel.setText(`x${stacks}`).setColor(atMax ? B.stack.maxColor : B.stack.color);
   }
 
   private center(i: number): { cx: number; cy: number } {
@@ -111,6 +128,9 @@ export class BuffBadges {
 
     // The pickup's picture.
     b.icon.setPosition(cx + shake, cy).setScale(b.iconScale * scale).setAlpha(blinkOn ? B.warn.iconAlpha : 1);
+
+    // The stack label (x2..x4): follows the badge's pop and bump.
+    if (b.stackLabel.visible) b.stackLabel.setScale(scale).setPosition(cx + shake + B.stack.dx * scale, cy + B.stack.dy * scale);
 
     // Seconds left, under the badge.
     const textY = cy + (r + B.seconds.gap) * scale;

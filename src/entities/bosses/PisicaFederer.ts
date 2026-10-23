@@ -572,6 +572,7 @@ export class PisicaFederer extends Boss {
           bus.emit(Events.Explosion, ring);
           this.enterRage();
           this.rig.to(POSE.ready, MS.rageBack, 'out', MS.rageBackDelay);
+          this.openWeakPoint(); // the racket is gone: a short moment to punish her
         },
       },
     ];

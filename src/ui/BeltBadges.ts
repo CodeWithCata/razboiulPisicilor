@@ -7,6 +7,8 @@ import { GAME, type BeltAttackId } from '../config/balance';
 import { BELT_BADGES as B } from '../config/beltBadges';
 import { FONT } from '../config/style';
 import { TOUCH } from '../config/touch';
+import { touchButton } from '../core/touchLayout';
+import { Events, listen } from '../core/events';
 import { BELT_LABELS, TOUCH_TEXT } from '../content/lines';
 import { usesTouchControls } from '../core/device';
 import type { Pt } from '../core/polyClip';
@@ -49,6 +51,8 @@ interface Badge {
   milk?: Milk;
   /** Counts down after a touch tap (the badge squashes). */
   pressMs: number;
+  /** Counts down after the badge was used (it wobbles). */
+  wobbleMs: number;
   /** The dodge badge only: its picture (Varu rolling over). */
   picture?: Phaser.GameObjects.Image;
 }
@@ -71,7 +75,7 @@ export class BeltBadges {
     const lastCx = GAME.width - B.right - outer;
     const deskCy = GAME.height - B.bottom - outer;
     this.badges = B.order.map((id, i) => {
-      const spot = touch ? TOUCH.buttons[id] : null;
+      const spot = touch ? touchButton(id) : null;
       const cx = spot ? spot.x : lastCx - (B.order.length - 1 - i) * (outer * 2 + B.gap);
       const cy = spot ? spot.y : deskCy;
       const k = spot ? spot.r / outer : 1;
@@ -81,7 +85,7 @@ export class BeltBadges {
         .setOrigin(0.5)
         .setDepth(1) // over the picture on the roll badge
         .setVisible(false);
-      const badge: Badge = { id, cx, cy, k, gfx, seconds, totalMs: 1, remainingMs: 0, away: false, popMs: 0, wasReady: true, milkMs: 0, pressMs: 0 };
+      const badge: Badge = { id, cx, cy, k, gfx, seconds, totalMs: 1, remainingMs: 0, away: false, popMs: 0, wasReady: true, milkMs: 0, pressMs: 0, wobbleMs: 0 };
       // Under the badge: the key on a computer, the name of the button on a phone (it fades after the first seconds of a run).
       badge.tag = scene.add
         .text(0, 0, touch ? TOUCH_TEXT[id] : BELT_LABELS[id].key, { fontFamily: FONT, fontSize: `${B.tag.size}px`, color: B.colors.tagText, stroke: B.colors.tagStroke, strokeThickness: B.tag.strokeThickness })
@@ -91,6 +95,24 @@ export class BeltBadges {
       return badge;
     });
     this.draw();
+    // The buttons can be moved / resized in the pause menu (core/touchLayout.ts): the badges follow.
+    if (touch) {
+      const off = listen(Events.TouchLayoutChanged, () => this.relayout());
+      scene.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
+    }
+  }
+
+  /** Move and resize every badge to where the player put its button. */
+  private relayout(): void {
+    for (const b of this.badges) {
+      const spot = touchButton(b.id);
+      b.cx = spot.x;
+      b.cy = spot.y;
+      b.k = spot.r / B.r;
+      b.gfx.setPosition(spot.x, spot.y);
+      b.seconds.setPosition(spot.x, spot.y);
+    }
+    this.draw();
   }
 
   /** A special started recharging (durationMs 0 = ready right now). */
@@ -99,11 +121,14 @@ export class BeltBadges {
     b.totalMs = Math.max(durationMs, 1);
     b.remainingMs = durationMs;
     b.away = false;
+    if (durationMs > 0) b.wobbleMs = B.wobble.ms; // it was just used (keys and taps both come through here)
   }
 
   /** A touch button was tapped: the badge squashes for a moment, ready or not. */
   press(attack: BeltSpecial): void {
-    this.find(attack).pressMs = B.press.ms;
+    const b = this.find(attack);
+    b.pressMs = B.press.ms;
+    b.wobbleMs = B.wobble.ms;
   }
 
   /** The belt left Varu's hand: the throw badge goes dashed until it is caught. */
@@ -117,6 +142,7 @@ export class BeltBadges {
       b.remainingMs = Math.max(0, b.remainingMs - delta);
       b.popMs = Math.max(0, b.popMs - delta);
       b.pressMs = Math.max(0, b.pressMs - delta);
+      b.wobbleMs = Math.max(0, b.wobbleMs - delta);
       const ready = !b.away && b.remainingMs <= 0;
       b.milkMs = Math.max(0, b.milkMs - delta);
       if (b.milkMs <= 0) b.milk = undefined;
@@ -146,6 +172,8 @@ export class BeltBadges {
     const r = B.r;
     g.clear();
     g.setScale(scale * b.k * (1 - B.press.squash * (b.pressMs / B.press.ms)));
+    const wobble = this.wobbleAngle(b);
+    g.setRotation(wobble);
 
     // Gold ring flying outwards from the ready badge.
     if (pop > 0) {
@@ -162,7 +190,7 @@ export class BeltBadges {
     const iconAlpha = b.away ? B.iconAlphaAway : 1;
     const iconColor = b.away ? B.colors.iconCooling : B.colors.iconReady;
     if (b.id === 'spin') this.drawSpinIcon(g, iconColor, iconAlpha, !b.away);
-    else if (b.id === 'roll') this.placeRollPicture(b, scale, iconColor);
+    else if (b.id === 'roll') this.placeRollPicture(b, scale, iconColor, wobble);
     else this.drawThrowIcon(g, iconColor, iconAlpha, !b.away);
     if (!b.away && !ready) this.drawSweep(g, b);
 
@@ -334,7 +362,15 @@ export class BeltBadges {
   }
 
   /** The roll badge shows a picture (Varu rolling over): size it with the badge, rock it a little, dim it while the roll recharges. */
-  private placeRollPicture(b: Badge, badgeScale: number, iconColor: number): void {
+  /** The turn (radians) of a wobbling badge: swings left and right and dies away. 0 when it is not wobbling. */
+  private wobbleAngle(b: Badge): number {
+    if (b.wobbleMs <= 0) return 0;
+    const W = B.wobble;
+    const left = b.wobbleMs / W.ms; // 1 -> 0
+    return Math.sin((1 - left) * W.cycles * Math.PI * 2) * W.deg * DEG * left;
+  }
+
+  private placeRollPicture(b: Badge, badgeScale: number, iconColor: number, wobble: number): void {
     const R = B.icon.roll;
     const img = b.picture;
     if (!img) return;
@@ -343,7 +379,7 @@ export class BeltBadges {
     img
       .setPosition(b.cx, b.cy)
       .setScale(k)
-      .setRotation(R.rockDeg * DEG * Math.sin((this.clockMs / R.rockMs) * Math.PI * 2))
+      .setRotation(R.rockDeg * DEG * Math.sin((this.clockMs / R.rockMs) * Math.PI * 2) + wobble)
       .setAlpha(b.away ? B.iconAlphaAway : cooling ? R.coolAlpha : 1);
     if (cooling) img.setTint(iconColor);
     else img.clearTint();

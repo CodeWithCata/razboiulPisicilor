@@ -6,6 +6,7 @@ import { GAME } from '../config/balance';
 import { PHOTO_FRAME } from '../config/jokes';
 import { FONT } from '../config/style';
 import { ENDING_MESSAGE, ENDING_TITLE } from '../content/bosses';
+import { summaryShort } from '../content/runStats';
 import { END_SCREEN_TEXT, ENDLESS_TEXT } from '../content/lines';
 import { usesTouchControls } from '../core/device';
 import type { RunOptions } from '../core/run';
@@ -52,6 +53,7 @@ export class VictoryScene extends Phaser.Scene {
     new MuteBadge(this, width - 46, 46);
 
     text(440, ENDING_MESSAGE, 36, '#fff3d6', 7);
+    if (d.summary) text(478, summaryShort(d.summary), 22, '#ffd9a8', 5);
     text(515, `Scor: ${d.score}   •   ${d.kills} pisici`, 34);
     if (d.isNewBest) text(558, 'RECORD NOU!', 30, '#9be28f', 6);
 

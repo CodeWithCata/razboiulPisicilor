@@ -4,6 +4,8 @@ import type Phaser from 'phaser';
 import { GAME } from '../../config/balance';
 import { PERF } from '../../config/perf';
 import { TOUCH } from '../../config/touch';
+import { gameClock } from '../../core/clock';
+import { touchButton } from '../../core/touchLayout';
 import { FONT } from '../../config/style';
 import { TOUCH_TEXT } from '../../content/lines';
 import type { StickView, TouchInput } from './TouchInput';
@@ -40,6 +42,9 @@ export class TouchOverlay {
   private laser: LaserZoneLayout;
   /** Set by `setHidden`: a cutscene hides every picture of the thumb controls. */
   private hidden = false;
+  /** The attack button was held on the last frame, and when its wobble started (game clock; the wobble is a few hundred ms). */
+  private attackWasHeld = false;
+  private wobbleStartedAt = -1e9;
   /** Frames left in which the laser zone is drawn once at `PERF.warm` alpha, so its textures are on the GPU before the first laser (see `PERF.warm`). */
   private laserWarm = PERF.warm.frames;
 
@@ -186,12 +191,18 @@ export class TouchOverlay {
    * It squashes and glows while a thumb holds it (the held picture is the squashed one; the arm is scaled to match).
    */
   private drawAttack(): void {
-    const b = TOUCH.buttons.attack;
+    const b = touchButton('attack'); // the player may have moved or resized it (core/touchLayout.ts); cached, no allocation
     const held = this.input.heldButtons.has('attack');
     const r = b.r * (held ? 1 - TOUCH.attackHeldSquash : 1);
     switchTo(this.attack, held ? TOUCH_TEX.attackHeld : TOUCH_TEX.attackIdle);
-    this.attack.setPosition(b.x, b.y);
-    this.attackIcon.setPosition(b.x, b.y).setScale(TOUCH.attackIcon.size * r);
+    this.attack.setPosition(b.x, b.y).setScale(b.r / TOUCH.buttons.attack.r); // the pictures are baked at the default radius
+    if (held && !this.attackWasHeld) this.wobbleStartedAt = gameClock.now; // the thumb just landed
+    this.attackWasHeld = held;
+    const W = TOUCH.attackWobble;
+    const left = 1 - (gameClock.now - this.wobbleStartedAt) / W.ms; // 1 -> 0
+    const wobble = left > 0 ? Math.sin((1 - left) * W.cycles * Math.PI * 2) * ((W.deg * Math.PI) / 180) * left : 0;
+    this.attackIcon.setPosition(b.x, b.y).setScale(TOUCH.attackIcon.size * r).setRotation(wobble);
+    this.attackTag.setPosition(b.x, b.y + b.r + TOUCH.attackTagGap);
   }
 
   /** The pause button: a soft disc, a thin ring and two bars with a navy outline (like the speaker badge). */

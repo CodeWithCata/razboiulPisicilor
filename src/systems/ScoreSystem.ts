@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { bus, Events, listen, type CatJailedPayload, type EnemyKilledPayload, type ScorePayload } from '../core/events';
 import type { RunMode } from '../core/run';
+import { getDifficulty, getDifficultyId } from '../core/difficulty';
 import { loadBest, saveBest } from '../core/storage';
 
 /** Tracks score, kills and the saved best score. UI and game over read it via events. */
@@ -15,11 +16,13 @@ export class ScoreSystem {
   constructor(
     scene: Phaser.Scene,
     private readonly mode: RunMode = 'campaign',
+    /** The combo's score factor (1 = none), read at every kill. */
+    private readonly comboMultiplier: () => number = () => 1,
   ) {
-    this.bestAtStart = loadBest(mode);
+    this.bestAtStart = loadBest(mode, getDifficultyId());
     this.off.push(
       listen<EnemyKilledPayload>(Events.EnemyKilled, ({ score }) => {
-        this.score += score;
+        this.score += Math.round(score * getDifficulty().score * this.comboMultiplier());
         this.kills += 1;
         this.emit();
       }),
@@ -43,7 +46,7 @@ export class ScoreSystem {
   /** Call once at game over. Saves a new best and tells you if it was one. */
   finish(): boolean {
     const isNewBest = this.score > this.bestAtStart;
-    if (isNewBest) saveBest(this.score, this.mode);
+    if (isNewBest) saveBest(this.score, this.mode, getDifficultyId());
     return isNewBest;
   }
 

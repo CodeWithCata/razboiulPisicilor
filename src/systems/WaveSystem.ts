@@ -5,6 +5,7 @@ import { ENDLESS, FINAL_WAVE, getWave } from '../config/waves';
 import type { RunMode } from '../core/run';
 import { bus, Events, type WavePayload } from '../core/events';
 import { gameClock } from '../core/clock';
+import { getDifficulty } from '../core/difficulty';
 
 /**
  * Runs the wave loop: countdown -> cats trickle in -> all dead -> pause -> next wave.
@@ -39,6 +40,11 @@ export class WaveSystem {
     if (!this.tutorialHold) return;
     this.tutorialHold = false;
     this.nextWaveAt = time + WAVE_TIMING.firstWaveDelayMs;
+  }
+
+  /** Between waves: the next wave does not start before `time + ms` (never earlier than it already would). */
+  postpone(time: number, ms: number): void {
+    if (this.waitingForNextWave) this.nextWaveAt = Math.max(this.nextWaveAt, time + ms);
   }
 
   stop(): void {
@@ -97,9 +103,9 @@ export class WaveSystem {
     }
 
     if (this.queue.length > 0) {
-      if (time >= this.nextSpawnAt && this.aliveCount() < WAVE_TIMING.maxAlive) {
+      if (time >= this.nextSpawnAt && this.aliveCount() < Math.round(WAVE_TIMING.maxAlive * getDifficulty().crowdCap)) {
         this.spawn(this.queue.shift()!);
-        this.nextSpawnAt = time + WAVE_TIMING.spawnIntervalMs;
+        this.nextSpawnAt = time + WAVE_TIMING.spawnIntervalMs * getDifficulty().spawnGap;
       }
       return;
     }
@@ -125,7 +131,7 @@ export class WaveSystem {
       return;
     }
     this.waitingForNextWave = true;
-    this.nextWaveAt = time + WAVE_TIMING.betweenWavesMs;
+    this.nextWaveAt = time + WAVE_TIMING.betweenWavesMs * getDifficulty().breather;
     const payload: WavePayload = { wave: this.wave };
     bus.emit(Events.WaveCleared, payload);
   }
@@ -133,8 +139,11 @@ export class WaveSystem {
   /** Flatten { normal: 5, ninja: 2 } into a shuffled list of spawns. Bosses always come first. */
   private buildQueue(wave: number): EnemyType[] {
     const list: EnemyType[] = [];
-    for (const [type, count] of Object.entries(getWave(wave)) as Array<[EnemyType, number]>) {
-      for (let i = 0; i < count; i++) list.push(type);
+    const D = getDifficulty();
+    for (const [type, count] of Object.entries(getWave(wave, D.endless)) as Array<[EnemyType, number]>) {
+      // The difficulty scales the crowd, never a boss, and a kind that is in the wave never drops to none.
+      const n = isBossType(type) ? count : Math.max(1, Math.round(count * D.count));
+      for (let i = 0; i < n; i++) list.push(type);
     }
     const bosses = list.filter(isBossType);
     const rest = Phaser.Utils.Array.Shuffle(list.filter((t) => !isBossType(t)));

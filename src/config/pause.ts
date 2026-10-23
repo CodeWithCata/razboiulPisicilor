@@ -72,8 +72,8 @@ export const PAUSE = {
   },
 
   /** Phones and tablets: taller rows and fatter volume blocks, so a thumb can hit them (see pauseRowH and pausePip below). */
-  /** (Compact rows and gaps, because phones have two more rows: the auto-attack and debug switches.) */
-  touch: { rowH: 48, gap: 5, groupGap: 12, pip: { w: 26, h: 40, gap: 8 } },
+  /** (Compact rows and gaps, because phones have four more rows: auto-attack, debug numbers, vibration and the roll button.) */
+  touch: { rowH: 40, gap: 3, groupGap: 10, pip: { w: 26, h: 32, gap: 8 } },
 
   /** The volume "bars": one rounded block per volume step (AUDIO.volumeSteps). */
   pip: { w: 15, h: 26, gap: 5, radius: 4, onColor: COLORS.gold, offColor: 0x4a5275, selectedOnColor: COLORS.navy, selectedOffColor: 0xb38b0c },

@@ -75,6 +75,13 @@ export const COSTLY_LINES = {
   overuse: 'Cureaua a ruginit de atâta învârtit!',
 } as const;
 
+/** The word over Varu when a Monster is grabbed while one runs: index = the new stack (2, 3, 4); the last one is the max. */
+export const MONSTER_STACK_WORDS: Record<number, string> = {
+  2: 'Monster x2! Mai tare!',
+  3: 'Monster x3! Furie!',
+  4: 'MONSTER x4! MAXIM!',
+};
+
 /** Marți 13: the banner under the wave banner, and the line over Varu with each curse. */
 export const MARTI_13_TEXT = { banner: 'MARȚI 13', line: 'Marți 13, Varule!' } as const;
 
@@ -288,6 +295,9 @@ export const INTRO_TEXT = {
   nightCard: 'În aceeași noapte, după ce tatăl Negrescu a avut grijă de copilul lui!',
 } as const;
 
+/** The combo counter on the HUD (ui/ComboMeter.ts). */
+export const COMBO_TEXT = { label: 'COMBO', kills: 'la rând', broken: 'Combo pierdut!' } as const;
+
 export const MENU_TEXT = {
   titleTop: 'VARU',
   titleVs: 'vs.',
@@ -295,7 +305,7 @@ export const MENU_TEXT = {
   start: 'Click sau orice tastă',
   record: 'Record',
   recordEndless: 'Infinit',
-  keys: 'A = almanah  •  N = sunet  •  Esc = pauză', // desktop only
+  keys: 'A = almanah  •  D = dificultate  •  N = sunet  •  Esc = pauză', // desktop only
 } as const;
 
 /** Installing the game as an app and offline play (ui/PwaUi.ts). */

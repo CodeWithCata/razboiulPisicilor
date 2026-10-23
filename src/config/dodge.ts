@@ -27,6 +27,8 @@ export const DODGE = {
   safeFromMs: 70,
   /** How far the roll phase carries him (px). Shorter than before: he rolls, he does not dash. */
   distancePx: 140,
+  /** How fast (per second) his walking momentum during the roll follows the stick: high = he steers and keeps moving, never braking to a stop. */
+  carryFollow: 14,
   /** A quick speed boost right after the roll ends: `ms` long, `mult` times his walk speed, full for the first `holdShare` of it, then it eases back to normal. */
   boost: { ms: 500, mult: 1.4, holdShare: 0.5 },
   /** Safe for this long after the roll ends (a hit landing on the last frame still misses). */

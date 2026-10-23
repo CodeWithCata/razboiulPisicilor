@@ -1,5 +1,6 @@
 /** @file All the words of the almanac (title, labels, one entry per cat and pickup) and the stat lines of an entry, worked out from the game numbers so they never drift. */
 import { ALMANAC_RARITY, ALMANAC_SPEED_BANDS, isCatId, type AlmanacId } from '../config/almanac';
+import { BUFF_STACKS } from '../config/buffStacks';
 import { BUFFS, ENEMIES, isBadPickup, PICKUPS, PICKUP_SPAWN, SMOKE_FREEZE, type BuffStats, type PickupKind } from '../config/balance';
 import { ICE_CREAM } from '../config/iceCream';
 
@@ -69,7 +70,7 @@ export const ALMANAC_ENTRIES: Record<AlmanacId, AlmanacEntry> = {
 const EFFECTS: Record<PickupKind, string> = {
   crochete: `+${PICKUPS.crocheteHeal} viață`,
   lapte: `viteză ×${BUFFS.lapte.speed}`,
-  monster: `forță ×${BUFFS.monster.damage}`,
+  monster: `forță ×${BUFFS.monster.damage}, până la ×${BUFF_STACKS.monster?.damage[BUFF_STACKS.monster.max - 1] ?? BUFFS.monster.damage} (strânge-le: x${BUFF_STACKS.monster?.max ?? 1})`,
   goldenBelt: `forță ×${BUFFS.goldenBelt.damage}`,
   laser: 'atrage pisicile',
   umbrella: 'oprește mingile',

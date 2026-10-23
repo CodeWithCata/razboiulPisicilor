@@ -57,11 +57,11 @@ function scaled(def: WaveDef, growth: number): WaveDef {
 }
 
 /** 1-based wave number. Past the campaign table it follows the ENDLESS rules. */
-export function getWave(n: number): WaveDef {
+export function getWave(n: number, endlessGrowth = 1): WaveDef {
   if (n <= WAVES.length) return WAVES[n - 1]!;
 
   const sinceCampaign = n - FINAL_WAVE; // 1 = the first endless wave
-  const growth = 1 + ENDLESS.growthPerWave * sinceCampaign;
+  const growth = 1 + ENDLESS.growthPerWave * endlessGrowth * sinceCampaign; // `endlessGrowth`: the difficulty's endless factor
   if (sinceCampaign % ENDLESS.bossEvery === 0) {
     const turn = sinceCampaign / ENDLESS.bossEvery - 1;
     const boss = ENDLESS.bosses[turn % ENDLESS.bosses.length]!;

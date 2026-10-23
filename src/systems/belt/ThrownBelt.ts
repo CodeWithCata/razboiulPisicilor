@@ -161,7 +161,7 @@ export class ThrownBelt {
       if (distToSegment(enemy.x, enemy.y, prevX, prevY, this.sprite.x, this.sprite.y) > reach) continue;
 
       this.alreadyHit.add(enemy);
-      enemy.takeDamage(damage, this.sprite.x, this.sprite.y, BELT_THROW.knockback);
+      enemy.takeDamage(damage, this.sprite.x, this.sprite.y, BELT_THROW.knockback * this.player.knockbackMultiplier);
     }
     this.catScratch.length = 0;
   }

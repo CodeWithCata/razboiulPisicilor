@@ -22,7 +22,7 @@ export class CostlyRewards {
     private readonly say: (text: string) => void,
   ) {
     const off = [
-      listen<BuffEndedPayload>(Events.BuffEnded, ({ kind }) => this.onBuffEnded(kind)),
+      listen<BuffEndedPayload>(Events.BuffEnded, ({ kind, stacks }) => this.onBuffEnded(kind, stacks)),
       listen(Events.BeltSpin, () => this.onSpecial()),
       listen(Events.BeltThrow, () => this.onSpecial()),
       listen(Events.WaveStarted, () => (this.uses = [])),
@@ -30,9 +30,11 @@ export class CostlyRewards {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => off.forEach((f) => f()));
   }
 
-  private onBuffEnded(kind: BuffKind): void {
+  private onBuffEnded(kind: BuffKind, stacks: number): void {
     if (kind === 'monster') {
-      if (this.curses.roll(COSTLY.crash.chance, 'emo', COSTLY.crash.durationMs)) this.say(COSTLY_LINES.crash);
+      const C = COSTLY.crash;
+      const extra = Math.max(0, stacks - 1); // more Monster cans stacked = a harder crash
+      if (this.curses.roll(Math.min(C.maxChance, C.chance + extra * C.perStack), 'emo', C.durationMs + extra * C.durationPerStackMs)) this.say(COSTLY_LINES.crash);
     } else if (kind === 'goldenBelt') {
       if (this.curses.roll(COSTLY.goo.chance, 'snail', COSTLY.goo.durationMs)) this.say(COSTLY_LINES.goo);
     }

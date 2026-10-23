@@ -2,9 +2,11 @@
 import type Phaser from 'phaser';
 import { SMOKE_BREAK, SMOKE_BREAK_ON } from '../config/animation';
 import { COSTLY } from '../config/curses';
-import { isBadPickup, MYSTERY, PICKUPS, SMOKE_FREEZE, type BadKind, type GoodPrize, type MysteryPrize, type PickupKind } from '../config/balance';
-import { bus, Events, type PickupPayload } from '../core/events';
+import { isBadPickup, MYSTERY, PICKUPS, SMOKE_FREEZE, type BadKind, type BuffKind, type GoodPrize, type MysteryPrize, type PickupKind } from '../config/balance';
+import { stackRule } from '../config/buffStacks';
+import { bus, Events, type BuffStackedPayload, type PickupPayload } from '../core/events';
 import { markSeen } from '../core/almanac';
+import { getDifficulty } from '../core/difficulty';
 import { weightedPick } from '../core/random';
 import type { Player } from '../entities/Player';
 import type { CrowRainSystem } from './CrowRainSystem';
@@ -28,7 +30,7 @@ export function applyPickup(kind: PickupKind, ctx: PickupContext, durationMs?: n
   switch (kind) {
     case 'crochete':
       ctx.curses?.roll(COSTLY.lungs.chance, 'smoke'); // BEFORE the heal: mercy looks at his health as he grabbed it. Healing costs lungs: sometimes a 1 s smoke break on top
-      ctx.player.heal(PICKUPS.crocheteHeal);
+      ctx.player.heal(PICKUPS.crocheteHeal * getDifficulty().heal);
       break;
     case 'lapte':
     case 'monster':
@@ -41,7 +43,7 @@ export function applyPickup(kind: PickupKind, ctx: PickupContext, durationMs?: n
     case 'emo':
     case 'rusty':
     case 'big':
-      ctx.powerUps.addBuff(kind, durationMs);
+      stacked(kind, ctx.powerUps.addBuff(kind, durationMs), ctx);
       if (kind === 'goldenBelt') ctx.player.goldenBeltFlourish();
       if (kind === 'lapte') ctx.player.milkSplash();
       if (kind === 'monster') ctx.player.backflip(); // energy: one back flip (animation only; the Z z z trail comes from the buff)
@@ -61,6 +63,14 @@ export function applyPickup(kind: PickupKind, ctx: PickupContext, durationMs?: n
   }
 }
 
+/** A buff that stacks (Monster) grew by one: tell the FX (word, sparks). The first stack is just the normal pickup. */
+function stacked(kind: BuffKind, stacks: number, ctx: PickupContext): void {
+  const rule = stackRule(kind);
+  if (!rule || stacks < 2) return;
+  const payload: BuffStackedPayload = { kind, stacks, max: rule.max, x: ctx.player.x, y: ctx.player.y };
+  bus.emit(Events.BuffStacked, payload);
+}
+
 /** Dev only (the debug card's "Semnul ? dă" picker): what the question mark must give. null = the normal gamble. */
 export type MysteryForce = 'good' | 'bad' | MysteryPrize;
 export const mysteryDebug: { force: MysteryForce | null } = { force: null };
@@ -69,7 +79,7 @@ export const mysteryDebug: { force: MysteryForce | null } = { force: null };
 function rollMysteryPrize(): MysteryPrize {
   const force = mysteryDebug.force;
   if (force && force !== 'good' && force !== 'bad') return force;
-  const bad = force === 'bad' || (force !== 'good' && Math.random() < MYSTERY.badChance);
+  const bad = force === 'bad' || (force !== 'good' && Math.random() < Math.min(0.9, MYSTERY.badChance * getDifficulty().mysteryBad));
   return bad ? weightedPick<BadKind>(MYSTERY.badWeights) : weightedPick<GoodPrize>(MYSTERY.goodWeights);
 }
 

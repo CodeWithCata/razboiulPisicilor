@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { type BadKind } from '../config/balance';
 import { CAT_HIT_CURSES, CURSE } from '../config/curses';
 import { gameClock } from '../core/clock';
+import { getDifficulty } from '../core/difficulty';
 import { Events, listen, type BallLandedPayload, type CurseSpec, type CurseZonePayload, type PlayerHurtPayload } from '../core/events';
 import type { Player } from '../entities/Player';
 import type { WaveSystem } from './WaveSystem';
@@ -75,7 +76,7 @@ export class CurseSystem {
 
   /** Roll `chance` (0..1, before the wave ramp and greed). On success Varu gets `kind` (for `durationMs` if given, else its normal time) and the cooldown starts. Returns true when he did. */
   roll(chance: number, kind: BadKind, durationMs?: number): boolean {
-    if (!this.allowed || (!this.debugSure && Math.random() >= chance * this.waveFactor * this.greedFactor)) return false;
+    if (!this.allowed || (!this.debugSure && Math.random() >= chance * this.waveFactor * this.greedFactor * getDifficulty().curses)) return false;
     this.mark();
     this.give(kind, durationMs);
     return true;

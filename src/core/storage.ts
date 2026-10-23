@@ -1,4 +1,5 @@
-/** @file Guarded localStorage: best scores, mute, volumes, hints, unlocks. */
+/** @file Guarded localStorage: best scores, mute, volumes, hints, unlocks, vibration, roll button spot. */
+import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../config/difficulty';
 import type { RunMode } from './run';
 
 const KEY_PREFIX = 'varu-vs-pisicile:';
@@ -6,6 +7,11 @@ const BEST_KEYS: Record<RunMode, string> = {
   campaign: `${KEY_PREFIX}best`, // same key as before, so old records survive
   endless: `${KEY_PREFIX}best-endless`,
 };
+/** The record key: Normal keeps the old key (old records survive), the other difficulties get their own. */
+const bestKey = (mode: RunMode, difficulty: DifficultyId): string => (difficulty === DEFAULT_DIFFICULTY ? BEST_KEYS[mode] : `${BEST_KEYS[mode]}-${difficulty}`);
+const BEST_COMBO_KEY = `${KEY_PREFIX}best-combo`;
+const LIFETIME_KILLS_KEY = `${KEY_PREFIX}lifetime-kills`;
+const LIFETIME_RUNS_KEY = `${KEY_PREFIX}lifetime-runs`;
 const MUTED_KEY = `${KEY_PREFIX}muted`;
 const HELP_HIDDEN_KEY = `${KEY_PREFIX}help-hidden`;
 const ENDLESS_UNLOCKED_KEY = `${KEY_PREFIX}endless-unlocked`;
@@ -14,7 +20,11 @@ const SEEN_CUTSCENES_KEY = `${KEY_PREFIX}cutscenes-seen`;
 const TUTORIAL_DONE_KEY = `${KEY_PREFIX}tutorial-done`;
 const INTRO_SEEN_KEY = `${KEY_PREFIX}intro-seen`;
 const ALMANAC_SEEN_KEY = `${KEY_PREFIX}almanac-seen`;
+const DIFFICULTY_KEY = `${KEY_PREFIX}difficulty`;
 const DEBUG_INFO_KEY = `${KEY_PREFIX}debug-info`;
+const VIBRATION_KEY = `${KEY_PREFIX}vibration`;
+const ROLL_LAYOUT_KEY = `${KEY_PREFIX}roll-layout`; // v224, roll button only: read once as a fallback
+const TOUCH_LAYOUT_KEY = `${KEY_PREFIX}touch-layout`;
 const volumeKey = (kind: string): string => `${KEY_PREFIX}volume-${kind}`;
 
 /** localStorage can be blocked (private mode), so every access is guarded. */
@@ -48,12 +58,24 @@ export function saveAlmanacSeen(ids: readonly string[]): void {
   write(ALMANAC_SEEN_KEY, JSON.stringify(ids));
 }
 
-export function loadBest(mode: RunMode = 'campaign'): number {
-  return Number(read(BEST_KEYS[mode])) || 0;
+export function loadBest(mode: RunMode = 'campaign', difficulty: DifficultyId = DEFAULT_DIFFICULTY): number {
+  return Number(read(bestKey(mode, difficulty))) || 0;
 }
 
-export function saveBest(score: number, mode: RunMode = 'campaign'): void {
-  write(BEST_KEYS[mode], String(score));
+export function saveBest(score: number, mode: RunMode = 'campaign', difficulty: DifficultyId = DEFAULT_DIFFICULTY): void {
+  write(bestKey(mode, difficulty), String(score));
+}
+
+/** The longest kill chain ever (all modes and difficulties). */
+export const loadBestCombo = (): number => Number(read(BEST_COMBO_KEY)) || 0;
+export const saveBestCombo = (count: number): void => write(BEST_COMBO_KEY, String(count));
+
+/** Totals over every run on this device. */
+export const loadLifetime = (): { runs: number; kills: number } => ({ runs: Number(read(LIFETIME_RUNS_KEY)) || 0, kills: Number(read(LIFETIME_KILLS_KEY)) || 0 });
+export function addLifetime(kills: number): void {
+  const now = loadLifetime();
+  write(LIFETIME_RUNS_KEY, String(now.runs + 1));
+  write(LIFETIME_KILLS_KEY, String(now.kills + kills));
 }
 
 export function loadMuted(): boolean {
@@ -100,6 +122,62 @@ export function loadAutoAttack(): boolean {
 
 export function saveAutoAttack(on: boolean): void {
   write(AUTO_ATTACK_KEY, on ? '1' : '0');
+}
+
+/** Phone vibration (pause menu). On unless saved as off. */
+export function loadVibration(): boolean {
+  return read(VIBRATION_KEY) !== '0';
+}
+
+export function saveVibration(on: boolean): void {
+  write(VIBRATION_KEY, on ? '1' : '0');
+}
+
+/** One button's saved size id and its spot as an offset (game px) from the default spot. */
+export interface SavedButton {
+  size: string;
+  dx: number;
+  dy: number;
+}
+
+const isSaved = (v: unknown): v is SavedButton => {
+  const d = v as Partial<SavedButton> | null;
+  return !!d && typeof d.size === 'string' && typeof d.dx === 'number' && typeof d.dy === 'number' && Number.isFinite(d.dx) && Number.isFinite(d.dy);
+};
+
+/** The saved layout of the touch buttons, by button id (only buttons that were changed). The v224 roll-only save is still read. */
+export function loadTouchLayout(): Record<string, SavedButton> {
+  const out: Record<string, SavedButton> = {};
+  try {
+    const raw = read(TOUCH_LAYOUT_KEY);
+    if (raw) {
+      const data = JSON.parse(raw) as Record<string, unknown>;
+      for (const id of Object.keys(data)) if (isSaved(data[id])) out[id] = data[id];
+      return out;
+    }
+    const old = read(ROLL_LAYOUT_KEY);
+    if (old) {
+      const data = JSON.parse(old) as unknown;
+      if (isSaved(data)) out.roll = data;
+    }
+  } catch {
+    // a broken save is the same as no save
+  }
+  return out;
+}
+
+export function saveTouchLayout(layout: Record<string, SavedButton>): void {
+  write(TOUCH_LAYOUT_KEY, JSON.stringify(layout));
+}
+
+/** The difficulty chosen on the main menu (Normal unless saved otherwise). */
+export function loadDifficulty(): DifficultyId {
+  const raw = read(DIFFICULTY_KEY);
+  return isDifficultyId(raw) ? raw : DEFAULT_DIFFICULTY;
+}
+
+export function saveDifficulty(id: DifficultyId): void {
+  write(DIFFICULTY_KEY, id);
 }
 
 /** Whether the player turned on the fps / debug numbers (pause menu, phones). Off unless saved as on. */

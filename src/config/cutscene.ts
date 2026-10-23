@@ -5,6 +5,17 @@ import type { EaseName } from '../core/ease';
  * Everything about HOW cutscenes look and feel. The cutscenes themselves are data in `content/cutscenes.ts`,
  * the words in the same file. Times are real milliseconds (a cutscene never runs on the slow-mo clock).
  */
+/**
+ * The last words of a boss: the blow that would kill a boss leaves it on 1 HP instead. It stops, cannot be hurt and cannot hurt,
+ * a cutscene (`bossLastWords` triggers in content/cutscenes.ts) plays where it talks, and when that scene is over, or skipped, it falls
+ * for real (K.O., slow-mo, confetti). Without a scene for it, or with `CUTSCENE.enabled` off, a boss dies at once as before.
+ */
+export const BOSS_LAST_WORDS = {
+  enabled: true,
+  /** The scene starts this long after the blow (game ms), so the hit is seen first. */
+  delayMs: 300,
+} as const;
+
 export const CUTSCENE = {
   /** false = every cutscene is skipped silently: the game plays exactly like before cutscenes existed. */
   enabled: true,

@@ -5,13 +5,15 @@ import { FLAG_CLOTH_ORIGIN_X, FLAG_CLOTH_ORIGIN_Y, FLAG_POLE_ORIGIN_Y } from '..
 import { Tex, type TexKey } from '../assets/keys';
 import { ANIM, FLINCH } from '../config/animation';
 import { ARENA_RULES } from '../config/arena';
-import { ENEMIES, LASER, SURRENDER, type EnemyStats, type EnemyType } from '../config/balance';
+import { ENEMIES, isBossType, LASER, SURRENDER, type EnemyStats, type EnemyType } from '../config/balance';
 import type { ArenaQuery } from '../core/arena';
 import { bus, Events, type CatPoppedPayload, type CatSurrenderPayload, type EnemyKilledPayload } from '../core/events';
+import { HIT_FEEL } from '../config/hitFeel';
 import { HIDEOUT } from '../config/props';
 import { ICE_CREAM } from '../config/iceCream';
 import { markSeen } from '../core/almanac';
 import { gameClock } from '../core/clock';
+import { getDifficulty } from '../core/difficulty';
 import { CULL } from '../config/culling';
 import type { FlowField } from '../core/flowField';
 import { hasClearLine, steerAround } from '../core/steering';
@@ -114,7 +116,11 @@ export abstract class Enemy extends Actor {
   private slipAngle = 0;
 
   protected constructor(scene: Phaser.Scene, x: number, y: number, type: EnemyType, texture: TexKey) {
-    const stats: EnemyStats = ENEMIES[type];
+    const D = getDifficulty();
+    const base: EnemyStats = ENEMIES[type];
+    const boss = isBossType(type);
+    // The chosen difficulty scales health and walking speed (bosses have their own factors: `bossHp`, `bossSpeed`).
+    const stats: EnemyStats = { ...base, hp: base.hp * (boss ? D.bossHp : D.catHp), speed: base.speed * (boss ? D.bossSpeed : D.catSpeed) };
     super(scene, x, y, texture, { maxHp: stats.hp, size: stats.size, hitRadius: stats.hitRadius });
     this.enemyType = type;
     markSeen(type); // the almanac unlocks this cat
@@ -748,7 +754,7 @@ export abstract class Enemy extends Actor {
   /** Subtract HP, flash, knock back, die. `effective` is the final damage (armor already applied). */
   protected applyHit(effective: number, fromX: number, fromY: number, knockback: number): boolean {
     this.hp -= effective;
-    this.flash();
+    this.flash(HIT_FEEL.flash.color, HIT_FEEL.flash.ms);
     bus.emit(Events.EnemyHit, { x: this.x, y: this.y });
 
     if (this.hp <= 0) {

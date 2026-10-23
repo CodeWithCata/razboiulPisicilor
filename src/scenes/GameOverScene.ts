@@ -5,6 +5,7 @@ import { Tex } from '../assets/keys';
 import { GAME } from '../config/balance';
 import { PHOTO_FRAME } from '../config/jokes';
 import { FONT } from '../config/style';
+import { summaryLines, type RunSummary } from '../content/runStats';
 import { END_SCREEN_TEXT, ENDLESS_TEXT, GAME_OVER_LINES, GAME_OVER_TITLE, pick } from '../content/lines';
 import { usesTouchControls } from '../core/device';
 import type { RunMode, RunOptions } from '../core/run';
@@ -20,6 +21,8 @@ export interface GameOverData {
   isNewBest: boolean;
   /** Which way this run was played (so "again" starts the same kind of run). */
   mode?: RunMode;
+  /** Time, best combo, hits... of the run (GameScene.endData). */
+  summary?: RunSummary;
 }
 
 const EMPTY: GameOverData = { score: 0, kills: 0, wave: 0, best: 0, isNewBest: false };
@@ -52,6 +55,12 @@ export class GameOverScene extends Phaser.Scene {
     text(405, `Valul ${d.wave}   •   ${d.kills} pisici`, 32);
     if (d.mode === 'endless') text(264, ENDLESS_TEXT.gameOverTitle, 26, '#f5c518', 5);
     text(455, d.isNewBest ? 'RECORD NOU!' : `Record: ${d.best}`, 30, d.isNewBest ? '#9be28f' : '#ffffff', 6);
+
+    if (d.summary) {
+      const [first, second] = summaryLines(d.summary);
+      text(498, first, 24, '#ffd9a8', 5);
+      text(530, second, 22, '#ffffff', 5).setAlpha(0.9);
+    }
 
     // Friend photo slot (real picture via PHOTO_MANIFEST, otherwise a "FOTO" silhouette).
     const photo = createPhotoFrame(this, 'gameOver', PHOTO_FRAME.gameOver);

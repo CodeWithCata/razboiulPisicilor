@@ -1,7 +1,7 @@
-/** @file Player settings saved on the device: music / sfx volume, auto-attack, debug numbers. */
+/** @file Player settings saved on the device: music / sfx volume, auto-attack, vibration, debug numbers. */
 import { AUDIO } from '../config/audio';
 import { bus, Events, type VolumePayload } from './events';
-import { loadAutoAttack, loadDebugInfo, loadVolume, saveAutoAttack, saveDebugInfo, saveVolume } from './storage';
+import { loadAutoAttack, loadDebugInfo, loadVibration, loadVolume, saveAutoAttack, saveDebugInfo, saveVibration, saveVolume } from './storage';
 
 export type VolumeKind = VolumePayload['kind'];
 
@@ -56,3 +56,15 @@ export function toggleDebugInfo(): void {
   debugInfo = !debugInfo;
   saveDebugInfo(debugInfo);
 }
+
+/** Phones: short vibration on dodge, hit and pick (core/haptics.ts). On by default; a switch in the pause menu turns it off. */
+let vibration = loadVibration();
+
+export const getVibration = (): boolean => vibration;
+
+export function setVibration(on: boolean): void {
+  vibration = on;
+  saveVibration(on);
+}
+
+export const toggleVibration = (): void => setVibration(!vibration);

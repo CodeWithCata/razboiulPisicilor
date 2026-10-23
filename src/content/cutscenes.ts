@@ -1,6 +1,7 @@
 /** @file Cutscene content: who speaks (names, colors, voices), the scripts themselves (none yet) and what triggers them. */
 import { Tex, type PhotoId, type TexKey } from '../assets/keys';
 import type { CutsceneScript, CutsceneStep, CutsceneTriggerDef } from '../core/cutscene';
+import { BOSS_LAST_WORDS } from '../config/cutscene';
 import { BOSS_TEXT } from './bosses';
 
 /** A voice in the dialogue box. `photo` (a friend's picture, if it is listed in the photo manifest) wins over `tex` (the code-drawn sprite). */
@@ -39,6 +40,19 @@ function bossEntrance(who: 'queen' | 'mafia' | 'federer', line: string, reply: s
   return { steps };
 }
 
+/** A boss's last words: the camera goes to the boss, it talks, Varu answers, it says one more thing, then it falls (the game does that when the scene ends). */
+function bossLastWords(who: 'queen' | 'mafia' | 'federer', line: string, reply: string, lastLine: string): CutsceneScript {
+  return {
+    steps: [
+      { do: 'camera', to: { at: 'boss' }, zoom: 1.5, ms: 700 },
+      { do: 'say', who, text: line },
+      { do: 'emote', actor: 'boss', kind: 'pop' },
+      { do: 'say', who: 'varu', text: reply, auto: true },
+      { do: 'say', who, text: lastLine },
+    ],
+  };
+}
+
 /**
  * THE CUTSCENES. One entry per scene, written as steps (types and every step: `core/cutscene.ts`,
  * the how-to: `docs/CUTSCENES.md`). Words go right here in the `say` steps (Romanian).
@@ -64,6 +78,10 @@ export const CUTSCENES: Readonly<Record<string, CutsceneScript>> = {
   queenEntrance: bossEntrance('queen', 'Cine îndrăznește să intre în regatul meu?', 'Doar vin după mingea mea.'),
   mafiaEntrance: bossEntrance('mafia', '...Nimeni nu mă înțelege. Nici tu.', 'Of, încă unul trist.'),
   federerEntrance: bossEntrance('federer', 'Șase-zero. Ți-am spus eu.', 'Încă nu am servit.'),
+  // Last words (PLACEHOLDER lines: rewrite them with the real inside jokes).
+  queenLastWords: bossLastWords('queen', 'Imposibil... un om de rând... m-a învins?', 'Regatul tău are nevoie de un covor nou.', 'Păstrează... mingea. Ai meritat-o.'),
+  mafiaLastWords: bossLastWords('mafia', 'Poate că... în sfârșit... cineva m-a ascultat.', 'Hai, nu mai fi trist.', 'Spune-le pisicilor... că nu eram chiar rău.'),
+  federerLastWords: bossLastWords('federer', 'Mi-ai returnat toate mingile... Bravo.', 'Mulțumesc. Aproape renunțam.', 'Joc, set... și meci. Pentru tine.'),
 };
 
 /** WHEN a scene plays: an event of the run -> a key of CUTSCENES. */
@@ -72,6 +90,9 @@ export const CUTSCENE_TRIGGERS: readonly CutsceneTriggerDef[] = [
   { when: { on: 'bossSpawned', boss: 'queen' }, play: 'queenEntrance' },
   { when: { on: 'bossSpawned', boss: 'mafia' }, play: 'mafiaEntrance' },
   { when: { on: 'bossSpawned', boss: 'federer' }, play: 'federerEntrance' },
+  { when: { on: 'bossLastWords', boss: 'queen' }, play: 'queenLastWords', delayMs: BOSS_LAST_WORDS.delayMs },
+  { when: { on: 'bossLastWords', boss: 'mafia' }, play: 'mafiaLastWords', delayMs: BOSS_LAST_WORDS.delayMs },
+  { when: { on: 'bossLastWords', boss: 'federer' }, play: 'federerLastWords', delayMs: BOSS_LAST_WORDS.delayMs },
 ];
 
 /** The small texts of the cutscene screen. */

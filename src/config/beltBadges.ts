@@ -47,6 +47,8 @@ export const BELT_BADGES = {
   },
   /** The "ready!" moment: the badge pops, flashes white, and a gold ring flies outwards. */
   pop: { ms: 420, grow: 0.22, flashAlpha: 0.65, burst: 18, burstW: 4 },
+  /** A badge that was used wobbles: it turns left and right and settles (`cycles` swings in `ms`). */
+  wobble: { ms: 320, deg: 9, cycles: 2.5 },
   /** The icon is dimmed while the belt is away (while recharging the dark pie dims it instead). */
   iconAlphaAway: 0.3,
   /** The belt is away (throw): the ring becomes dashed. */

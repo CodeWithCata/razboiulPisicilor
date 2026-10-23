@@ -101,6 +101,8 @@ export const TOUCH = {
   },
   /** The attack button squashes by this much (fraction) while a thumb holds it. */
   attackHeldSquash: 0.08,
+  /** The belt arm on the attack button wobbles when a thumb lands on it (`cycles` swings in `ms`, then it settles). */
+  attackWobble: { ms: 300, deg: 12, cycles: 2.5 },
   /** The name under the attack button (it fades with the other reminders): its size and the space between it and the button. */
   attackTagSize: 24,
   attackTagGap: 18,
@@ -110,9 +112,75 @@ export const TOUCH = {
   hintFadeMs: 900,
   hintSize: 24,
 
-  /** Short buzz on phones that support it (Android; iPhones ignore it). */
-  haptics: { pressMs: 12, hurtMs: 35 },
+  /**
+   * Short buzzes on phones that support it (Android; iPhones ignore them). A number is one buzz (ms), a list is buzz / pause / buzz...
+   * A buzz that comes less than `minGapMs` after the last one is dropped (a crowd of events must not turn into one long hum).
+   * The pause-menu switch "Vibrație" turns all of it off (core/settings.ts).
+   */
+  haptics: {
+    pressMs: 12,
+    hurtMs: 35,
+    minGapMs: 45,
+    /** The dodge roll starts; a roll that saved Varu from a hit. */
+    dodgeMs: 18,
+    dodgeSave: [14, 40, 14] as readonly number[],
+    /** The finisher lands on a cat; a hit inside a boss weak-point window. */
+    finisherMs: 45,
+    weakHitMs: 30,
+    /** A belt upgrade card is picked, the rare synergy card, a pickup is grabbed. */
+    pickMs: 25,
+    synergy: [20, 45, 20, 45, 60] as readonly number[],
+    pickupMs: 14,
+    /** A new combo tier. */
+    tierMs: 35,
+    /** A boss goes down: a rolling thump. */
+    bossDefeated: [70, 50, 70, 50, 180] as readonly number[],
+  },
+
+  /**
+   * The four action buttons (attack, spin, throw, roll) can be moved and resized by the player (pause menu, phones only: "Butoane").
+   * `sizes` multiply the radius in `buttons`; `defaultSize` is the size a button has until it is changed (roll was made bigger in v224).
+   * A spot is saved as an offset from the default spot (so it keeps hugging the same corner on any screen). A button stays inside the
+   * right part of the screen, `edgeMargin` from the edges, below `topLimit` (the pause button and the combo counter live above), and
+   * never on top of another button or the chain dots (`gap` px between circles). The dots follow the attack button.
+   */
+  layout: {
+    sizes: [
+      { id: 'small', k: 0.8 },
+      { id: 'normal', k: 1 },
+      { id: 'big', k: 1.25 },
+      { id: 'huge', k: 1.5 },
+    ] as const,
+    defaultSize: { attack: 'normal', spin: 'normal', throw: 'normal', roll: 'big' } as const,
+    edgeMargin: 14,
+    topLimit: 250,
+    gap: 10,
+  },
+  /** The screen where the buttons are moved and resized (opened from the pause menu). */
+  layoutEditor: {
+    depth: 260,
+    dimColor: 0x14182b,
+    dimAlpha: 0.8,
+    ghostAlpha: 0.35,
+    ghostColor: 0xfff3d6,
+    badColor: 0xff5a5a,
+    goodColor: 0xf5c518,
+    ringWidth: 6,
+    titleY: 64,
+    titleSize: 46,
+    helpY: 120,
+    helpSize: 24,
+    buttonsY: 664,
+    buttonW: 250,
+    buttonH: 64,
+    buttonGap: 28,
+    buttonSize: 28,
+  },
 } as const;
 
 export type TouchButtonId = keyof typeof TOUCH.buttons;
+export type TouchSizeId = (typeof TOUCH.layout.sizes)[number]['id'];
+/** The buttons the player can move and resize (the pause button and the floating stick stay where they are). */
+export const MOVABLE_BUTTON_IDS = ['attack', 'spin', 'throw', 'roll'] as const;
+export type MovableButtonId = (typeof MOVABLE_BUTTON_IDS)[number];
 export const TOUCH_BUTTON_IDS = Object.keys(TOUCH.buttons) as TouchButtonId[];

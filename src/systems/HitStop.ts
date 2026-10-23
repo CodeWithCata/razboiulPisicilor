@@ -1,7 +1,8 @@
 /** @file Tiny physics freeze on strong hits (config/hitstop.ts). */
 import Phaser from 'phaser';
 import { HIT_STOP } from '../config/hitstop';
-import { Events, listen, type EnemyKilledPayload } from '../core/events';
+import { BOSS_KILL } from '../config/slowMo';
+import { Events, listen, type EnemyKilledPayload, type HitFreezePayload } from '../core/events';
 import { gameClock } from '../core/clock';
 
 /**
@@ -24,7 +25,10 @@ export class HitStop {
       }),
       listen(Events.PlayerHurt, () => this.freeze(d.playerHurt)),
       listen(Events.BossStunned, () => this.freeze(d.bossStunned)),
-      listen(Events.BossDefeated, () => this.freeze(d.bossDefeated)),
+      listen(Events.BossDefeated, () => {
+        if (!BOSS_KILL.enabled) this.freeze(d.bossDefeated); // the boss kill slow-mo (SlowMoSystem) replaces the freeze
+      }),
+      listen<HitFreezePayload>(Events.HitFreeze, ({ ms }) => this.freeze(ms)), // HitFeel: tiny freezes on kills and big hits
     );
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.stop());
   }
@@ -46,7 +50,7 @@ export class HitStop {
   }
 
   private freeze(ms: number): void {
-    if (this.stopped) return;
+    if (this.stopped || ms <= 0) return;
     const now = gameClock.now;
     if (this.timer !== null) {
       // Already frozen: a longer freeze may extend it, a shorter one changes nothing.

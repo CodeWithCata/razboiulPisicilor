@@ -56,10 +56,22 @@ export const Events = {
   ProjectileSmash: 'projectile:smash', // ProjectileSmashPayload (every frame a smashing projectile flies: props, barrels and lamps in its way take the hit)
   WaveStarted: 'wave:started', // WavePayload
   WaveCleared: 'wave:cleared', // WavePayload
+  BeltSynergyPicked: 'belt:synergy-picked', // BeltSynergyPayload (the rare 4th card: two matching upgrades fused; stats are refreshed)
+  BeltFinisher: 'belt:finisher', // BeltAttackPayload (the third swing of a rhythm chain starts: bigger arc, flings cats)
+  BeltChain: 'belt:chain', // BeltChainPayload (the swing chain moved on or broke: HUD pips)
+  FinisherHit: 'belt:finisher-hit', // PointPayload (the finisher landed on a cat)
+  BossWeakPoint: 'boss:weak-point', // BossWeakPayload (a boss opened its weak-point window after a big attack)
+  BossWeakHit: 'boss:weak-hit', // BossWeakPayload (a hit landed inside the window)
+  BossLastWords: 'boss:last-words', // BossLastWordsPayload (a boss took its killing blow and stands on 1 HP: GameScene plays its scene, then the boss falls)
+  BossKillBurst: 'boss:kill-burst', // BossKillBurstPayload (the slow-mo of a boss kill reached a burst: confetti flies)
+  HitFreeze: 'fx:hit-freeze', // HitFreezePayload (ask HitStop for a tiny freeze)
+  BeltUpgradePicked: 'belt:upgrade-picked', // BeltUpgradePayload (Varu picked a belt upgrade between waves: stats are refreshed, a word floats up)
   WeatherChanged: 'weather:changed', // WeatherPayload (every wave start says what the weather is for that wave, 'clear' too: fog, rain and the weather curses listen)
   ScoreChanged: 'score:changed', // ScorePayload
+  ComboChanged: 'combo:changed', // ComboPayload (the kill chain grew, was refilled, broke or its bar waits)
   PickupCollected: 'pickup:collected', // PickupPayload
   BuffsChanged: 'buffs:changed', // BuffsPayload
+  BuffStacked: 'buff:stacked', // BuffStackedPayload (a stackable buff grew by one: Monster x2, x3, x4)
   BuffEnded: 'buff:ended', // BuffEndedPayload (a buff ran out by itself; NOT when it is cleared by the debug card or replaced)
   CrowImpact: 'crow:impact', // CrowImpactPayload
   LobBall: 'boss:lob', // LobBallPayload (the tennis cat smashes a ball into the sky; BallLobSystem flies it)
@@ -95,6 +107,7 @@ export const Events = {
   MusicTrack: 'audio:music', // MusicPayload (scenes ask for the background track)
   PauseRequest: 'game:pause-request', // touch pause button (the keyboard uses Esc directly)
   TouchPress: 'touch:press', // TouchPressPayload (a touch spin / throw button was tapped: its badge squashes)
+  TouchLayoutChanged: 'touch:layout', // no payload (a touch button was moved, resized or reset in the pause menu: the HUD badges and chain dots follow)
   VolumeChanged: 'audio:volume', // VolumePayload (pause menu sliders)
   DebugAction: 'debug:action', // DebugActionPayload (dev only: a cheat just ran, the debug card flashes it)
   DebugStats: 'debug:stats', // DebugStatsPayload (dev only: live numbers for the debug card)
@@ -410,6 +423,40 @@ export interface WavePayload {
   wave: number;
 }
 
+export interface BeltUpgradePayload {
+  id: 'heavy' | 'long' | 'quick' | 'tornado' | 'knock';
+  /** The level after the pick (1..max). */
+  level: number;
+}
+
+/** The rare synergy card was picked (core/beltSynergies.ts). */
+export interface BeltSynergyPayload {
+  id: string;
+}
+
+/** The swing chain: `step` swings done in a row (0 = no chain). `ready` = the next swing is the finisher. */
+export interface BeltChainPayload {
+  step: number;
+  ready: boolean;
+  /** True on the one update where the finisher swing just started (the HUD pips flash). */
+  finisher?: boolean;
+}
+
+/** A boss weak-point window (entities/bosses/WeakPoint.ts). `durationMs` = how long it stays open. */
+export interface BossWeakPayload extends PointPayload {
+  boss: string;
+  durationMs: number;
+}
+
+/** One burst of the boss-kill finale (systems/SlowMoSystem.ts -> systems/CelebrationFx.ts): how many confetti pieces fly from the boss. */
+export interface BossKillBurstPayload extends PointPayload {
+  confetti: number;
+}
+
+export interface HitFreezePayload {
+  ms: number;
+}
+
 export interface LightsOutPayload {
   on: boolean;
 }
@@ -422,6 +469,21 @@ export interface WeatherPayload {
   wave: number;
   /** True on the wave after rain: the rainbow shows and drops bonus pickups (systems/Rainbow.ts). */
   rainbow?: boolean;
+}
+
+/** The kill combo (systems/ComboSystem.ts): `count` 0 = no chain. `broken` = it just broke after a long chain. */
+export interface ComboPayload {
+  count: number;
+  multiplier: number;
+  /** CSS color of the current tier. */
+  color: string;
+  remainingMs: number;
+  windowMs: number;
+  /** The time bar waits (no wave is running). */
+  frozen: boolean;
+  /** Set on the kill that reached a new tier. */
+  tierUp?: { word: string; mult: number; color: string };
+  broken: boolean;
 }
 
 export interface ScorePayload {
@@ -450,10 +512,21 @@ export interface BuffInfo {
   kind: BuffKind;
   remainingMs: number;
   durationMs: number;
+  /** 1 for a buff that does not stack, otherwise the current stack (1..max). */
+  stacks: number;
 }
 
 export interface BuffEndedPayload {
   kind: BuffKind;
+  /** The stacks it had when it ran out (1 for a buff that does not stack). */
+  stacks: number;
+}
+
+export interface BuffStackedPayload extends PointPayload {
+  kind: BuffKind;
+  /** The new stack, 2..max (the first one is the normal pickup). */
+  stacks: number;
+  max: number;
 }
 
 export interface BuffsPayload {
@@ -531,6 +604,10 @@ export interface ShoutPayload extends PointPayload {
 export interface BossDefeatedPayload extends PointPayload {
   boss: BossType;
   final: boolean;
+}
+
+export interface BossLastWordsPayload extends PointPayload {
+  boss: BossType;
 }
 
 export interface CutsceneStartPayload {

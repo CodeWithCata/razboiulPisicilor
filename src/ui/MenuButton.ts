@@ -16,12 +16,14 @@ export interface MenuButtonOptions {
   accent?: boolean;
   /** Makes the whole button a click target with a hover pop. The scene decides what a click does. */
   interactive?: boolean;
+  /** Overrides the label color (the difficulty button shows its level in green / orange / red). */
+  textColor?: string;
 }
 
 /** A navy pill with a border: same look as the pause menu rows. */
 export function createMenuButton(scene: Phaser.Scene, o: MenuButtonOptions): Phaser.GameObjects.Container {
   const B = MENU.button;
-  const textColor = o.accent ? '#f5c518' : '#fff3d6';
+  const textColor = o.textColor ?? (o.accent ? '#f5c518' : '#fff3d6');
 
   const back = scene.add.graphics();
   back.fillStyle(COLORS.navy, 0.96).fillRoundedRect(-o.w / 2, -o.h / 2, o.w, o.h, o.h / B.radiusFactor);

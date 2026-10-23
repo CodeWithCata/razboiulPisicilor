@@ -132,18 +132,34 @@ export const QUEEN = {
   },
 
   // ---- red carpet (phase 2+): bands of floor strike one after the other, one band is safe (green) ----
+  // v221 FAIRNESS: the second strike used to be planned with the first and warned only 750-900 ms ahead, so a Varu standing at the far
+  // edge of the first safe corridor needed ~160 px of running (plus reaction) in less time than he can run: no chance at all, and
+  // slowed (snail, puddle, Big hoodie) or frozen (smoke break) it was hopeless. Now the second strike is planned WHEN the first one
+  // lands, from where Varu really stands, and its safe corridor is always one he can reach (see `QueenCat.buildFollowUp`).
   carpet: {
     telegraphMs: [1600, 1450, 1300] as const, // not shortened by the tier factor: it is a puzzle, not a reflex test
     laneWidth: 130,
     halfBands: 3, // bands on each side of Varu (3 = seven bands)
     safeBands: [3, 3, 2] as const, // how many bands side by side are safe (a wide green corridor)
     waves: [1, 1, 2] as const,
-    waveGapMs: [900, 800, 750] as const,
+    waveGapMs: [1150, 1050, 950] as const, // v221: was 900 / 800 / 750
     lingerMs: 250,
-    damage: 10,
+    damage: 7, // v221: was 10
     recoverMs: [1100, 1000, 800] as const,
     safeColor: 0x7bd88f,
     strikeFadeMs: 380,
+    /** v221: a red band only hurts this far (px) inside its drawn edge, so standing right at the green line is safe. */
+    hitInsetPx: 12,
+    /** v221: first strike, where the safe corridor may be centered (bands away from Varu). Normal: 1 or 2 away. */
+    reach: [-2, -1, 1, 2] as const,
+    /** v221: same, when Varu is slowed or frozen: 1 away, so the corridor always reaches the band he stands in. */
+    nearReach: [-1, 1] as const,
+    /** v221: below this share of his normal walking speed (snail, puddles, ...) or while frozen, Varu counts as impaired. */
+    slowBelow: 0.85,
+    /** v221: time (ms) Varu is given to see the second warning and start moving, before the running time counts. */
+    reactionMs: 330,
+    /** v221: the second corridor must be reachable using at most this share of the running time left (1 = every last pixel). */
+    reachShare: 0.75,
   },
 } as const;
 

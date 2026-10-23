@@ -25,6 +25,8 @@ export const BUFF_BADGES = {
   /** The last stretch: the ring, icon and seconds blink, the badge gives a tiny shake. */
   warn: { ms: 2000, blinkMs: 130, shakePx: 1.2, iconAlpha: 0.45 },
   arcSegments: 40,
+  /** The stack label ("x2") on a stackable buff (Monster), at the badge's top right. Hidden at x1. */
+  stack: { size: 20, strokeThickness: 5, dx: 20, dy: -18, color: '#b4ff1a', maxColor: '#ffe14a', stroke: '#1b2340' },
 
   colors: {
     warn: 0xff5a5a,

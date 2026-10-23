@@ -3,6 +3,12 @@ import Phaser from 'phaser';
 import { ARENA_RULES, CAMERA, WORLD } from '../config/arena';
 import { CULL } from '../config/culling';
 import { PAUSE, PAUSE_KEYS } from '../config/pause';
+import { BELT_UPGRADE_OFFER } from '../config/beltUpgrades';
+import { FINAL_WAVE } from '../config/waves';
+import { BELT_SYNERGY_TEXT, BELT_SYNERGY_UI, BELT_UPGRADE_TEXT, BELT_UPGRADE_UI } from '../content/beltUpgrades';
+import { anyUpgradeOpen, beltUpgradeDue, resetBeltUpgrades, rollBeltChoices } from '../core/beltUpgrades';
+import { eligibleSynergies, isBeltSynergyId, resetBeltSynergies, rollSynergy } from '../core/beltSynergies';
+import type { UpgradeSceneData } from './UpgradeScene';
 import { BELT, ENEMIES, WAVE_TIMING, isBossType, type EnemyType, type PickupKind } from '../config/balance';
 import { TOUCH } from '../config/touch';
 import type { PropKind } from '../config/props';
@@ -12,12 +18,13 @@ import { usesTouchControls } from '../core/device';
 import { readRun, type RunOptions } from '../core/run';
 import { gameClock } from '../core/clock';
 import { saveEndlessUnlocked } from '../core/storage';
-import { bus, Events, listen, type BallLandedPayload, type BossDefeatedPayload, type ExplosionPayload, type MusicPayload, type PerfStatsPayload, type SpawnEnemyPayload } from '../core/events';
+import { bus, Events, listen, type BeltSynergyPayload, type BeltUpgradePayload, type BallLandedPayload, type BossDefeatedPayload, type BossLastWordsPayload, type ExplosionPayload, type MusicPayload, type PerfStatsPayload, type SpawnEnemyPayload } from '../core/events';
 import { FlowField } from '../core/flowField';
 import { snapshotInto } from '../core/snapshot';
 import { Enemy, type EnemyContext } from '../entities/Enemy';
 import { createEnemy } from '../entities/enemies';
 import { Player } from '../entities/Player';
+import { Boss } from '../entities/bosses/Boss';
 import type { InputSource } from '../input/InputSource';
 import { KeyboardMouseInput } from '../input/KeyboardMouseInput';
 import { AutoAim } from '../input/touch/AutoAim';
@@ -45,16 +52,20 @@ import { WeatherCurses } from '../systems/WeatherCurses';
 import { Effects } from '../systems/Effects';
 import { CutsceneSystem } from '../systems/cutscene/CutsceneSystem';
 import { HitStop } from '../systems/HitStop';
+import { HitFeel } from '../systems/HitFeel';
 import { JokeSystem } from '../systems/JokeSystem';
 import { LuckyCatSystem } from '../systems/LuckyCatSystem';
 import { LowHpSystem } from '../systems/LowHpSystem';
 import { PinballSystem } from '../systems/PinballSystem';
 import { PickupSystem } from '../systems/PickupSystem';
 import { SlowMoSystem } from '../systems/SlowMoSystem';
+import { HapticsSystem } from '../systems/HapticsSystem';
+import { CelebrationFx } from '../systems/CelebrationFx';
 import { SurrenderSystem } from '../systems/SurrenderSystem';
 import { announcePickup, applyPickup } from '../systems/pickupEffects';
 import { CurseSystem } from '../systems/CurseSystem';
 import { PowerUpSystem } from '../systems/PowerUpSystem';
+import { getDifficulty, getDifficultyId } from '../core/difficulty';
 import { DodgeSystem } from '../systems/DodgeSystem';
 import { UmbrellaSystem } from '../systems/UmbrellaSystem';
 import { ScooterSystem } from '../systems/ScooterSystem';
@@ -67,6 +78,12 @@ import { GoldLeafSystem } from '../systems/props/GoldLeaf';
 import { PropSystem } from '../systems/props/PropSystem';
 import { ProjectileSystem } from '../systems/ProjectileSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
+import { ComboSystem } from '../systems/ComboSystem';
+import { BonusSystem } from '../systems/BonusSystem';
+import { RunStats } from '../systems/RunStats';
+import { BONUS } from '../config/bonus';
+import type { RunSummary } from '../content/runStats';
+import { addLifetime, loadBestCombo, saveBestCombo } from '../core/storage';
 import { WaveSystem } from '../systems/WaveSystem';
 import { TUTORIAL } from '../config/tutorial';
 import { tutorialWanted } from '../core/tutorial';
@@ -95,6 +112,8 @@ export class GameScene extends Phaser.Scene {
   private projectiles!: ProjectileSystem;
   private waves!: WaveSystem;
   private score!: ScoreSystem;
+  private combo!: ComboSystem;
+  private stats!: RunStats;
   private powerUps!: PowerUpSystem;
   private umbrella!: UmbrellaSystem;
   private scooter!: ScooterSystem;
@@ -149,6 +168,8 @@ export class GameScene extends Phaser.Scene {
     this.bomberAnnounced = false;
     this.curses = null;
     gameClock.reset(this.time.now); // game time starts here; it stops while the pause menu is open
+    resetBeltUpgrades(); // a new run starts with a plain belt
+    resetBeltSynergies(); // ...and no synergies
     this.physics.world.setBounds(0, 0, WORLD.width, WORLD.height);
     this.arena = new ArenaMap(this); // the Tiled map (or a plain grass field if it can't load)
 
@@ -184,11 +205,13 @@ export class GameScene extends Phaser.Scene {
       });
     }
     this.effects = new Effects(this, () => this.player.goldenBelt);
+    new HapticsSystem(this); // phone vibration on dodge, hits, picks (unsubscribes on shutdown)
+    new HitFeel(this, this.effects); // shake and tiny freezes on kills, the finisher and boss weak hits (it unsubscribes on shutdown)
     new PropFx(this, this.effects); // leaves, chips, fluff and words when the arena is hit
     this.goldLeaf = new GoldLeafSystem(this, this.player, this.arena.grid, this.effects); // a rare gold leaf from a bush: tiny heal
     this.props = new PropSystem(this, this.arena, this.player, this.enemies); // bushes, fences, cans... react to the belt, blasts and walking
     this.barrels = new BarrelSystem(this, this.arena.grid, this.player, this.enemies, this.effects, this.obstacles, () => this.curses?.waveOpen ?? false); // mustard barrels: solid, break them, the puddle slows Varu and cats
-    this.score = new ScoreSystem(this, this.run.mode);
+    this.score = new ScoreSystem(this, this.run.mode, () => this.combo?.multiplier ?? 1);
     this.hitStop = new HitStop(this);
     this.powerUps = new PowerUpSystem(this, this.player);
     this.umbrella = new UmbrellaSystem(this, this.player); // the umbrella buff: canopy over Varu, stops petards and the ball rain
@@ -206,7 +229,8 @@ export class GameScene extends Phaser.Scene {
       if (foggy) this.effects.floatText(this.player.x, this.player.y - 60, pick(FOG_LINES), '#dfeaf0', 26);
     }); // some waves start in a mist: cats far from Varu fade out until they come close
     this.rain = new Rain(this, () => this.effects.floatText(this.player.x, this.player.y - 60, pick(RAIN_LINES), '#bcd6ee', 26)); // some waves start in rain: streaks over the screen, the belt gets wet
-    this.slowMo = new SlowMoSystem(this, this.effects, this.player); // the last cat of a wave dies in slow motion
+    this.slowMo = new SlowMoSystem(this, this.effects, this.player); // the last cat of a wave and the last hit on a boss: slow motion
+    new CelebrationFx(this); // confetti of the boss kill (listens to the slow-mo's bursts)
     this.crowRain = new CrowRainSystem(this, this.enemies, this.arena.grid);
     new BallLobSystem(this); // the tennis cat's ball rain: flies the balls, then tells us where they landed
     this.pickups = new PickupSystem(this, this.player, this.arena.grid, (kind) => this.applyToVaru(kind));
@@ -220,7 +244,14 @@ export class GameScene extends Phaser.Scene {
     });
     this.enemyContext = { player: this.player, lure: null, projectiles: this.projectiles.group, enemies: this.enemies };
     this.flow = new FlowField(this.arena.grid);
+    this.combo = new ComboSystem(this, () => this.waves.inWave); // kill chain: a score multiplier that a hit on Varu breaks
     this.waves = new WaveSystem((type) => this.spawnWaveCat(type), () => this.waveCatCount(), this.run.mode);
+    this.stats = new RunStats(this); // numbers for the end screens
+    new BonusSystem(this, {
+      addScore: (points) => this.score.add(points),
+      say: (line, text, color, size) => this.effects.floatText(this.player.x, this.player.y - 70 - line * BONUS.lineGap, text, color, size),
+      isBossWave: () => this.waves.isBossWave,
+    }); // perfect wave, quick clear, perfect dodge, flawless boss, kill milestones
     // Bad luck: the gate for every random curse (cooldown, wave ramp, mercy). Cats that curse him on hit listen to `PlayerHurt` inside it.
     const curses = new CurseSystem(this, this.player, this.waves, (kind, ms) => this.givePickup(kind, ms), () => this.powerUps.goodCount, (x, y, text, color, size) => this.effects.floatText(x, y, text, color, size));
     this.curses = curses;
@@ -312,6 +343,11 @@ export class GameScene extends Phaser.Scene {
         this.addEnemy(type, spot.x, spot.y);
         bus.emit(Events.Teleport, { x: spot.x, y: spot.y }); // puff of smoke
       }),
+      // A boss took its killing blow: its last-words scene plays, and when it is over (or skipped, or there is none) the boss falls.
+      listen<BossLastWordsPayload>(Events.BossLastWords, ({ boss }) => {
+        const fall = (): void => this.finishBossLastWords();
+        if (!this.cutscene.fire({ on: 'bossLastWords', boss }, fall)) fall();
+      }),
       listen<BossDefeatedPayload>(Events.BossDefeated, ({ final }) => {
         if (final) this.scatterCats();
       }),
@@ -321,8 +357,23 @@ export class GameScene extends Phaser.Scene {
       }),
       listen<{ wave: number }>(Events.WaveCleared, ({ wave }) => {
         const late = wave >= WAVE_TIMING.lateHeal.fromWave && wave <= WAVE_TIMING.lateHeal.toWave;
-        this.player.heal(WAVE_TIMING.clearHeal + (late ? WAVE_TIMING.lateHeal.bonus : 0));
+        this.player.heal((WAVE_TIMING.clearHeal + (late ? WAVE_TIMING.lateHeal.bonus : 0)) * getDifficulty().heal);
         this.effects.floatText(this.player.x, this.player.y - 56, pick(WAVE_CLEARED_LINES), '#9be28f', 26);
+        // Belt upgrade pick (waves 3, 6, 9, 12 and 14; endless: every 3rd wave). The next wave waits until the screen has been and gone.
+        if (beltUpgradeDue(wave, this.run.mode, FINAL_WAVE) && (anyUpgradeOpen() || eligibleSynergies().length > 0)) {
+          this.waves.postpone(gameClock.now, BELT_UPGRADE_OFFER.delayMs + 600);
+          this.time.delayedCall(BELT_UPGRADE_OFFER.delayMs, () => this.openUpgrades(wave));
+        }
+      }),
+      listen<BeltUpgradePayload>(Events.BeltUpgradePicked, ({ id, level }) => {
+        this.powerUps.refreshStats(); // the new multipliers go on Varu
+        this.waves.postpone(gameClock.now, BELT_UPGRADE_OFFER.breatherMs);
+        this.effects.floatText(this.player.x, this.player.y - 60, BELT_UPGRADE_UI.picked(BELT_UPGRADE_TEXT[id].name, level), '#f5c518', 30);
+      }),
+      listen<BeltSynergyPayload>(Events.BeltSynergyPicked, ({ id }) => {
+        this.powerUps.refreshStats(); // the synergy multipliers are read through the same stats
+        this.waves.postpone(gameClock.now, BELT_UPGRADE_OFFER.breatherMs);
+        if (isBeltSynergyId(id)) this.effects.floatText(this.player.x, this.player.y - 60, BELT_SYNERGY_UI.picked(BELT_SYNERGY_TEXT[id].name), '#ff5ac8', 30);
       }),
     ];
 
@@ -437,6 +488,7 @@ export class GameScene extends Phaser.Scene {
     this.crowRain.update(now);
     this.pickups.update(now);
     this.waves.update(now);
+    this.combo.update(now);
     this.weatherCurses.update(now);
     this.surrender.update(now);
     this.lucky.update(now);
@@ -584,20 +636,43 @@ export class GameScene extends Phaser.Scene {
 
     // Quick "knocked out" spin, then on to the game over screen.
     this.tweens.add({ targets: this.player, angle: this.player.angle + 540, scale: 0.2, alpha: 0, duration: 800, ease: 'Cubic.easeIn' });
-    const data: GameOverData = {
-      score: this.score.score,
-      kills: this.score.kills,
-      wave: this.waves.wave,
-      best: this.score.best,
-      isNewBest: this.score.finish(),
-      mode: this.run.mode,
-    };
+    const data = this.endData();
     this.time.delayedCall(950, () => this.scene.start('GameOverScene', data));
   }
 
+  /** What the end screens show (score, record, and the run summary). Saves the best combo and the lifetime totals: call it once per run. */
+  private endData(): GameOverData {
+    const comboRecord = loadBestCombo();
+    const newComboRecord = this.combo.best > comboRecord;
+    if (newComboRecord) saveBestCombo(this.combo.best);
+    addLifetime(this.score.kills);
+    const summary: RunSummary = {
+      difficulty: getDifficultyId(),
+      timeMs: this.stats.timeMs,
+      bestCombo: this.combo.best,
+      comboRecord: Math.max(comboRecord, this.combo.best),
+      newComboRecord,
+      hits: this.stats.hits,
+      perfectDodges: this.stats.perfectDodges,
+    };
+    return { score: this.score.score, kills: this.score.kills, wave: this.waves.wave, best: this.score.best, isNewBest: this.score.finish(), mode: this.run.mode, summary };
+  }
+
   /** The last boss fell: a 'victory' cutscene (if the content has one) plays first, then the victory screen. */
+  /** The last-words scene of a boss is over: the boss that was waiting for it falls for real. */
+  private finishBossLastWords(): void {
+    for (const child of this.enemies.getChildren()) {
+      if (child instanceof Boss && child.isSpeaking) child.finishLastWords();
+    }
+  }
+
   private onVictory(): void {
     if (this.gameOver) return;
+    // The final boss just fell: let its slow-mo and confetti play out before the ending starts.
+    if (this.slowMo.bossBeatActive) {
+      this.slowMo.whenBossBeatEnds(() => this.onVictory());
+      return;
+    }
     if (this.cutscene.fire({ on: 'victory' }, () => this.finishVictory())) return;
     this.finishVictory();
   }
@@ -611,14 +686,7 @@ export class GameScene extends Phaser.Scene {
     if (this.run.mode === 'campaign') saveEndlessUnlocked();
     const silence: MusicPayload = { track: null };
     bus.emit(Events.MusicTrack, silence);
-    const data: GameOverData = {
-      score: this.score.score,
-      kills: this.score.kills,
-      wave: this.waves.wave,
-      best: this.score.best,
-      isNewBest: this.score.finish(),
-      mode: this.run.mode,
-    };
+    const data = this.endData();
     this.time.delayedCall(1300, () => this.scene.start('VictoryScene', data));
   }
 
@@ -667,6 +735,25 @@ export class GameScene extends Phaser.Scene {
     this.touchOverlay?.setHidden(false);
     this.input.keyboard?.resetKeys();
     gameClock.skipNextStep();
+  }
+
+  /** A wave with a belt pick was cleared: freeze the game and show the three cards. If a cutscene or the pause menu is in the way it tries again shortly. */
+  private openUpgrades(wave: number): void {
+    if (this.gameOver || !this.scene.isActive()) return;
+    if (this.cutscene.active) {
+      this.time.delayedCall(500, () => this.openUpgrades(wave));
+      return;
+    }
+    const choices = rollBeltChoices();
+    let synergy = rollSynergy(); // ONCE per pick: it keeps the miss counter
+    if (choices.length === 0 && !synergy) synergy = eligibleSynergies()[0] ?? null; // every upgrade is maxed: the screen is only worth opening for a synergy
+    if (choices.length === 0 && !synergy) return;
+    this.hitStop.cancel();
+    this.scene.pause();
+    this.scene.pause('UIScene');
+    if (this.scene.isActive('CutsceneScene')) this.scene.pause('CutsceneScene');
+    const data: UpgradeSceneData = { wave, choices, ...(synergy ? { synergy } : {}) };
+    this.scene.launch('UpgradeScene', data);
   }
 
   private openPause(): void {

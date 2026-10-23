@@ -2,12 +2,13 @@
 import Phaser from 'phaser';
 import { PAUSE, PAUSE_KEYS, pauseGaps, pauseRowH } from '../config/pause';
 import { FONT } from '../config/style';
-import { PAUSE_TEXT } from '../content/pause';
+import { BUTTON_EDIT_TEXT, PAUSE_TEXT } from '../content/pause';
+import { isLayoutCustom } from '../core/touchLayout';
 import { usesTouchControls } from '../core/device';
 import { Events, listen } from '../core/events';
 import { isMuted, toggleMuted } from '../core/mute';
 import { readRun, type RunOptions } from '../core/run';
-import { getAutoAttack, getDebugInfo, getVolume, nudgeVolume, setVolume, toggleAutoAttack, toggleDebugInfo, type VolumeKind } from '../core/settings';
+import { getAutoAttack, getDebugInfo, getVibration, getVolume, nudgeVolume, setVolume, toggleAutoAttack, toggleDebugInfo, toggleVibration, type VolumeKind } from '../core/settings';
 import { GAME } from '../config/balance';
 import { COLORS } from '../config/style';
 import { createLogoWord } from '../ui/logoWord';
@@ -15,7 +16,7 @@ import { createSunburst, createVignette } from '../ui/menuBackdrop';
 import { createPauseScene, createPeekingCats } from '../ui/pause/PauseDecor';
 import { PauseRow, type PauseRowSpec } from '../ui/pause/PauseRow';
 
-type RowId = 'resume' | 'music' | 'sfx' | 'sound' | 'autoAttack' | 'debugInfo' | 'restart' | 'menu';
+type RowId = 'resume' | 'music' | 'sfx' | 'sound' | 'autoAttack' | 'debugInfo' | 'vibration' | 'touchButtons' | 'restart' | 'menu';
 
 interface RowDef extends PauseRowSpec {
   id: RowId;
@@ -23,7 +24,7 @@ interface RowDef extends PauseRowSpec {
   groupStart?: boolean;
 }
 
-/** The rows of the menu. Phones and tablets get two more: the auto-attack switch (computers swing with the mouse) and the debug numbers. */
+/** The rows of the menu. Phones and tablets get four more: the auto-attack switch (computers swing with the mouse), vibration, the roll button screen and the debug numbers. */
 const rowsFor = (touch: boolean): readonly RowDef[] => [
   { id: 'resume', kind: 'button', label: PAUSE_TEXT.resume, icon: 'play' },
   { id: 'music', kind: 'volume', label: PAUSE_TEXT.music, groupStart: true },
@@ -32,6 +33,8 @@ const rowsFor = (touch: boolean): readonly RowDef[] => [
   ...(touch
     ? [
         { id: 'autoAttack', kind: 'toggle', label: PAUSE_TEXT.autoAttack } satisfies RowDef,
+        { id: 'vibration', kind: 'toggle', label: PAUSE_TEXT.vibration } satisfies RowDef,
+        { id: 'touchButtons', kind: 'toggle', label: PAUSE_TEXT.touchButtons } satisfies RowDef,
         { id: 'debugInfo', kind: 'toggle', label: PAUSE_TEXT.debugInfo } satisfies RowDef,
       ]
     : []),
@@ -118,7 +121,7 @@ export class PauseScene extends Phaser.Scene {
     this.select(0);
 
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => this.onKey(e));
-    const off = [listen(Events.MuteChanged, () => this.refresh()), listen(Events.VolumeChanged, () => this.refresh())];
+    const off = [listen(Events.MuteChanged, () => this.refresh()), listen(Events.VolumeChanged, () => this.refresh()), listen(Events.TouchLayoutChanged, () => this.refresh())];
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => off.forEach((f) => f()));
   }
 
@@ -170,6 +173,8 @@ export class PauseScene extends Phaser.Scene {
       case 'sound':
       case 'autoAttack':
       case 'debugInfo':
+      case 'vibration':
+      case 'touchButtons':
         this.flip(def.id);
         break;
       case 'music':
@@ -187,11 +192,20 @@ export class PauseScene extends Phaser.Scene {
   /** An on/off row was chosen: switch it. */
   private flip(id: RowId): void {
     if (id === 'sound') toggleMuted();
-    else if (id === 'autoAttack' || id === 'debugInfo') {
+    else if (id === 'touchButtons') this.openButtonEditor();
+    else if (id === 'autoAttack' || id === 'debugInfo' || id === 'vibration') {
       if (id === 'autoAttack') toggleAutoAttack();
+      else if (id === 'vibration') toggleVibration();
       else toggleDebugInfo();
       this.refresh(); // (the mute switch announces itself with an event; these do not need to)
     }
+  }
+
+  /** The screen where the touch buttons are moved and resized. This menu sleeps meanwhile and wakes when it is closed. */
+  private openButtonEditor(): void {
+    this.leaving = false;
+    this.scene.launch('ButtonEditScene');
+    this.scene.sleep();
   }
 
   private setLevel(id: RowId, level: number): void {
@@ -224,6 +238,8 @@ export class PauseScene extends Phaser.Scene {
       if (def.id === 'music' || def.id === 'sfx') row.setLevel(getVolume(def.id));
       if (def.id === 'sound') row.setValue(isMuted() ? PAUSE_TEXT.soundOff : PAUSE_TEXT.soundOn);
       if (def.id === 'autoAttack') row.setValue(getAutoAttack() ? PAUSE_TEXT.on : PAUSE_TEXT.off);
+      if (def.id === 'vibration') row.setValue(getVibration() ? PAUSE_TEXT.on : PAUSE_TEXT.off);
+      if (def.id === 'touchButtons') row.setValue(isLayoutCustom() ? BUTTON_EDIT_TEXT.custom : BUTTON_EDIT_TEXT.default);
       if (def.id === 'debugInfo') row.setValue(getDebugInfo() ? PAUSE_TEXT.on : PAUSE_TEXT.off);
     });
   }

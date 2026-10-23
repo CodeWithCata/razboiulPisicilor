@@ -6,6 +6,7 @@ import { QUEEN_GEMS } from '../../assets/art/queen';
 import { Tex } from '../../assets/keys';
 import { QUEEN_POSE_MS as MS, QUEEN_POSES as POSE, QUEEN_RIG } from '../../config/animation';
 import { PLAY_AREA } from '../../config/arena';
+import { PLAYER } from '../../config/balance';
 import { BOSS_CURSE, byTier, QUEEN } from '../../config/bosses';
 import { BOSS_CURSE_LINES, BOSS_TEXT } from '../../content/bosses';
 import { clampToArena } from '../../core/arena';
@@ -40,6 +41,8 @@ interface Rect {
 interface CarpetWave {
   lanes: Rect[];
   safe: Rect | null;
+  /** The band slot (0 = the one Varu stood in when the attack began) the green corridor is centered on. */
+  center: number;
 }
 
 interface ScepterFlight {
@@ -109,6 +112,11 @@ export class QueenCat extends Boss {
   private carpetWaves: CarpetWave[] = [];
   private carpetNext = 0;
   private carpetStrikeAt = 0;
+  /** How many strikes this carpet attack has (the later ones are planned when the one before lands). */
+  private carpetPlanned = 0;
+  private carpetHorizontal = true;
+  /** Where slot 0 sits on the bands' axis (Varu's y for rows, x for columns, when the attack began). */
+  private carpetAnchor = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'queen', Tex.BossQueen);
@@ -381,7 +389,7 @@ export class QueenCat extends Boss {
         id: 'carpet',
         minPhase: 2,
         telegraphMs: () => this.pick(QUEEN.carpet.telegraphMs),
-        activeMs: () => Math.max(0, this.carpetWaves.length - 1) * this.pick(QUEEN.carpet.waveGapMs) + QUEEN.carpet.lingerMs,
+        activeMs: () => Math.max(0, this.carpetPlanned - 1) * this.pick(QUEEN.carpet.waveGapMs) + QUEEN.carpet.lingerMs,
         recoverMs: () => this.pick(QUEEN.carpet.recoverMs),
         onTelegraph: () => {
           const ms = this.pick(QUEEN.carpet.telegraphMs);
@@ -395,26 +403,19 @@ export class QueenCat extends Boss {
           this.rig.to(POSE.relaxed, MS.decreeBack, 'out', MS.decreeBackDelay);
           this.strikeWave(this.carpetWaves[0]);
           this.carpetNext = 1;
-          if (this.carpetWaves.length > 1) {
-            const gap = this.pick(QUEEN.carpet.waveGapMs);
-            this.warnWave(this.carpetWaves[1], gap);
-            this.carpetStrikeAt = gameClock.now + gap;
-          }
+          if (this.carpetPlanned > 1) this.planFollowUp(1, gameClock.now);
         },
         onActive: (time) => {
-          if (this.carpetNext < 1 || this.carpetNext >= this.carpetWaves.length || time < this.carpetStrikeAt) return;
+          if (this.carpetNext < 1 || this.carpetNext >= this.carpetPlanned || time < this.carpetStrikeAt) return;
           this.strikeWave(this.carpetWaves[this.carpetNext]);
           this.carpetNext += 1;
-          if (this.carpetNext < this.carpetWaves.length) {
-            const gap = this.pick(QUEEN.carpet.waveGapMs);
-            this.warnWave(this.carpetWaves[this.carpetNext], gap);
-            this.carpetStrikeAt = time + gap;
-          }
+          if (this.carpetNext < this.carpetPlanned) this.planFollowUp(this.carpetNext, time);
         },
         onEnd: () => {
           this.carpetWaves = [];
           this.carpetNext = 0;
-          this.tryChain();
+          this.carpetPlanned = 0;
+          if (!this.tryChain()) this.openWeakPoint(); // the carpet is done: now she is open (not when she flows straight into a rush)
         },
       },
     ];
@@ -766,59 +767,105 @@ export class QueenCat extends Boss {
 
   // ---- red carpet bands -----------------------------------------------------------------------
 
+  /** The band of floor `slot` bands from where Varu stood when the attack began, clipped to the play area (null when nothing of it is left). */
+  private carpetBand(slot: number): Rect | null {
+    const w = QUEEN.carpet.laneWidth;
+    const a = this.carpetAnchor + slot * w - w / 2;
+    const b = a + w;
+    const area = PLAY_AREA;
+    const r: Rect = this.carpetHorizontal
+      ? { x1: area.left, x2: area.right, y1: Math.max(a, area.top), y2: Math.min(b, area.bottom) }
+      : { y1: area.top, y2: area.bottom, x1: Math.max(a, area.left), x2: Math.min(b, area.right) };
+    return r.x2 - r.x1 > 8 && r.y2 - r.y1 > 8 ? r : null;
+  }
+
+  /** One strike: a safe corridor of side-by-side bands centered on `center`, every other band hurts. */
+  private carpetWave(center: number): CarpetWave {
+    const half = QUEEN.carpet.halfBands;
+    const safeCount = this.pick(QUEEN.carpet.safeBands);
+    const corridor = [center];
+    const first = Math.random() < 0.5 ? 1 : -1;
+    for (const side of [first, -first]) {
+      if (corridor.length >= safeCount) break;
+      const slot = center + side;
+      if (Math.abs(slot) <= half && this.carpetBand(slot) !== null) corridor.push(slot);
+    }
+    const lanes: Rect[] = [];
+    let safe: Rect | null = null;
+    for (let s = -half; s <= half; s++) {
+      const r = this.carpetBand(s);
+      if (!r) continue;
+      if (corridor.includes(s)) {
+        safe = safe ? { x1: Math.min(safe.x1, r.x1), y1: Math.min(safe.y1, r.y1), x2: Math.max(safe.x2, r.x2), y2: Math.max(safe.y2, r.y2) } : { ...r };
+      } else {
+        lanes.push(r);
+      }
+    }
+    return { lanes, safe, center };
+  }
+
+  /** Varu is slowed (snail, puddles, Big hoodie) or frozen (smoke break): he cannot be asked to run far. */
+  private varuImpaired(): boolean {
+    const player = this.ctx.player;
+    return player.frozen || player.speedMultiplier * player.terrainSlow * player.tearSlow < QUEEN.carpet.slowBelow;
+  }
+
   /**
-   * Bands of floor across the whole arena, lined up on Varu. A corridor of side-by-side bands is safe (`safeBands` wide, green);
-   * the rest hurts. The first corridor is centered 1 or 2 bands from Varu, the next ones 1 band from the previous one.
+   * The FIRST strike: bands across the whole arena, lined up on Varu (rows or columns). The corridor is centered 1 or 2 bands away
+   * (only 1 when he is slowed or frozen, so it always covers the band he stands in or the next one). The other strikes are planned
+   * later, see `planFollowUp`.
    */
   private buildCarpet(): CarpetWave[] {
     const player = this.ctx.player;
-    const horizontal = Math.random() < 0.5;
-    const w = QUEEN.carpet.laneWidth;
+    this.carpetHorizontal = Math.random() < 0.5;
+    this.carpetAnchor = this.carpetHorizontal ? player.y : player.x;
+    this.carpetPlanned = this.pick(QUEEN.carpet.waves);
+    const reach = this.varuImpaired() ? QUEEN.carpet.nearReach : QUEEN.carpet.reach;
+    const options = reach.filter((s) => Math.abs(s) <= QUEEN.carpet.halfBands && this.carpetBand(s) !== null);
+    const center = options.length > 0 ? options[Math.floor(Math.random() * options.length)]! : 0;
+    return [this.carpetWave(center)];
+  }
+
+  /** How far (px) Varu has to run from where he stands to be out of every red band of this strike (0 = he is already safe). */
+  private carpetRunNeeded(wave: CarpetWave): number {
+    const player = this.ctx.player;
+    const safe = wave.safe;
+    if (!safe) return 0;
+    const p = this.carpetHorizontal ? player.y : player.x;
+    const lo = this.carpetHorizontal ? safe.y1 : safe.x1;
+    const hi = this.carpetHorizontal ? safe.y2 : safe.x2;
+    const inside = Math.min(p - lo, hi - p); // negative while he is outside the corridor
+    return Math.max(0, player.hitRadius - QUEEN.carpet.hitInsetPx - inside);
+  }
+
+  /**
+   * A later strike is planned when the one before it lands, from where Varu really is. Its corridor sits one band beside the last
+   * one (a puzzle: he must move), but only a corridor he can reach in time is allowed: the running time is the gap minus a reaction
+   * time, times his real speed now (snail, puddle, frozen). If none of the neighbours is reachable, the corridor goes over him.
+   */
+  private planFollowUp(index: number, now: number): void {
+    const prev = this.carpetWaves[index - 1];
+    const player = this.ctx.player;
+    const gap = this.pick(QUEEN.carpet.waveGapMs);
+    const speed = player.frozen ? 0 : PLAYER.speed * player.speedMultiplier * player.terrainSlow * player.tearSlow;
+    const budget = (speed * Math.max(0, gap - QUEEN.carpet.reactionMs) * 0.001) * QUEEN.carpet.reachShare;
     const half = QUEEN.carpet.halfBands;
-    const area = PLAY_AREA;
+    const from = prev?.center ?? 0;
+    const p = this.carpetHorizontal ? player.y : player.x;
+    const own = Phaser.Math.Clamp(Math.round((p - this.carpetAnchor) / QUEEN.carpet.laneWidth), -half, half);
 
-    const band = (slot: number): Rect | null => {
-      const center = (horizontal ? player.y : player.x) + slot * w;
-      const a = center - w / 2;
-      const b = center + w / 2;
-      const r: Rect = horizontal
-        ? { x1: area.left, x2: area.right, y1: Math.max(a, area.top), y2: Math.min(b, area.bottom) }
-        : { y1: area.top, y2: area.bottom, x1: Math.max(a, area.left), x2: Math.min(b, area.right) };
-      return r.x2 - r.x1 > 8 && r.y2 - r.y1 > 8 ? r : null;
-    };
-
-    const waves: CarpetWave[] = [];
-    let ref = 0;
-    const count = this.pick(QUEEN.carpet.waves);
-    const safeCount = this.pick(QUEEN.carpet.safeBands);
-    for (let i = 0; i < count; i++) {
-      const reach = i === 0 ? [-2, -1, 1, 2] : [-1, 1];
-      const options = reach.map((o) => ref + o).filter((s) => Math.abs(s) <= half && band(s) !== null);
-      const centerSlot = options.length > 0 ? options[Math.floor(Math.random() * options.length)]! : ref;
-      const corridor = [centerSlot];
-      const first = Math.random() < 0.5 ? 1 : -1;
-      for (const side of [first, -first]) {
-        if (corridor.length >= safeCount) break;
-        const slot = centerSlot + side;
-        if (Math.abs(slot) <= half && band(slot) !== null) corridor.push(slot);
-      }
-      const lanes: Rect[] = [];
-      let safe: Rect | null = null;
-      for (let s = -half; s <= half; s++) {
-        const r = band(s);
-        if (!r) continue;
-        if (corridor.includes(s)) {
-          safe = safe
-            ? { x1: Math.min(safe.x1, r.x1), y1: Math.min(safe.y1, r.y1), x2: Math.max(safe.x2, r.x2), y2: Math.max(safe.y2, r.y2) }
-            : { ...r };
-        } else {
-          lanes.push(r);
-        }
-      }
-      waves.push({ lanes, safe });
-      ref = centerSlot;
+    const neighbours = [from - 1, from + 1].filter((s) => Math.abs(s) <= half && this.carpetBand(s) !== null).map((s) => this.carpetWave(s));
+    const reachable = neighbours.filter((w) => this.carpetRunNeeded(w) <= budget);
+    let wave: CarpetWave;
+    if (reachable.length > 0) {
+      wave = reachable[Math.floor(Math.random() * reachable.length)]!;
+    } else {
+      const fallback = [...neighbours, this.carpetWave(own)];
+      wave = fallback.reduce((best, w) => (this.carpetRunNeeded(w) < this.carpetRunNeeded(best) ? w : best));
     }
-    return waves;
+    this.carpetWaves[index] = wave;
+    this.warnWave(wave, gap);
+    this.carpetStrikeAt = now + gap;
   }
 
   /** Show where the next strike lands (red) and which band is safe (green). */
@@ -829,15 +876,17 @@ export class QueenCat extends Boss {
     if (s) this.track(telegraphRect(this.scene, s.x1, s.y1, s.x2, s.y2, ms, QUEEN.carpet.safeColor, false));
   }
 
-  /** The bands strike: a flash, and Varu is hurt if he stands in one. */
+  /** The bands strike: a flash, and Varu is hurt if he stands in one (a band hurts only `hitInsetPx` inside its drawn edge). */
   private strikeWave(wave: CarpetWave | undefined): void {
     if (!wave) return;
     const player = this.ctx.player;
     let hit: Rect | null = null;
     for (const r of wave.lanes) {
       carpetStrike(this.scene, r.x1, r.y1, r.x2, r.y2, QUEEN.carpet.strikeFadeMs);
-      const dx = Math.max(r.x1 - player.x, 0, player.x - r.x2);
-      const dy = Math.max(r.y1 - player.y, 0, player.y - r.y2);
+      const insetX = Math.min(QUEEN.carpet.hitInsetPx, Math.max(0, (r.x2 - r.x1) / 2 - 1));
+      const insetY = Math.min(QUEEN.carpet.hitInsetPx, Math.max(0, (r.y2 - r.y1) / 2 - 1));
+      const dx = Math.max(r.x1 + insetX - player.x, 0, player.x - (r.x2 - insetX));
+      const dy = Math.max(r.y1 + insetY - player.y, 0, player.y - (r.y2 - insetY));
       if (hyp(dx, dy) <= player.hitRadius) hit = r;
     }
     this.rig.burst(5);

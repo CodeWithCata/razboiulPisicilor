@@ -60,6 +60,8 @@ export type CutsceneTrigger =
   | { on: 'waveCleared'; wave: number }
   | { on: 'bossSpawned'; boss?: BossType }
   | { on: 'bossDefeated'; boss?: BossType }
+  /** The killing blow landed: the boss is on 1 HP and talks before it falls (config/cutscene.ts `BOSS_LAST_WORDS`). */
+  | { on: 'bossLastWords'; boss?: BossType }
   | { on: 'victory' };
 
 export interface CutsceneTriggerDef {

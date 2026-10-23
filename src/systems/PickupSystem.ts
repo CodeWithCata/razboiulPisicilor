@@ -10,6 +10,7 @@ import { snapshotInto } from '../core/snapshot';
 import { Pickup } from '../entities/Pickup';
 import type { Player } from '../entities/Player';
 import { gameClock } from '../core/clock';
+import { getDifficulty } from '../core/difficulty';
 import { announcePickup } from './pickupEffects';
 
 /**
@@ -31,7 +32,7 @@ export class PickupSystem {
     onCollect: (kind: PickupKind) => void,
   ) {
     this.group = scene.physics.add.group();
-    this.nextSpawnAt = gameClock.now + PICKUP_SPAWN.firstDelayMs;
+    this.nextSpawnAt = gameClock.now + PICKUP_SPAWN.firstDelayMs / getDifficulty().pickups;
     this.nextGoldenAt = gameClock.now + PICKUP_SPAWN.goldenBeltFirstMs;
 
     scene.physics.add.overlap(player, this.group, (_p, obj) => {
@@ -49,7 +50,7 @@ export class PickupSystem {
           this.luckyReward(x, y); // caught the lucky cat: a pile of pickups, always
           return;
         }
-        if (Math.random() < PICKUP_SPAWN.killDropChance && this.hasRoom()) {
+        if (Math.random() < PICKUP_SPAWN.killDropChance * getDifficulty().pickups && this.hasRoom()) {
           this.spawnAt(this.pickKind(), Phaser.Math.Clamp(x, PLAY_AREA.left + 60, PLAY_AREA.right - 60), Phaser.Math.Clamp(y, PLAY_AREA.top + 60, PLAY_AREA.bottom - 60));
         }
       }),
@@ -75,12 +76,12 @@ export class PickupSystem {
 
     // Guaranteed golden belt: never skipped, even when the field is full.
     if (time >= this.nextGoldenAt) {
-      this.nextGoldenAt = time + PICKUP_SPAWN.goldenBeltEveryMs;
+      this.nextGoldenAt = time + PICKUP_SPAWN.goldenBeltEveryMs / getDifficulty().pickups;
       this.spawnAt('goldenBelt', ...this.randomSpot());
     }
 
     if (time >= this.nextSpawnAt) {
-      this.nextSpawnAt = time + Phaser.Math.Between(PICKUP_SPAWN.minIntervalMs, PICKUP_SPAWN.maxIntervalMs);
+      this.nextSpawnAt = time + Phaser.Math.Between(PICKUP_SPAWN.minIntervalMs, PICKUP_SPAWN.maxIntervalMs) / getDifficulty().pickups;
       if (this.hasRoom()) this.spawnAt(this.pickKind(), ...this.randomSpot());
     }
   }
