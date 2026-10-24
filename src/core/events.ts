@@ -35,7 +35,7 @@ export const Events = {
   LuckyGone: 'lucky:gone', // PointPayload (she got away: a line and a sound; catching her is a normal EnemyKilled with type 'lucky')
   FanThrow: 'fan:throw', // FanThrowPayload (a fan in the stands let go of something: the whoosh, the crowd cheers)
   BomberArrived: 'bomber:arrived', // PointPayload (the FIRST bomber cat of the run walks in: the crowd shouts, a sting plays)
-  PetardSwatted: 'petard:swatted', // PointPayload (Varu's belt knocked a bomber's fresh petard back at her: a cheer, a sound)
+  PetardSwatted: 'petard:swatted', // PointPayload (Varu's umbrella sent a bomber's petard back at her: a cheer, a sound)
   ThrowPetard: 'petard:throw', // ThrowPetardPayload (the bomber cat lobs a petard: FanThrowSystem flies it and sets it off, same as the fans' petards)
   FanLanded: 'fan:landed', // FanLandedPayload (it hit the floor: a gift pops out, or a petard starts to hiss)
   Heartbeat: 'player:heartbeat', // HeartbeatPayload (Varu is low on health: one beat, for the sound and the red edge)
@@ -148,7 +148,7 @@ export interface ThrowPetardPayload extends PointPayload {
   /** Where it lands. */
   toX: number;
   toY: number;
-  /** The cat that threw it (an Enemy; core cannot import entities). The belt can knock the petard back at her (FAN_THROW.swat). */
+  /** The cat that threw it (an Enemy; core cannot import entities). Only the umbrella can send the petard back at her (FAN_THROW.swat). */
   by?: Phaser.GameObjects.GameObject;
 }
 

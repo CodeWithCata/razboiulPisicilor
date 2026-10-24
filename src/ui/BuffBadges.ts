@@ -23,6 +23,11 @@ interface Badge {
   /** Counts down while the badge pops in / bumps (0 = idle). */
   popInMs: number;
   bumpMs: number;
+  /** What the ring was last painted for (see `drawBadge`): -1 = never. The ring is only repainted when this changes. */
+  paintKey: number;
+  /** The last seconds text and blink state set on the label: a Text re-renders its canvas on every `setText` / `setColor` that changes it, so they are only set on a change. */
+  lastSeconds: string;
+  lastBlink: boolean | null;
 }
 
 /**
@@ -76,7 +81,7 @@ export class BuffBadges {
     fitToSize(icon, B.iconSize);
     const seconds = this.scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: `${B.seconds.size}px`, color: B.colors.seconds, stroke: B.colors.secondsStroke, strokeThickness: B.seconds.strokeThickness }).setOrigin(0.5);
     const stackLabel = this.scene.add.text(0, 0, '', { fontFamily: FONT, fontSize: `${B.stack.size}px`, color: B.stack.color, stroke: B.stack.stroke, strokeThickness: B.stack.strokeThickness }).setOrigin(0.5).setVisible(false);
-    const badge: Badge = { info, gfx, icon, iconScale: icon.scale, seconds, stackLabel, popInMs: B.popIn.ms, bumpMs: 0 };
+    const badge: Badge = { info, gfx, icon, iconScale: icon.scale, seconds, stackLabel, popInMs: B.popIn.ms, bumpMs: 0, paintKey: -1, lastSeconds: '', lastBlink: null };
     this.setStackLabel(badge);
     return badge;
   }
@@ -90,17 +95,21 @@ export class BuffBadges {
     b.stackLabel.setText(`x${stacks}`).setColor(atMax ? B.stack.maxColor : B.stack.color);
   }
 
-  private center(i: number): { cx: number; cy: number } {
-    return { cx: B.x + B.r + i * (B.r * 2 + B.gap), cy: B.y + B.r };
+  /** Centre x of badge `i` (the row runs left to right); all badges share `centerY`. */
+  private centerX(i: number): number {
+    return B.x + B.r + i * (B.r * 2 + B.gap);
   }
 
+  private readonly centerY = B.y + B.r;
+
   private draw(): void {
-    this.badges.forEach((b, i) => this.drawBadge(b, i));
+    for (let i = 0; i < this.badges.length; i++) this.drawBadge(this.badges[i], i);
   }
 
   private drawBadge(b: Badge, index: number): void {
     const g = b.gfx;
-    const { cx, cy } = this.center(index);
+    const cx = this.centerX(index);
+    const cy = this.centerY;
     const color = PICKUP_VISUALS[b.info.kind].color;
     const ratio = Phaser.Math.Clamp(b.info.remainingMs / b.info.durationMs, 0, 1);
     const warning = b.info.remainingMs <= B.warn.ms;
@@ -113,17 +122,26 @@ export class BuffBadges {
     const r = B.r;
     const rr = r - B.ringW / 2;
 
-    g.clear();
-    g.setPosition(cx + shake, cy).setScale(scale);
+    g.setPosition(cx + shake, cy).setScale(scale); // moving and scaling are cheap and happen every frame
 
-    // Glow disc, then the ring: a faint track with the part still left drawn over it, draining clockwise from the top.
-    const ringColor = blinkOn ? B.colors.warn : color;
-    g.fillStyle(color, B.glowAlpha).fillCircle(0, 0, r);
-    g.lineStyle(B.ringW, color, B.trackAlpha).strokeCircle(0, 0, rr);
-    if (ratio > 0) {
-      g.lineStyle(B.ringW, ringColor, B.ringAlpha);
-      if (ratio >= 0.999) g.strokeCircle(0, 0, rr);
-      else g.strokePoints(poly(this.arc(rr, -90 * DEG, (-90 + 360 * ratio) * DEG, Math.max(3, Math.ceil(B.arcSegments * ratio)))), false);
+    // The shapes (glow disc, track, draining ring) are only repainted when what they show changed: the ring end moves in
+    // `ringSteps` steps (a fraction of a pixel each), or the warning blink flipped. Repainting every frame rebuilt the same
+    // path again and again.
+    const q = Math.round(ratio * B.ringSteps);
+    const paintKey = q * 2 + (blinkOn ? 1 : 0);
+    if (paintKey !== b.paintKey) {
+      b.paintKey = paintKey;
+      g.clear();
+      // Glow disc, then the ring: a faint track with the part still left drawn over it, draining clockwise from the top.
+      const ringColor = blinkOn ? B.colors.warn : color;
+      const shown = q / B.ringSteps;
+      g.fillStyle(color, B.glowAlpha).fillCircle(0, 0, r);
+      g.lineStyle(B.ringW, color, B.trackAlpha).strokeCircle(0, 0, rr);
+      if (q > 0) {
+        g.lineStyle(B.ringW, ringColor, B.ringAlpha);
+        if (shown >= 0.999) g.strokeCircle(0, 0, rr);
+        else g.strokePoints(poly(this.arc(rr, -90 * DEG, (-90 + 360 * shown) * DEG, Math.max(3, Math.ceil(B.arcSegments * shown)))), false);
+      }
     }
 
     // The pickup's picture.
@@ -134,11 +152,17 @@ export class BuffBadges {
 
     // Seconds left, under the badge.
     const textY = cy + (r + B.seconds.gap) * scale;
-    b.seconds
-      .setText((Math.ceil(b.info.remainingMs / 100) / 10).toFixed(1))
-      .setColor(blinkOn ? B.colors.warnText : B.colors.seconds)
-      .setScale(scale)
-      .setPosition(cx + shake, textY);
+    // A Text redraws its whole canvas (and re-uploads it) on every `setText` / `setColor`, so only call them when the value changed.
+    const seconds = (Math.ceil(b.info.remainingMs / 100) / 10).toFixed(1);
+    if (seconds !== b.lastSeconds) {
+      b.lastSeconds = seconds;
+      b.seconds.setText(seconds);
+    }
+    if (blinkOn !== b.lastBlink) {
+      b.lastBlink = blinkOn;
+      b.seconds.setColor(blinkOn ? B.colors.warnText : B.colors.seconds);
+    }
+    b.seconds.setScale(scale).setPosition(cx + shake, textY);
   }
 
   private arc(r: number, from: number, to: number, steps: number): Pt[] {

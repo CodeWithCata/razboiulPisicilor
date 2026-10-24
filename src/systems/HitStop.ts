@@ -14,6 +14,8 @@ export class HitStop {
   private readonly off: Array<() => void> = [];
   private timer: Phaser.Time.TimerEvent | null = null;
   private lastFreezeAt = -Infinity;
+  /** When the running freeze began: extensions are cut off `HIT_STOP.maxChainMs` after it. */
+  private freezeStartedAt = 0;
   private stopped = false;
 
   constructor(private readonly scene: Phaser.Scene) {
@@ -54,11 +56,14 @@ export class HitStop {
     const now = gameClock.now;
     if (this.timer !== null) {
       // Already frozen: a longer freeze may extend it, a shorter one changes nothing.
-      if (ms > this.timer.getRemaining()) this.restartTimer(ms);
+      const room = this.freezeStartedAt + HIT_STOP.maxChainMs - now; // never longer than maxChainMs in total
+      const wanted = Math.min(ms, room);
+      if (wanted > this.timer.getRemaining()) this.restartTimer(wanted);
       return;
     }
     if (now - this.lastFreezeAt < HIT_STOP.minGapMs) return;
     this.lastFreezeAt = now;
+    this.freezeStartedAt = now;
     this.scene.physics.world.pause();
     this.restartTimer(ms);
   }

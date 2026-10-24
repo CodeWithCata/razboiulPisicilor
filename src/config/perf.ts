@@ -26,8 +26,10 @@ export const PERF = {
    * The WebGL context settings passed to Phaser (main.ts). `antialiasGL` is the MSAA of the context (smooths the edges of
    * every shape): it costs fill rate on phones. `true` = the Phaser default, so the look does not change. Set it to `false`
    * to test the speed; `ui/PerfPanel.ts` shows the value the context really got (`aa on` / `aa off`).
+   * `powerPreference`: asks laptops with two GPUs for the fast one. It is only a hint; phones ignore it. If `npm run check`
+   * says Phaser's typings do not know this name, delete it here and in main.ts.
    */
-  render: { antialiasGL: true },
+  render: { antialiasGL: true, powerPreference: 'high-performance' as const },
 
   /** The little card: top left, under the health meter. */
   panel: { x: 12, y: 96, size: 18, padX: 8, padY: 6, lineSpacing: 2, radius: 8, backAlpha: 0.62, depth: 400, color: '#b6f5a8' },

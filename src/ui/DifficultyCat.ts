@@ -1,85 +1,57 @@
-/** @file The difficulty button on the main menu, shaped like a cat's head: pointy ears, whiskers on the cheeks, the level name on the face. Same navy look and hover pop as `createMenuButton`. */
+/** @file The difficulty button on the main menu: a cat's FACE whose mood follows the level (happy kitten, tabby, angry tabby, horned nightmare cat) with the level name under it, same hover pop as `createMenuButton`. */
 import Phaser from 'phaser';
-import { DIFFICULTY_CAT } from '../config/difficulty';
+import { drawDifficultyFace } from '../assets/art/difficultyCat';
+import { DIFFICULTY_CAT, type DifficultyId } from '../config/difficulty';
 import { MENU } from '../config/menu';
-import { COLORS, FONT } from '../config/style';
+import { FONT } from '../config/style';
 
 export interface DifficultyCatOptions {
   x: number;
   y: number;
-  /** Width and height of the HEAD (the ears stand on top of it, `DIFFICULTY_CAT.earH` more). */
-  w: number;
-  h: number;
+  /** Which level's face to draw. */
+  id: DifficultyId;
+  /** Width of the face's 96x96 art canvas, in game pixels. */
+  faceW: number;
+  /** Font size of the level name under the face. */
   size: number;
   label: string;
   textColor: string;
 }
 
-/** Whole height of the button: the head plus the ears (the click area and the spacing use this). */
-export const difficultyCatHeight = (headH: number): number => headH + DIFFICULTY_CAT.earH;
+const ART = 96;
+const faceHeight = (faceW: number): number => faceW * DIFFICULTY_CAT.heightShare;
+const labelHeight = (size: number): number => Math.round(size * 1.25);
+
+/** Whole height of the button: the face plus the name (the click area and the spacing under it use this). */
+export const difficultyCatHeight = (faceW: number, size: number): number => faceHeight(faceW) + DIFFICULTY_CAT.labelGap + labelHeight(size);
 
 /**
- * The container's middle is the middle of the whole shape (head + ears), so the click area (`setSize`) fits the ears too.
- * The outline is ONE path (ears are part of it, no seam where the ears meet the head): corner arcs, an ear going up to a tip and down again, twice.
+ * The container's middle is the middle of the whole button (face + name), so `setSize` fits both. A soft glow in the level's color sits
+ * behind the face; the face itself is drawn once by `assets/art/difficultyCat.ts` and scaled. A new face pops in (`DIFFICULTY_CAT.pop`).
  */
 export function createDifficultyCat(scene: Phaser.Scene, o: DifficultyCatOptions): Phaser.GameObjects.Container {
   const C = DIFFICULTY_CAT;
-  const hw = o.w / 2;
-  const hh = o.h / 2;
-  const r = hh * C.cornerShare;
-  const ear = C.earH;
-  const shift = ear / 2; // the head sits this much lower than the container's middle
-  const top = -hh + shift;
-  const bottom = hh + shift;
+  const total = difficultyCatHeight(o.faceW, o.size);
+  const faceH = faceHeight(o.faceW);
+  const faceCy = -total / 2 + faceH / 2;
+  const k = o.faceW / ART;
 
-  const g = scene.add.graphics();
-  // Both ears: outer foot, tip leaning outward, inner foot (mirrored for the right ear).
-  const path = (): void => {
-    g.beginPath();
-    g.moveTo(-hw, top + r);
-    g.arc(-hw + r, top + r, r, Math.PI, Math.PI * 1.5);
-    g.lineTo(-hw + r + C.tipLean, top - ear);
-    g.lineTo(-hw + r + C.earW, top);
-    g.lineTo(hw - r - C.earW, top);
-    g.lineTo(hw - r - C.tipLean, top - ear);
-    g.lineTo(hw - r, top);
-    g.arc(hw - r, top + r, r, Math.PI * 1.5, Math.PI * 2);
-    g.lineTo(hw, bottom - r);
-    g.arc(hw - r, bottom - r, r, 0, Math.PI * 0.5);
-    g.lineTo(-hw + r, bottom);
-    g.arc(-hw + r, bottom - r, r, Math.PI * 0.5, Math.PI);
-    g.closePath();
-  };
-  g.fillStyle(COLORS.navy, 0.96);
-  path();
-  g.fillPath();
-  g.lineStyle(MENU.button.border, C.borderColor, 1);
-  path();
-  g.strokePath();
+  const aura = scene.add.graphics();
+  aura.fillStyle(C.looks[o.id].aura, C.aura.alpha).fillCircle(0, faceCy, o.faceW * C.aura.radius);
 
-  // The inside of the ears: a smaller, lighter triangle in each.
-  g.fillStyle(C.innerEar, 1);
-  for (const side of [-1, 1]) {
-    const footOuter = side * (hw - r - C.earInset);
-    const footInner = side * (hw - r - C.earW + C.earInset);
-    const tip = side * (hw - r - C.tipLean - C.earInset * 0.2);
-    g.fillTriangle(footOuter, top + 1, footInner, top + 1, tip, top - ear + C.earInset + 2);
-  }
+  const face = scene.add.graphics();
+  drawDifficultyFace(face, o.id);
+  face.setPosition(-ART * k * 0.5, faceCy - ART * k * 0.5).setScale(k); // the art's middle (48, 48) lands on the face's middle
 
-  // Whiskers on the cheeks (inside the head, so the button never reaches past its own edge): three short lines on each side.
-  g.lineStyle(C.whiskerWidth, C.whiskerColor, 1);
-  for (const side of [-1, 1]) {
-    for (const [dy, tilt] of C.whiskers) {
-      const x0 = side * (hw - C.whiskerFromEdge);
-      const x1 = side * (hw - C.whiskerFromEdge - C.whiskerLen);
-      g.lineBetween(x0, shift + dy, x1, shift + dy + tilt);
-    }
-  }
+  const label = scene.add
+    .text(0, total / 2 - labelHeight(o.size) / 2, o.label, { fontFamily: FONT, fontSize: `${o.size}px`, color: o.textColor, stroke: '#1b2340', strokeThickness: 5 })
+    .setOrigin(0.5);
 
-  const label = scene.add.text(0, shift + 2, o.label, { fontFamily: FONT, fontSize: `${o.size}px`, color: o.textColor, stroke: '#1b2340', strokeThickness: 5 }).setOrigin(0.5);
+  const button = scene.add.container(o.x, o.y, [aura, face, label]).setDepth(MENU.button.depth);
+  button.setSize(o.faceW, total).setInteractive({ useHandCursor: true });
+  button.setScale(C.pop.from);
+  scene.tweens.add({ targets: button, scale: 1, duration: C.pop.ms, ease: 'Back.easeOut' });
 
-  const button = scene.add.container(o.x, o.y, [g, label]).setDepth(MENU.button.depth);
-  button.setSize(o.w, o.h + ear).setInteractive({ useHandCursor: true });
   const pop = (scale: number): void => {
     scene.tweens.add({ targets: button, scale, duration: MENU.button.hoverMs, ease: 'Sine.easeOut' });
   };

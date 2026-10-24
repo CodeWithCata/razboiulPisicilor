@@ -74,29 +74,43 @@ export const DIFFICULTY_ORDER: readonly DifficultyId[] = ['easy', 'normal', 'har
 export const DEFAULT_DIFFICULTY: DifficultyId = 'normal';
 export const isDifficultyId = (value: unknown): value is DifficultyId => typeof value === 'string' && value in DIFFICULTIES;
 
-/** The difficulty button on the main menu (under the almanac button). `touchW` / `touchH`: bigger on phones. */
-export const DIFFICULTY_MENU = { x: 118, y: 132, w: 188, h: 50, touchW: 220, touchH: 62, size: 24 } as const;
+/**
+ * The difficulty button on the main menu (under the almanac button): a cat's FACE whose look follows the level, with the level name under it.
+ * `y` is the middle of face + name together (`touchY` on phones, where everything is bigger). `faceW` = width of the face's 96x96 art canvas.
+ * `captionW` = width of the blurb under it.
+ */
+export const DIFFICULTY_MENU = { x: 118, y: 214, touchY: 231, faceW: 116, touchFaceW: 132, size: 26, touchSize: 30, captionW: 190 } as const;
 
-/** The cat-head shape of that button (`ui/DifficultyCat.ts`). Sizes in game pixels. `y` above is the middle of head + ears together. */
+/** What one level's cat looks like: fur, the darker stripes, the inside of the ears, the muzzle, the nose, the blush, and the soft glow behind it. */
+export interface CatFaceLook {
+  fur: number;
+  dark: number;
+  inner: number;
+  muzzle: number;
+  nose: number;
+  /** Pink cheeks (only the gentle levels have them). */
+  blush: number | null;
+  aura: number;
+}
+
+/**
+ * The cat-face button of that menu (`ui/DifficultyCat.ts`, the face is drawn by `assets/art/difficultyCat.ts` with the same flat-and-navy-outline
+ * toolkit as the game's cats). Ușor = a cream kitten with a happy open smile; Normal = the game's orange tabby; Greu = a burnt-orange tabby with
+ * angry eyes and fangs; Coșmar = a purple-black cat with horns, glowing slit eyes and a jagged grin.
+ */
 export const DIFFICULTY_CAT = {
-  /** How far the ears stand above the head, how wide each ear is at its foot, and how far its tip leans outward. */
-  earH: 22,
-  earW: 38,
-  tipLean: 11,
-  /** Corner roundness of the head (share of half its height; 1 = a full pill). */
-  cornerShare: 0.95,
-  borderColor: 0x4a5275,
-  /** The lighter inside of the ears. */
-  innerEar: 0x3a4370,
-  earInset: 8,
-  /** Three whiskers per cheek: [offset from the middle line (px), how much the outer end drops (px)]. */
-  whiskers: [
-    [-7, -3],
-    [0, 0],
-    [7, 3],
-  ] as readonly (readonly [number, number])[],
-  whiskerColor: 0x6a74a0,
-  whiskerWidth: 2,
-  whiskerFromEdge: 9,
-  whiskerLen: 24,
+  /** The art is drawn on a 96x96 canvas (like the other cats) and scaled to `faceW`. The cat covers this share of that height (ear tips to chin). */
+  heightShare: 0.92,
+  /** Space between the face and the name under it. */
+  labelGap: 4,
+  /** A new face pops in: scale from `from` to 1 in `ms`. */
+  pop: { from: 0.8, ms: 240 },
+  /** The glow behind the face: radius (share of `faceW`) and alpha. */
+  aura: { radius: 0.56, alpha: 0.22 },
+  looks: {
+    easy: { fur: 0xffe3b0, dark: 0xe3b66a, inner: 0xffb3c1, muzzle: 0xffffff, nose: 0xff9fb3, blush: 0xff8fa3, aura: 0x7ee081 },
+    normal: { fur: 0xf59a3c, dark: 0xd9731a, inner: 0xf4a5a0, muzzle: 0xffe9c9, nose: 0xf4a5a0, blush: 0xff8fa3, aura: 0xfff3d6 },
+    hard: { fur: 0xe0672a, dark: 0xa8421a, inner: 0xf08a7a, muzzle: 0xffd2a8, nose: 0xd9534f, blush: null, aura: 0xffb347 },
+    nightmare: { fur: 0x4c3a68, dark: 0x251a3d, inner: 0xd93a3a, muzzle: 0x6d5a8c, nose: 0xd93a3a, blush: null, aura: 0xff6b6b },
+  } as Record<DifficultyId, CatFaceLook>,
 } as const;

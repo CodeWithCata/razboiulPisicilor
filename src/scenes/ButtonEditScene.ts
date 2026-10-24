@@ -1,10 +1,11 @@
-/** @file Screen (opened from the pause menu, phones) where the attack, spin, throw and roll buttons are dragged to better spots, resized, or all put back to default. */
+/** @file Screen (opened from the pause menu, phones) where the attack, spin, throw and roll buttons are dragged to better spots, resized, the move stick is made fixed, or all put back to default. */
 import Phaser from 'phaser';
 import { GAME } from '../config/balance';
 import { COLORS, FONT } from '../config/style';
 import { MOVABLE_BUTTON_IDS, TOUCH, type MovableButtonId } from '../config/touch';
 import { BUTTON_EDIT_TEXT } from '../content/pause';
 import { hyp } from '../core/hyp';
+import { getStaticStick, setStaticStick, toggleStaticStick } from '../core/settings';
 import { clampSpot, cycleButtonSize, getButtonSize, resetAllButtons, setButtonSpot, spotIsFree, touchButton } from '../core/touchLayout';
 
 const E = TOUCH.layoutEditor;
@@ -12,13 +13,18 @@ const E = TOUCH.layoutEditor;
 /**
  * The button editor. GameScene and UIScene stay paused underneath; the pause menu sleeps and wakes when this closes.
  * Tap a button to pick it (gold), drag it anywhere; "Mărime" cycles the size of the picked button; "Resetează tot" puts every
- * button back to its default spot and size. While dragging, the circle turns red on top of another button (or the pause button) and snaps back on release (`setButtonSpot` refuses a spot that is not free).
+ * button back to its default spot and size (and the stick back to floating). "Joystick" switches the move stick between floating (it appears
+ * where the thumb lands) and fixed (it always sits at `TOUCH.idleStickSpot`; only a thumb landing on it picks it up). While dragging, the circle turns red on top of another button (or the pause button) and snaps back on release (`setButtonSpot` refuses a spot that is not free).
  * Everything is saved the moment it changes (core/touchLayout.ts) and the HUD follows through `Events.TouchLayoutChanged`.
  */
 export class ButtonEditScene extends Phaser.Scene {
   private ring!: Phaser.GameObjects.Graphics;
   private warning!: Phaser.GameObjects.Text;
   private sizeLabel!: Phaser.GameObjects.Text;
+  private joyLabel!: Phaser.GameObjects.Text;
+  private stickName!: Phaser.GameObjects.Text;
+  /** The move stick's circle, under the bottom buttons (its ring may reach their row). */
+  private stickGfx!: Phaser.GameObjects.Graphics;
   private labels = {} as Record<MovableButtonId, Phaser.GameObjects.Text>;
   /** Where each circle is drawn right now (the dragged one follows the finger). */
   private spots = {} as Record<MovableButtonId, { x: number; y: number; r: number }>;
@@ -57,6 +63,9 @@ export class ButtonEditScene extends Phaser.Scene {
 
     this.ring = this.add.graphics().setDepth(E.depth + 3);
     for (const id of MOVABLE_BUTTON_IDS) this.labels[id] = this.add.text(0, 0, BUTTON_EDIT_TEXT.names[id], style(20)).setOrigin(0.5).setDepth(E.depth + 4);
+    const idle = TOUCH.idleStickSpot;
+    this.stickGfx = this.add.graphics().setDepth(E.depth + 1);
+    this.stickName = this.add.text(idle.x, idle.y, BUTTON_EDIT_TEXT.stickName, { ...style(E.stickLabelSize), color: '#c9cfe6' }).setOrigin(0.5).setDepth(E.depth + 4);
     this.takeSpots();
     this.draw();
 
@@ -71,10 +80,11 @@ export class ButtonEditScene extends Phaser.Scene {
     });
   }
 
-  /** The three buttons under the screen: size (of the picked button), reset all, done. */
+  /** The four buttons under the screen: size (of the picked button), joystick (floating / fixed), reset all, done. */
   private makeButtons(textStyle: Phaser.Types.GameObjects.Text.TextStyle): void {
     const { width } = GAME;
-    const total = E.buttonW * 3 + E.buttonGap * 2;
+    const count = 4;
+    const total = E.buttonW * count + E.buttonGap * (count - 1);
     const first = width / 2 - total / 2 + E.buttonW / 2;
     const make = (index: number, label: string, fill: number, ink: string, action: () => void): Phaser.GameObjects.Text => {
       const x = first + index * (E.buttonW + E.buttonGap);
@@ -96,12 +106,24 @@ export class ButtonEditScene extends Phaser.Scene {
       this.takeSpots();
       this.draw();
     });
-    make(1, BUTTON_EDIT_TEXT.reset, 0x232c52, '#fff3d6', () => {
+    this.joyLabel = make(1, '', 0x232c52, '#fff3d6', () => {
+      toggleStaticStick(); // saved; TouchInput reads it when a thumb lands
+      this.draw();
+    });
+    make(2, BUTTON_EDIT_TEXT.reset, 0x232c52, '#fff3d6', () => {
       resetAllButtons();
+      setStaticStick(false);
       this.takeSpots();
       this.draw();
     });
-    make(2, BUTTON_EDIT_TEXT.done, COLORS.gold, '#1b2340', () => this.close());
+    make(3, BUTTON_EDIT_TEXT.done, COLORS.gold, '#1b2340', () => this.close());
+    this.draw(); // fills the two labels that change
+  }
+
+  /** Sets a button's text and squeezes it when it would not fit inside the button. */
+  private setLabel(text: Phaser.GameObjects.Text, value: string): void {
+    text.setText(value);
+    text.setScale(Math.min(1, (E.buttonW - E.labelPad) / text.width));
   }
 
   /** Every circle goes to where its button really is now. */
@@ -125,7 +147,18 @@ export class ButtonEditScene extends Phaser.Scene {
       this.labels[id].setPosition(x, y).setFontSize(Math.round(r * 0.36)).setColor(picked ? '#ffffff' : '#c9cfe6');
     }
     this.warning.setVisible(this.dragging !== null && !this.dragFree);
-    this.sizeLabel?.setText(BUTTON_EDIT_TEXT.size(BUTTON_EDIT_TEXT.names[this.selected], BUTTON_EDIT_TEXT.sizeNames[getButtonSize(this.selected)]));
+    // The move stick: a circle where it rests. Bright and named when fixed, a faint hint when it floats.
+    const fixed = getStaticStick();
+    const idle = TOUCH.idleStickSpot;
+    const stickColor = fixed ? E.goodColor : E.ghostColor;
+    const sg = this.stickGfx;
+    sg.clear();
+    sg.fillStyle(stickColor, fixed ? 0.22 : 0.08).fillCircle(idle.x, idle.y, TOUCH.stickRadius);
+    sg.lineStyle(E.ringWidth - 2, stickColor, fixed ? 0.9 : E.stickFloatingAlpha * 0.5).strokeCircle(idle.x, idle.y, TOUCH.stickRadius);
+    sg.fillStyle(stickColor, fixed ? 0.5 : 0.2).fillCircle(idle.x, idle.y, TOUCH.knobRadius);
+    this.stickName.setPosition(idle.x, idle.y - TOUCH.stickRadius - 24).setColor(fixed ? '#f5c518' : '#c9cfe6').setAlpha(fixed ? 1 : E.stickFloatingAlpha);
+    if (this.sizeLabel) this.setLabel(this.sizeLabel, BUTTON_EDIT_TEXT.size(BUTTON_EDIT_TEXT.names[this.selected], BUTTON_EDIT_TEXT.sizeNames[getButtonSize(this.selected)]));
+    if (this.joyLabel) this.setLabel(this.joyLabel, BUTTON_EDIT_TEXT.joystick(fixed));
   }
 
   private onDown(p: Phaser.Input.Pointer): void {

@@ -50,8 +50,7 @@ export const MENU = {
   start: { y: 642, w: 560, h: 74, size: 34, pulseTo: 1.06, pulseMs: 650 },
   /** `touchH`: the endless button is taller on phones (it is the one tap target on the menu). */
   endless: { y: 563, w: 380, h: 52, touchH: 66, size: 28 },
-  /** The almanac button in the top left corner (`touchW` / `touchH`: bigger on phones). */
-  almanac: { x: 118, y: 46, w: 188, h: 50, touchW: 220, touchH: 62, size: 26 },
+  // The almanac button (top left) moved to `ALMANAC_MENU` in config/almanac.ts (v239: a book picture instead of a text pill).
   button: { radiusFactor: 2.6, border: 5, playIconW: 24, playIconGap: 18, hoverScale: 1.05, hoverMs: 120, depth: 10 },
   footer: { get y() { return GAME.height - 22; }, size: 20, alpha: 0.85, strokeThickness: 4, separator: '   •   ' },
 } as const;

@@ -3,6 +3,7 @@ import { GAME } from '../config/balance';
 import { MOVABLE_BUTTON_IDS, TOUCH, type MovableButtonId, type TouchButtonId, type TouchSizeId } from '../config/touch';
 import { bus, Events } from './events';
 import { hyp } from './hyp';
+import { getStaticStick } from './settings';
 import { loadTouchLayout, saveTouchLayout, type SavedButton } from './storage';
 
 export interface ButtonSpot {
@@ -112,8 +113,8 @@ export function touchButton(id: TouchButtonId): Readonly<ButtonSpot> {
 
 const isCustom = (id: MovableButtonId): boolean => settings[id].dx !== 0 || settings[id].dy !== 0 || settings[id].size !== TOUCH.layout.defaultSize[id];
 
-/** Has the player changed any button? (The pause menu row says so.) */
-export const isLayoutCustom = (): boolean => MOVABLE_BUTTON_IDS.some(isCustom);
+/** Has the player changed any button, or fixed the move stick? (The pause menu row says so.) */
+export const isLayoutCustom = (): boolean => getStaticStick() || MOVABLE_BUTTON_IDS.some(isCustom);
 
 function persist(): void {
   dirty = true;

@@ -2,8 +2,7 @@
 import Phaser from 'phaser';
 import { DAY_NIGHT } from '../config/dayNight';
 import { GAME } from '../config/balance';
-import { ENDLESS, FINAL_WAVE } from '../config/waves';
-import type { RunMode } from '../core/run';
+import type { WavePlan } from '../core/wavePlan';
 import { Events, listen, type LightsOutPayload, type WavePayload } from '../core/events';
 import { FloorLamp } from './FloorLamp';
 import type { Obstacles } from './props/Obstacles';
@@ -16,13 +15,13 @@ function mixColor(from: number, to: number, k: number): number {
   return (mix(16) << 16) | (mix(8) << 8) | mix(0);
 }
 
-/** 0 = afternoon, 1 = night, for a wave number. The campaign runs once from the first wave to the last; endless swings back and forth. */
-export function nightProgress(wave: number, mode: RunMode): number {
-  if (mode === 'endless') {
-    const turn = (Math.max(wave, ENDLESS.startWave) - ENDLESS.startWave) / DAY_NIGHT.endlessCycleWaves;
+/** 0 = afternoon, 1 = night, for a wave number. A run with a last wave goes once from the first wave to it; a run without one swings back and forth. */
+export function nightProgress(wave: number, plan: WavePlan): number {
+  if (plan.finalWave === null) {
+    const turn = (Math.max(wave, plan.firstWave) - plan.firstWave) / DAY_NIGHT.endlessCycleWaves;
     return 0.5 - 0.5 * Math.cos(turn * Math.PI * 2);
   }
-  return Phaser.Math.Clamp((wave - 1) / Math.max(1, FINAL_WAVE - 1), 0, 1);
+  return Phaser.Math.Clamp((wave - 1) / Math.max(1, plan.finalWave - 1), 0, 1);
 }
 
 /**
@@ -45,8 +44,8 @@ export class DayNight {
   private sheetColor = -1;
   private sheetAlpha = -1;
 
-  constructor(scene: Phaser.Scene, private readonly mode: RunMode, private readonly obstacles: Obstacles) {
-    this.current = this.target = nightProgress(mode === 'endless' ? ENDLESS.startWave : 1, mode);
+  constructor(scene: Phaser.Scene, private readonly plan: WavePlan, private readonly obstacles: Obstacles) {
+    this.current = this.target = nightProgress(plan.firstWave, plan);
     const M = DAY_NIGHT.margin;
     this.sheet = scene.add
       .rectangle(-M, -M, GAME.width + M * 2, GAME.height + M * 2, 0xffffff, 0)
@@ -59,7 +58,7 @@ export class DayNight {
     for (const lamp of this.lamps) lamp.snapTo(startUp); // no emerge animation at the very start of a run
 
     const offWave = listen<WavePayload>(Events.WaveStarted, ({ wave }) => {
-      this.target = nightProgress(wave, this.mode);
+      this.target = nightProgress(wave, this.plan);
     });
     const offLights = listen<LightsOutPayload>(Events.LightsOut, ({ on }) => (this.forcedUp = on));
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {

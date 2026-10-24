@@ -1,6 +1,7 @@
 /** @file On-phone card with fps and screen numbers (pause-menu switch "Date debug"). */
 import Phaser from 'phaser';
 import { PERF } from '../config/perf';
+import { slowAboveMs } from '../core/fpsLimit';
 import { PERF_TEXT } from '../content/lines';
 import { Events, listen, type PerfStatsPayload } from '../core/events';
 import { getDebugInfo } from '../core/settings';
@@ -62,7 +63,7 @@ export class PerfPanel {
     const lines = [
       fill(PERF_TEXT.fps, { fps: Math.round(s.fps) }),
       fill(PERF_TEXT.frame, { avg: f1(s.frameAvgMs), min: Math.round(s.frameMinMs), max: Math.round(s.frameMaxMs) }),
-      fill(PERF_TEXT.slow, { limit: PERF.slowFrameMs, slow: s.slowFrames, frames: s.frames }),
+      fill(PERF_TEXT.slow, { limit: Math.round(slowAboveMs(PERF.slowFrameMs)), slow: s.slowFrames, frames: s.frames }),
       fill(PERF_TEXT.walk, { stalled: s.stalledFrames, walk: s.walkFrames }),
       fill(PERF_TEXT.step, { avg: f1(s.stepAvg), max: f1(s.stepMax) }),
       fill(PERF_TEXT.world, { cats: s.cats, balls: s.balls }),

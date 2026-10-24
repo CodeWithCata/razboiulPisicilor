@@ -85,7 +85,7 @@ export const BELT_THROW = {
   catchRadius: 34, // Varu catches it this close
   size: 46, // displayed size
   spinDegPerSec: 1080,
-  damage: 0.7,
+  damage: 0.8, // per leg, it hurts on the way out AND back (v242: was 1.0, v241 raised it from 0.7: 1.0 was too strong, a whole throw killed every base cat on the line; 0.8 = 1.6 per throw, 2 throws for a base cat, -7% single-target vs plain swinging. v241 note: a whole throw dealt 1.4, less than a 2 HP cat, and cost the swing for its whole flight; now out + back = 2.0 kills a base cat and single-target damage per throw cycle matches plain swinging)
   knockback: 240,
   cooldownMs: 1200, // starts when Varu catches the belt
   maxFrameMs: 50, // a lag spike never makes the belt jump further than this much time
@@ -400,7 +400,7 @@ export interface BuffStats {
 export const BUFFS: Record<BuffKind, BuffStats> = {
   lapte: { durationMs: 6000, speed: 1.45 },
   monster: { durationMs: 8000, damage: 2 },
-  goldenBelt: { durationMs: 7000, damage: 2.5, range: 1.25 },
+  goldenBelt: { durationMs: 7000, damage: 2.2, range: 1.25 }, // (v242: was damage 2.5; a 2 HP cat still dies in 2 swings, a fat cat needs 6 instead of 5)
   laser: { durationMs: 6000 }, // cats chase the red dot, see LASER
   umbrella: { durationMs: 8000 }, // blocks balls, shots and petards, see config/umbrella.ts
   scooter: { durationMs: 5000, speed: 1.6 }, // Varu rides a scooter: faster, and cats that touch him are bumped away (config/scooter.ts)
@@ -460,7 +460,7 @@ export type CrowVariant = 'normal' | 'golden' | 'kamikaze' | 'miss';
 
 export const CROW_RAIN = {
   durationMs: 5000,
-  dropIntervalMs: 220,
+  dropIntervalMs: 300, // (v242: was 220: 22 crows per rain, now 16, -27%; on a lone boss the rain was about 144% of the Queen's HP)
   telegraphMs: 650, // growing shadow = warning time before impact
   targetEnemyChance: 0.7, // otherwise a random spot in the arena
   targetJitter: 60,

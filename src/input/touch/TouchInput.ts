@@ -1,11 +1,11 @@
-/** @file Touch controls: floating move stick + big attack button; implements InputSource. */
+/** @file Touch controls: move stick (floating, or fixed if the player chose so) + big attack button; implements InputSource. */
 import Phaser from 'phaser';
 import { GAME } from '../../config/balance';
 import { TOUCH, TOUCH_BUTTON_IDS, type TouchButtonId } from '../../config/touch';
 import { touchButton } from '../../core/touchLayout';
 import { bus, Events, type TouchPressPayload } from '../../core/events';
 import { buzz } from '../../core/haptics';
-import { getAutoAttack } from '../../core/settings';
+import { getAutoAttack, getStaticStick } from '../../core/settings';
 import type { InputSource } from '../InputSource';
 import type { AutoAim } from './AutoAim';
 import { hyp } from '../../core/hyp';
@@ -179,7 +179,8 @@ export class TouchInput implements InputSource {
     }
 
     // The left side of the screen is the move stick. The right side has no stick: only the buttons.
-    if (pointer.x < GAME.width * TOUCH.leftZone && this.moveId === null) {
+    // A floating stick starts anywhere on the left; a fixed one (button editor) only when the thumb lands on it.
+    if (pointer.x < GAME.width * TOUCH.leftZone && this.moveId === null && (!getStaticStick() || this.onFixedStick(pointer))) {
       this.moveId = pointer.id;
       this.usedStick = true;
       this.start(this.moveStick, pointer);
@@ -221,22 +222,36 @@ export class TouchInput implements InputSource {
     bus.emit(Events.TouchPress, payload);
   }
 
+  /** Did the thumb land on the fixed stick (its resting spot, a little wider than the ring)? */
+  private onFixedStick(pointer: Phaser.Input.Pointer): boolean {
+    const spot = TOUCH.idleStickSpot;
+    return hyp(pointer.x - spot.x, pointer.y - spot.y) <= TOUCH.staticStick.grabRadius;
+  }
+
   private start(stick: StickView, pointer: Phaser.Input.Pointer): void {
     stick.active = true;
+    if (getStaticStick()) {
+      // Fixed: the stick stays at its resting spot and the knob goes to the thumb (up to the ring).
+      const spot = TOUCH.idleStickSpot;
+      stick.originX = spot.x;
+      stick.originY = spot.y;
+      this.drag(stick, pointer);
+      return;
+    }
     stick.originX = pointer.x;
     stick.originY = pointer.y;
     stick.knobX = pointer.x;
     stick.knobY = pointer.y;
   }
 
-  /** The knob follows the thumb up to the ring. Past it, the whole stick slides along (or the knob just stops, if stickFollows is off). */
+  /** The knob follows the thumb up to the ring. Past it, the whole stick slides along (or the knob just stops, if stickFollows is off or the stick is fixed). */
   private drag(stick: StickView, pointer: Phaser.Input.Pointer): void {
     let dx = pointer.x - stick.originX;
     let dy = pointer.y - stick.originY;
     const length = hyp(dx, dy);
     if (length > TOUCH.stickRadius) {
       const k = TOUCH.stickRadius / length;
-      if (TOUCH.stickFollows) {
+      if (TOUCH.stickFollows && !getStaticStick()) {
         stick.originX = pointer.x - dx * k;
         stick.originY = pointer.y - dy * k;
       }

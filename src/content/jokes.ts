@@ -15,7 +15,7 @@ export const JOKE_LINES: Record<JokeCategory, readonly string[]> = {
   lowHp: [
     'Varule, ai grijă!',
     'Doar o zgârietură... zgârietură mare.',
-    'Unde-i crocheta?!',
+    'Unde-s țigările?!',
     'Nu acum, vă rog!',
   ],
   killStreak: [
@@ -51,9 +51,9 @@ export const JOKE_LINES: Record<JokeCategory, readonly string[]> = {
 
 /** PLACEHOLDER: boss intro lines, one list per boss. Put the real nicknames here. */
 export const BOSS_INTRO_LINES: Record<BossType, readonly string[]> = {
-  queen: ['PLACEHOLDER: ea își cere tronul înapoi.', 'Regina vrea o plecăciune. Sau o centură.'],
-  mafia: ['PLACEHOLDER: cine i-a frânt inima?', 'Pisica Emo: \"Sunt bine. (Nu sunt.)\"'],
-  federer: ['PLACEHOLDER: serviciu, retur, apoi smash.', 'Pisica Federer: 20 de turnee, 0 mile de milă.'],
+  queen: ['PLACEHOLDER: ea își cere tronul înapoi.', 'Regina Ioana vrea o plecăciune. Sau o centură.'],
+  mafia: ['PLACEHOLDER: cine i-a frânt inima?', 'AnatasYOU: \"Sunt bine. (Nu sunt.)\"'],
+  federer: ['PLACEHOLDER: serviciu, retur, apoi smash.', 'Simona Miaulep: 20 de turnee, 0 mile de milă.'],
 };
 
 /**
@@ -63,7 +63,7 @@ export const BOSS_INTRO_LINES: Record<BossType, readonly string[]> = {
 export const PHOTO_CAPTIONS: Record<PhotoId, string> = {
   queen: 'PLACEHOLDER: numele prietenei (Regina)',
   mafia: 'PLACEHOLDER: numele prietenului (Emo-ul)',
-  federer: 'PLACEHOLDER: numele prietenului (Federer)',
+  federer: 'PLACEHOLDER: numele prietenului (Simona Miaulep)',
   gameOver: 'PLACEHOLDER: cine râde de Varu',
   ending: 'PLACEHOLDER: toată gașca',
 };

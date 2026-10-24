@@ -58,6 +58,8 @@ export type CutsceneTrigger =
   | { on: 'runStart' }
   | { on: 'waveStart'; wave: number }
   | { on: 'waveCleared'; wave: number }
+  /** Varu picked a belt upgrade on the upgrade screen (the scene starts once the game is running again). */
+  | { on: 'upgradePicked' }
   | { on: 'bossSpawned'; boss?: BossType }
   | { on: 'bossDefeated'; boss?: BossType }
   /** The killing blow landed: the boss is on 1 HP and talks before it falls (config/cutscene.ts `BOSS_LAST_WORDS`). */

@@ -23,8 +23,14 @@ export const TOUCH = {
   deadZone: 0.12,
   /** Pushed this far (fraction of the travel) Varu already walks at full speed, so the thumb never has to reach the very edge. */
   fullSpeedAt: 0.85,
-  /** Past the ring the stick slides along with the thumb instead of stopping, so the thumb can drift without losing the stick. */
+  /** Past the ring the stick slides along with the thumb instead of stopping, so the thumb can drift without losing the stick. (A fixed stick never slides.) */
   stickFollows: true,
+  /**
+   * The fixed stick (button editor, "Joystick: FIX"): it stays at `idleStickSpot` and only a thumb that lands within `grabRadius`
+   * of its center (a bit more than the ring, a finger is fat) picks it up. The knob then follows the thumb up to the ring, and the
+   * stick stays put.
+   */
+  staticStick: { grabRadius: 170 },
 
   /** Where Varu looks: the nearest target (and, with auto-attack on, when he swings). Distances are from Varu's center, in game pixels. */
   autoAim: {
@@ -171,16 +177,21 @@ export const TOUCH = {
     helpY: 120,
     helpSize: 24,
     buttonsY: 664,
-    buttonW: 250,
+    buttonW: 262,
     buttonH: 64,
-    buttonGap: 28,
+    buttonGap: 16,
     buttonSize: 28,
+    /** A button label wider than the button minus this much is squeezed to fit. */
+    labelPad: 28,
+    /** The stick's circle in the editor: its name size, and its alpha when floating (only a hint) or fixed. */
+    stickLabelSize: 26,
+    stickFloatingAlpha: 0.5,
   },
 } as const;
 
 export type TouchButtonId = keyof typeof TOUCH.buttons;
 export type TouchSizeId = (typeof TOUCH.layout.sizes)[number]['id'];
-/** The buttons the player can move and resize (the pause button and the floating stick stay where they are). */
+/** The buttons the player can move and resize (the pause button stays where it is; the move stick is only floating or fixed, never moved). */
 export const MOVABLE_BUTTON_IDS = ['attack', 'spin', 'throw', 'roll'] as const;
 export type MovableButtonId = (typeof MOVABLE_BUTTON_IDS)[number];
 export const TOUCH_BUTTON_IDS = Object.keys(TOUCH.buttons) as TouchButtonId[];

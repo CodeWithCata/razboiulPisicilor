@@ -99,7 +99,7 @@ export const COSTLY = {
    * A random roll, so the wave ramp (x0.3 at wave 4, x1 from wave 15) and greed apply: about 18% at wave 4, 37% at wave 9, 60% at wave 15.
    */
   goo: { chance: 0.6, durationMs: 2000 },
-  /** Healing costs lungs: each crochete (pack, loose cigarettes or vape) has this chance of a smoke break (the 1 s freeze, `SMOKE_FREEZE`) on top of the heal. */
+  /** Healing costs lungs: each Carpați pack (id crochete: pack, loose cigarettes or vape) has this chance of a smoke break (the 1 s freeze, `SMOKE_FREEZE`) on top of the heal. */
   lungs: { chance: 0.15 },
   /** Rust from overuse: this many spins or throws within `windowMs` make the belt Rusty (uses while it is already Rusty do not count). */
   overuse: { uses: 6, windowMs: 10000 },

@@ -1,15 +1,14 @@
-/** @file Wave loop: countdown -> cats trickle in -> all dead -> next wave (campaign and endless). */
+/** @file Wave loop: countdown -> cats trickle in -> all dead -> next wave. What each wave holds and where the run ends comes from the run's wave plan (campaign, endless or custom). */
 import Phaser from 'phaser';
 import { isBossType, WAVE_TIMING, type EnemyType } from '../config/balance';
-import { ENDLESS, FINAL_WAVE, getWave } from '../config/waves';
-import type { RunMode } from '../core/run';
+import type { WavePlan } from '../core/wavePlan';
 import { bus, Events, type WavePayload } from '../core/events';
 import { gameClock } from '../core/clock';
 import { getDifficulty } from '../core/difficulty';
 
 /**
  * Runs the wave loop: countdown -> cats trickle in -> all dead -> pause -> next wave.
- * In endless mode it starts after the campaign and never wins. It only decides WHEN and WHAT to spawn. `spawn` and `aliveCount` come from the scene.
+ * The wave plan says where it starts and whether it ever wins (no last wave = it never does). It only decides WHEN and WHAT to spawn. `spawn` and `aliveCount` come from the scene.
  */
 export class WaveSystem {
   wave: number;
@@ -29,9 +28,9 @@ export class WaveSystem {
   constructor(
     private readonly spawn: (type: EnemyType) => void,
     private readonly aliveCount: () => number,
-    private readonly mode: RunMode = 'campaign',
+    private readonly plan: WavePlan,
   ) {
-    this.wave = mode === 'endless' ? ENDLESS.startWave - 1 : 0;
+    this.wave = plan.firstWave - 1;
     this.nextWaveAt = gameClock.now + WAVE_TIMING.firstWaveDelayMs;
   }
 
@@ -71,23 +70,23 @@ export class WaveSystem {
     return this.bossWave;
   }
 
-  /** The last wave of the campaign (endless mode has none). */
+  /** The last wave of the run (a run without a last wave never has one). */
   get isFinalWave(): boolean {
-    return this.mode === 'campaign' && this.wave >= FINAL_WAVE;
+    return this.plan.finalWave !== null && this.wave >= this.plan.finalWave;
   }
 
-  /** Dev only (debug key L): drop what is left of this wave and start the next one on the next frame. The campaign stops at the last wave. */
+  /** Dev only (debug key L): drop what is left of this wave and start the next one on the next frame. A run stops at its last wave. */
   skipToNextWave(time: number): void {
-    if (!this.running || (this.mode === 'campaign' && this.wave >= FINAL_WAVE)) return;
+    if (!this.running || this.isFinalWave) return;
     this.queue = [];
     this.waitingForNextWave = true;
     this.nextWaveAt = time;
   }
 
-  /** Dev only (debug card): drop what is left of this wave and start wave `n` on the next frame (the campaign stops at its last wave). */
+  /** Dev only (debug card): drop what is left of this wave and start wave `n` on the next frame (a run stops at its last wave). */
   jumpToWave(n: number, time: number): void {
     if (!this.running) return;
-    const target = this.mode === 'campaign' ? Math.min(n, FINAL_WAVE) : n;
+    const target = this.plan.finalWave !== null ? Math.min(n, this.plan.finalWave) : n;
     this.queue = [];
     this.wave = Math.max(1, target) - 1;
     this.waitingForNextWave = true;
@@ -125,7 +124,7 @@ export class WaveSystem {
   }
 
   private finishWave(time: number): void {
-    if (this.mode === 'campaign' && this.wave >= FINAL_WAVE) {
+    if (this.isFinalWave) {
       this.running = false;
       bus.emit(Events.Victory);
       return;
@@ -140,7 +139,7 @@ export class WaveSystem {
   private buildQueue(wave: number): EnemyType[] {
     const list: EnemyType[] = [];
     const D = getDifficulty();
-    for (const [type, count] of Object.entries(getWave(wave, D.endless)) as Array<[EnemyType, number]>) {
+    for (const [type, count] of Object.entries(this.plan.waveDef(wave, D.endless)) as Array<[EnemyType, number]>) {
       // The difficulty scales the crowd, never a boss, and a kind that is in the wave never drops to none.
       const n = isBossType(type) ? count : Math.max(1, Math.round(count * D.count));
       for (let i = 0; i < n; i++) list.push(type);

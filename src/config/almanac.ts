@@ -55,3 +55,38 @@ export const ALMANAC = {
   back: { x: 190, y: 668, w: 320, h: 54, size: 26 },
   counter: { x: 44, y: 596, size: 26 },
 } as const;
+
+/**
+ * The almanac button on the main menu (top left): the almanac's picture (`assets/art/almanacBook.ts`) bobbing a little, a pill with how many
+ * entries were found, and the name under it. `y` is the middle of book + name together (`touchY` on phones). `bookH` = height of the picture.
+ */
+export const ALMANAC_MENU = {
+  x: 118,
+  y: 71,
+  touchY: 75,
+  bookH: 92,
+  touchBookH: 96,
+  size: 24,
+  touchSize: 26,
+  labelGap: 4,
+  /** Click area: wider than the book so a thumb finds it. */
+  hitW: 140,
+  /** The "found / total" pill that sits on the lower right corner of the book. */
+  pill: { w: 60, h: 24, size: 17, border: 3, color: 0x1b2340, textColor: '#f5c518', doneColor: '#7ee081' },
+  /** The idle wiggle: the book sways `deg` degrees and bobs `px` pixels. */
+  bob: { px: 3, deg: 3, swayMs: 1300, bobMs: 900 },
+  /** Two sparkles that twinkle round the book: [x, y] as shares of the book's height from its middle, and the delay of each. */
+  sparkles: [
+    { x: -0.5, y: -0.34, scale: 0.8, delayMs: 0 },
+    { x: 0.52, y: -0.12, scale: 0.6, delayMs: 700 },
+  ] as readonly { x: number; y: number; scale: number; delayMs: number }[],
+  sparkleMs: 900,
+  /**
+   * Hover (desktop): the cover swings open round the spine. `endScale` = the cover's sideways scale once open (negative = flipped over, its
+   * inside showing), `shift` = how far (art pixels) the whole book slides right meanwhile, `dip` = how much the cover tips toward you in the middle.
+   */
+  open: { ms: 320, closeMs: 200, endScale: -0.62, shift: 15, dip: 0.08 },
+} as const;
+
+/** The book on the almanac screen's title: its height and how far it stands from the title's ends. */
+export const ALMANAC_TITLE_BOOK = { h: 72, gap: 52 } as const;

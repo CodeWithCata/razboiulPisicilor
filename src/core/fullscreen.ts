@@ -7,6 +7,8 @@ let watchingVisibility = false;
 let wentFullscreen = false;
 /** Set when a fullscreen request was just made, so whenScaleSettled knows there is a size change to wait for. */
 let fullscreenRequested = false;
+/** True once a fullscreen request was made from a tap (granted or refused): the menu's first-tap rule below is used up. */
+let fullscreenAsked = false;
 
 /**
  * A thumb on the glass is not "activity" for the phone, so the screen would dim in the middle of a fight.
@@ -34,6 +36,7 @@ export function keepScreenOn(): void {
  * browsers refuse the orientation lock, so failures are silently ignored and the game still works.
  */
 export function enterFullscreenLandscape(scene: Phaser.Scene): void {
+  fullscreenAsked = true;
   try {
     const scale = scene.scale;
     if (scale.fullscreen.available && !scale.isFullscreen) {
@@ -51,6 +54,15 @@ export function enterFullscreenLandscape(scene: Phaser.Scene): void {
     // No orientation lock on this browser.
   }
   keepScreenOn();
+}
+
+/**
+ * True while a phone has not been asked for fullscreen yet and the browser can do it. The menu uses it so that the FIRST tap
+ * on empty space only goes fullscreen (browsers need a tap for that) and does not start the run, leaving the player time to
+ * pick the difficulty. Always false on iPhones (no fullscreen) and after the first request.
+ */
+export function needsFullscreenTap(scene: Phaser.Scene): boolean {
+  return !fullscreenAsked && !wentFullscreen && !scene.scale.isFullscreen && scene.scale.fullscreen.available;
 }
 
 /**

@@ -1,16 +1,21 @@
-/** @file The rare 4th card of the belt pick screen: a synergy of two owned upgrades. Pink border, a "SINERGIE" tag, the two upgrades it fuses. */
+/** @file The rare 4th card of the belt pick screen: a synergy of two owned upgrades. Pink border, a "SINERGIE" tag, a looping picture of both upgrades working together, and their names. */
 import Phaser from 'phaser';
+import { UPGRADE_ART } from '../config/beltUpgradeArt';
 import { BELT_UPGRADE_LOOK as L } from '../config/beltUpgrades';
 import { BELT_SYNERGY_LOOK as S, type BeltSynergyId } from '../config/beltSynergies';
 import { COLORS, FONT } from '../config/style';
 import { BELT_SYNERGY_TEXT, BELT_SYNERGY_UI, synergyNeedNames } from '../content/beltUpgrades';
-import type { PickCard } from './PickCard';
+import { fitOneLine, type PickCard } from './PickCard';
+import { SynergyIllustration } from './SynergyIllustration';
 
-/** Same layout as `UpgradeCard`, but pink, with the two fused upgrades where a plain card shows its level. */
+/** Same layout as `UpgradeCard`, but pink, with the two fused upgrades where a plain card shows its level. The picture plays both of them at once. */
 export class SynergyCard implements PickCard {
   readonly box: Phaser.GameObjects.Container;
   readonly id: BeltSynergyId;
   private readonly back: Phaser.GameObjects.Graphics;
+  /** The "SINERGIE" pill: drawn above the picture because it overlaps the picture's frame. */
+  private readonly front: Phaser.GameObjects.Graphics;
+  private readonly art: SynergyIllustration;
   private readonly texts: { name: Phaser.GameObjects.Text; body: Phaser.GameObjects.Text; fuse: Phaser.GameObjects.Text; tag: Phaser.GameObjects.Text; key: Phaser.GameObjects.Text | null };
   private selected = false;
   private baseScale = 1;
@@ -30,9 +35,12 @@ export class SynergyCard implements PickCard {
     const top = -C.h / 2;
 
     this.back = scene.add.graphics();
+    this.front = scene.add.graphics();
     const style = (size: number, color: string): Phaser.Types.GameObjects.Text.TextStyle => ({ fontFamily: FONT, fontSize: `${size}px`, color, stroke: '#1b2340', strokeThickness: 5, align: 'center' });
-    const badge = scene.add.text(0, top + L.badge.y, words.badge, style(S.badgeSize, '#ff9bdc')).setOrigin(0.5);
-    const name = scene.add.text(0, top + L.name.y, words.name, { ...style(L.name.size, L.colors.normal), wordWrap: { width: C.w - L.name.wrapPad * 2 } }).setOrigin(0.5);
+    this.art = new SynergyIllustration(scene, id, top + UPGRADE_ART.stage.top + UPGRADE_ART.stage.h / 2); // both upgrades at work, as a small looping scene
+    this.art.update(0);
+    const name = scene.add.text(0, top + L.name.y, words.name, style(L.name.size, L.colors.normal)).setOrigin(0.5);
+    fitOneLine(name, C.w - L.name.wrapPad * 2);
     const body = scene.add
       .text(0, top + L.text.y, words.text, { ...style(L.text.size, L.colors.dim), strokeThickness: 3, lineSpacing: L.text.lineSpacing, wordWrap: { width: C.w - L.text.wrapPad * 2 } })
       .setOrigin(0.5, 0);
@@ -41,9 +49,14 @@ export class SynergyCard implements PickCard {
     const key = keyLabel ? scene.add.text(0, top + C.h - L.key.fromBottom, keyLabel, { ...style(L.key.size, L.colors.dim), strokeThickness: 3 }).setOrigin(0.5) : null;
     this.texts = { name, body, fuse, tag, key };
 
-    this.box = scene.add.container(x, y, [this.back, badge, name, body, fuse, tag, ...(key ? [key] : [])]).setDepth(L.depth + 2);
+    this.box = scene.add.container(x, y, [this.back, this.art.view, this.front, name, body, fuse, tag, ...(key ? [key] : [])]).setDepth(L.depth + 2);
     this.box.setSize(C.w, C.h);
     this.redraw();
+  }
+
+  /** Called every frame by the pick screen: plays the picture. */
+  update(timeMs: number): void {
+    this.art.update(timeMs);
   }
 
   setBaseScale(scale: number): void {
@@ -96,16 +109,11 @@ export class SynergyCard implements PickCard {
     g.lineStyle(C.borderWidth, sel ? COLORS.navy : S.borderColor, 1).strokeRoundedRect(left, top, C.w, C.h, C.radius);
     g.lineStyle(2, sel ? COLORS.navy : COLORS.cream, sel ? 0.25 : C.innerAlpha).strokeRoundedRect(left + C.innerInset, top + C.innerInset, C.w - C.innerInset * 2, C.h - C.innerInset * 2, C.radius - C.innerInset / 2);
 
-    // Badge plate, like a plain card but ringed in pink.
-    const B = L.badge;
-    g.fillStyle(sel ? COLORS.navy : B.fill, 1).fillCircle(0, top + B.y, B.radius);
-    g.lineStyle(B.ringWidth, sel ? COLORS.navy : S.borderColor, 1).strokeCircle(0, top + B.y, B.radius);
-    g.lineStyle(3, S.borderColor, sel ? 1 : 0.35).strokeCircle(0, top + B.y, B.radius - 8);
-
     // The "SINERGIE" pill on the top edge.
     const T = S.tag;
-    g.fillStyle(T.fill, 1).fillRoundedRect(-T.w / 2, top + T.y - T.h / 2, T.w, T.h, T.radius);
-    g.lineStyle(3, COLORS.navy, 1).strokeRoundedRect(-T.w / 2, top + T.y - T.h / 2, T.w, T.h, T.radius);
+    const f = this.front.clear();
+    f.fillStyle(T.fill, 1).fillRoundedRect(-T.w / 2, top + T.y - T.h / 2, T.w, T.h, T.radius);
+    f.lineStyle(3, COLORS.navy, 1).strokeRoundedRect(-T.w / 2, top + T.y - T.h / 2, T.w, T.h, T.radius);
 
     const X = this.texts;
     const ink = L.colors.selected;

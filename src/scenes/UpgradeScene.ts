@@ -11,6 +11,7 @@ import { usesTouchControls } from '../core/device';
 import { bus, Events, type BeltSynergyPayload, type BeltUpgradePayload } from '../core/events';
 import { createLogoWord } from '../ui/logoWord';
 import { createSunburst, createVignette } from '../ui/menuBackdrop';
+import { OwnedUpgrades } from '../ui/OwnedUpgrades';
 import type { PickCard } from '../ui/PickCard';
 import { SynergyCard } from '../ui/SynergyCard';
 import { UpgradeCard } from '../ui/UpgradeCard';
@@ -37,6 +38,8 @@ export class UpgradeScene extends Phaser.Scene {
   private choices: BeltUpgradeId[] = [];
   private synergy: BeltSynergyId | null = null;
   private cards: PickCard[] = [];
+  /** The chips along the bottom: what Varu already owns. Redrawn right after a pick so the new level shows while the card pops. */
+  private owned: OwnedUpgrades | null = null;
   private selected = 0;
   private openedAt = 0;
   private leaving = false;
@@ -50,6 +53,7 @@ export class UpgradeScene extends Phaser.Scene {
     this.choices = data.choices;
     this.synergy = data.synergy ?? null;
     this.cards = [];
+    this.owned = null;
     this.selected = 0;
     this.leaving = false;
   }
@@ -104,7 +108,14 @@ export class UpgradeScene extends Phaser.Scene {
       .setAlpha(0.9)
       .setDepth(L.depth + 3);
 
+    this.owned = new OwnedUpgrades(this, width / 2, L.owned.y);
+    this.owned.intro();
+
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => this.onKey(e));
+  }
+
+  update(time: number): void {
+    for (const card of this.cards) card.update?.(time);
   }
 
   private onKey(e: KeyboardEvent): void {
@@ -136,10 +147,12 @@ export class UpgradeScene extends Phaser.Scene {
       addBeltSynergy(this.synergy);
       const payload: BeltSynergyPayload = { id: this.synergy };
       bus.emit(Events.BeltSynergyPicked, payload); // no upgrade level-up for this card
+      this.owned?.refreshAndPop(this.synergy);
     } else if (id) {
       const level = addBeltUpgrade(id);
       const payload: BeltUpgradePayload = { id, level };
       bus.emit(Events.BeltUpgradePicked, payload);
+      this.owned?.refreshAndPop(id);
     }
     this.cards.forEach((card, i) => (i === index ? card.chosen() : card.fadeAway()));
     this.time.delayedCall(520, () => this.resume());

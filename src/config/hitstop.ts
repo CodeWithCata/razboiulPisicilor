@@ -18,4 +18,6 @@ export const HIT_STOP = {
   },
   /** After a freeze, the next one can't start for this long. Stops a crowd of hits from freezing the game over and over. */
   minGapMs: 160,
+  /** One freeze, however many hits ask to extend it, never lasts longer than this from its start (ms). */
+  maxChainMs: 100,
 } as const;

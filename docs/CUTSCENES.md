@@ -2,7 +2,7 @@
 
 A cutscene is a **script of steps written as data** in `src/content/cutscenes.ts`. The game itself is held still
 while it plays: GameScene runs only the director, the game clock does not move, cats and projectiles are frozen,
-and Varu walks with his real walk on a scripted input. There are only simple TEST scenes for now (`intro` at run start, one entrance per boss): change or delete them freely.
+and Varu walks with his real walk on a scripted input. The campaign opens with the story scene (`story`: Varu's dream, a cat, "I have to beat this game to get home"); endless and custom runs keep the short `introArena`; the boss entrances and last words are still simple placeholders: change or delete them freely.
 
 ## How it fits together
 | Piece | File | Job |
@@ -44,7 +44,7 @@ queenIntro: {
 ```
 And in `CUTSCENE_TRIGGERS`: `{ when: { on: 'bossSpawned', boss: 'queen' }, play: 'queenIntro', repeat: 'run' }`.
 
-Triggers: `runStart`, `waveStart`/`waveCleared` (+ `wave`), `bossSpawned`/`bossDefeated` (+ optional `boss`), `victory`
+Triggers: `runStart`, `waveStart`/`waveCleared` (+ `wave`), `upgradePicked` (a belt upgrade was picked), `bossSpawned`/`bossDefeated` (+ optional `boss`), `victory`
 (plays BEFORE the victory screen), `bossLastWords` (+ optional `boss`: the killing blow landed, the boss stands on 1 HP and talks; when the scene ends or is skipped it falls). `repeat`: `'always'` (default), `'run'`, `'save'` (once per device). `mode`: campaign / endless.
 
 ## Rules for writing scenes

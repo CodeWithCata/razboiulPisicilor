@@ -21,15 +21,15 @@ const CAT_NAMES: Partial<Record<EnemyType, string>> = {
   flying: 'Zburătoare',
   lucky: 'Norocoasă',
   tennis: 'Tenis',
-  queen: 'Regina',
-  mafia: 'Mafia',
-  federer: 'Federer',
+  queen: 'Regina Ioana',
+  mafia: 'AnatasYOU',
+  federer: 'Simona Miaulep',
 };
 const catName = (type: EnemyType): string => CAT_NAMES[type] ?? type;
 
 /** Short names of the prizes the question mark can give (good and bad), for the two ghinion pickers. */
 const PRIZE_NAMES: Record<MysteryPrize, string> = {
-  crochete: 'Crochete',
+  crochete: 'Carpați',
   lapte: 'Lapte',
   monster: 'Monster',
   goldenBelt: 'Cureaua de aur',

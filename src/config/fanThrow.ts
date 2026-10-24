@@ -102,11 +102,11 @@ export const FAN_THROW = {
   },
 
   /**
-   * v170 SWAT IT BACK: a petard THROWN BY A CAT (the bomber) can be knocked back by the belt (swing, spin or thrown belt) while it lies on the
-   * floor (the squash, the hop and the short fuse: about 0.7 s, so it is a matter of timing). It then flies back to where its thrower
-   * stands NOW (or to where she threw it from if she is gone) in `flightMs`, with a fresh fuse, and hurts the cats in its ring for `catDamage`
-   * instead of the usual `petard.catDamage` (enough to finish a bomber). A knocked-back petard cannot be swatted twice. Fans' petards cannot be swatted.
-   * `hitRadiusPx` is how far from the petard's middle the belt still counts as touching it.
+   * SEND IT BACK (v170, changed in v254): a petard THROWN BY A CAT (the bomber) is sent back ONLY by the umbrella power-up (the belt, the spin
+   * and the thrown belt no longer touch it). While the umbrella is open, a cat's petard that lies inside its blast reach of Varu flies back to
+   * where its thrower stands NOW (or to where she threw it from if she is gone) in `flightMs`, with a fresh fuse, and hurts the cats in its ring
+   * for `catDamage` instead of the usual `petard.catDamage` (enough to finish a bomber). A petard sent back cannot be sent twice. Fans' petards
+   * are never sent back (the umbrella just takes the blast, see `UMBRELLA.blockedBlastSources`).
    */
-  swat: { hitRadiusPx: 34, flightMs: 520, catDamage: 6, word: { offsetY: -64, size: 30, color: '#9be28f' } },
+  swat: { flightMs: 520, catDamage: 6, word: { offsetY: -64, size: 30, color: '#9be28f' } },
 } as const;

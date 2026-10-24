@@ -6,6 +6,7 @@ import { CULL } from '../config/culling';
 import { CROWD, MOOD_KEYS, type CrowdMood, type MoodLook, type ShoutKind, type ThrowPick, type ThrowSpot } from '../config/crowd';
 import { BOMBER_ENTRANCE, CROWD_LINES, pick } from '../content/lines';
 import { PERF } from '../config/perf';
+import { fastBelowMs, slowAboveMs } from '../core/fpsLimit';
 import { usesTouchControls } from '../core/device';
 import { Events, listen } from '../core/events';
 import type { BossStunnedPayload, PointPayload, WavePayload } from '../core/events';
@@ -141,7 +142,7 @@ export class StandsCrowd {
         this.shout('bomber');
         this.hooks?.say(x, y - CROWD.shout.bomberNameLiftPx, BOMBER_ENTRANCE, CROWD.shout.bomberNameColor, CROWD.shout.bomberNameSize);
       }),
-      // v170: Varu's belt knocked a petard back at the bomber: the stands go wild for a moment.
+      // v170: Varu's umbrella sent a petard back at the bomber: the stands go wild for a moment.
       listen(Events.PetardSwatted, () => {
         this.hold('cheer', CROWD.cheer.throwMs);
         this.pulseAmt = Math.max(this.pulseAmt, CROWD.thrower.pulse);
@@ -173,14 +174,15 @@ export class StandsCrowd {
   /** Called every half second with the measured average frame time (ms): fewer animated fans while the game is slow, back to normal when it is smooth again (`PERF.adapt`). */
   adapt(frameAvgMs: number): void {
     const A = PERF.adapt;
-    if (frameAvgMs > A.slowMs) {
+    // Judged against the frame-rate limit: at 60 fps a frame lasts 16.7 ms by design, which used to count as slow.
+    if (frameAvgMs > slowAboveMs(A.slowMs)) {
       this.fastRun = 0;
       this.slowRun += 1;
       if (this.slowRun >= A.slowSamples) {
         this.slowRun = 0;
         this.adaptScale = Math.max(A.minScale, this.adaptScale - A.step);
       }
-    } else if (frameAvgMs < A.fastMs) {
+    } else if (frameAvgMs < fastBelowMs(A.fastMs)) {
       this.slowRun = 0;
       this.fastRun += 1;
       if (this.fastRun >= A.fastSamples) {

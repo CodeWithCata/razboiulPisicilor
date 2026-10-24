@@ -65,14 +65,43 @@ export const BELT_UPGRADE_LOOK = {
     introMs: 320,
     introStaggerMs: 110,
   },
-  badge: { y: 70, radius: 52, fill: 0x232c52, ring: COLORS.gold, ringWidth: 4, valueSize: 40 },
   name: { y: 158, size: 34, wrapPad: 26 },
-  text: { y: 206, size: 22, lineSpacing: 2, wrapPad: 34 },
-  /** The "0% -> +12%" line sits under the (up to 3-line) description, then the pips, then the level text, then the key; all offsets from the card top. */
+  text: { y: 190, size: 22, lineSpacing: 2, wrapPad: 34 },
+  /**
+   * Top to bottom, all offsets from the card top (the card is 396 tall): the picture (`UPGRADE_ART.stage`: 14 to 126), the name (one line, middle 158),
+   * the description (from 190, up to 3 lines), the "0% -> +12%" line, the pips, the level text, then the key. v245: the description moved up 16 px
+   * (it was 206) so three lines end above the "0% -> +12%" line.
+   */
   change: { y: 308, size: 30 },
   pips: { y: 336, w: 40, h: 12, gap: 10, radius: 5, offColor: 0x4a5275 },
   levelText: { y: 366 },
   key: { fromBottom: 20, size: 20 },
   hint: { y: 664, size: 22 },
   colors: { normal: '#fff3d6', selected: '#1b2340', dim: '#c9cfe6', up: '#9be28f', upSelected: '#1d6b2f' },
+  /**
+   * v246: what Varu already owns, as a row of small chips along the bottom of the screen under the hint: the upgrade's name and its level
+   * pips (gold = level reached, dark = still to come), one chip per upgrade he has, then a pink chip per synergy. Nothing owned = no row.
+   * Sizes are game pixels; the row shrinks (never grows) until it fits `maxWidthShare` of the screen width.
+   */
+  owned: {
+    y: 698,
+    h: 26,
+    radius: 13,
+    padX: 11,
+    nameGap: 8,
+    gap: 10,
+    size: 15,
+    strokeThickness: 3,
+    fill: 0x14182b,
+    fillAlpha: 0.9,
+    border: 3,
+    maxWidthShare: 0.94,
+    pip: { w: 12, h: 8, gap: 4, radius: 3, offColor: 0x4a5275, onColor: COLORS.gold },
+    /** The row fades in after the cards, and the chip that just changed pops (scale, ms up; it comes back down by itself). */
+    introMs: 260,
+    introDelayMs: 420,
+    pop: { scale: 1.22, ms: 150 },
+    /** The accent (border) of each upgrade's chip. */
+    accents: { heavy: 0xff7a59, long: 0x6ee7ff, quick: 0xf5c518, tornado: 0xc9a7ff, knock: 0x9be28f },
+  },
 } as const;

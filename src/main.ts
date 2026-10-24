@@ -5,6 +5,7 @@ import { PERF } from './config/perf';
 import { usesTouchControls } from './core/device';
 import { loadGameFont } from './core/fonts';
 import { initPwa, markBootSuccess } from './core/pwa';
+import { installFpsLimit } from './core/fpsLimit';
 import { watchRelayout } from './core/relayout';
 import { watchRotateHint } from './core/rotateHint';
 import { watchViewport } from './core/viewport';
@@ -13,6 +14,7 @@ import { GameOverScene } from './scenes/GameOverScene';
 import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
 import { AlmanacScene } from './scenes/AlmanacScene';
+import { CustomGameScene } from './scenes/CustomGameScene';
 import { CutsceneScene } from './scenes/CutsceneScene';
 import { PauseScene } from './scenes/PauseScene';
 import { ButtonEditScene } from './scenes/ButtonEditScene';
@@ -47,14 +49,15 @@ const game = new Phaser.Game({
   // measuring #game (inset by the notch / home bar), so the canvas stayed smaller than the screen and the rest showed black.
   scale: { mode: Phaser.Scale.EXPAND, autoCenter: Phaser.Scale.CENTER_BOTH, fullscreenTarget: 'game' },
   // WebGL context settings (MSAA etc.): numbers in config/perf.ts so they can be switched for a speed test.
-  render: { antialiasGL: PERF.render.antialiasGL },
+  render: { antialiasGL: PERF.render.antialiasGL, powerPreference: PERF.render.powerPreference },
   // fixedStep off: physics moves things by the real time of each frame. With the default (60 fixed steps a second) a 90 or 120 Hz
   // phone shows Varu moving only every second frame, which looks choppy, and uneven when the refresh rate wanders.
   physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, fixedStep: false } },
   input: { activePointers: 4 }, // the move stick + spin + throw + pause at the same time
-  scene: [BootScene, MenuScene, AlmanacScene, GameScene, UIScene, GameOverScene, VictoryScene, CutsceneScene, PauseScene, UpgradeScene, ButtonEditScene],
+  scene: [BootScene, MenuScene, AlmanacScene, CustomGameScene, GameScene, UIScene, GameOverScene, VictoryScene, CutsceneScene, PauseScene, UpgradeScene, ButtonEditScene],
 });
 
+installFpsLimit(game); // the frame-rate limit from the pause-menu slider (60 until the player changes it)
 bindGameSize(game.scale); // GAME.width / GAME.height now follow the real canvas size
 watchViewport(game); // phones: follow the visible height (address bar in or out, turning the phone)
 watchRelayout(game); // menu and end screens are rebuilt when the screen size changes

@@ -16,8 +16,8 @@ export interface BossText {
  */
 export const BOSS_TEXT: Record<BossType, BossText> = {
   queen: {
-    name: 'Regina Pisicilor',
-    phase2: 'Regina e furioasă!',
+    name: 'Regina Pisicilor Ioana',
+    phase2: 'Regina Ioana e furioasă!',
     phase3: 'ÎNCHINAȚI-VĂ TOȚI!',
     attacks: {
       decree: 'Decret regal!',
@@ -29,12 +29,12 @@ export const BOSS_TEXT: Record<BossType, BossText> = {
     },
   },
   mafia: {
-    name: 'Pisica Emo',
+    name: 'AnatasYOU',
     phase2: 'Acum chiar nu mai sunt OK...',
     attacks: { hearts: 'Inimi frânte...', sad: 'Inimi triste... te găsesc oriunde.', scream: 'NIMENI NU MĂ ÎNȚELEGE!', crew: 'Gașca neagră!' },
   },
   federer: {
-    name: 'Pisica Federer',
+    name: 'Simona Miaulep',
     phase2: 'Acum e serios!',
     /** Shouted when her last quarter of health starts (the tie-break rage). */
     phase3: 'TIE-BREAK!',
@@ -80,6 +80,6 @@ export const MAFIA_MOODS = {
 /** v173: what each boss says when it turns the lights off (Romanian). */
 export const LIGHTS_OUT_LINES: Record<BossType, string> = {
   mafia: 'Stingeți luminile. Oricum nu mă vede nimeni.',
-  queen: 'Fără lumină, supușilor! Regina vede tot!',
+  queen: 'Fără lumină, supușilor! Regina Ioana vede tot!',
   federer: 'Meciul continuă... pe întuneric!',
 };

@@ -4,6 +4,7 @@ import { COMBO, comboTier } from '../config/combo';
 import { HIT_FEEL } from '../config/hitFeel';
 import { HIT_STOP } from '../config/hitstop';
 import type { Effects } from './Effects';
+import { gameClock } from '../core/clock';
 import { bus, Events, listen, type ComboPayload, type EnemyKilledPayload, type HitFreezePayload } from '../core/events';
 
 /**
@@ -14,6 +15,8 @@ export class HitFeel {
   /** Index of the combo tier the chain is in (0 = none). */
   private tier = 0;
   private shutDown = false;
+  /** When the last finisher freeze was asked for (the hit event comes once per cat, the freeze only once per swing). */
+  private lastFinisherFreezeAt = -Infinity;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -41,6 +44,9 @@ export class HitFeel {
       }),
       listen(Events.FinisherHit, () => {
         this.shake(HIT_FEEL.finisher.shakeMs, HIT_FEEL.finisher.shake);
+        const now = gameClock.now;
+        if (now - this.lastFinisherFreezeAt < HIT_FEEL.finisher.freezeOnceMs) return;
+        this.lastFinisherFreezeAt = now;
         this.freeze(HIT_FEEL.finisher.freezeMs);
       }),
       listen(Events.BossWeakHit, () => {

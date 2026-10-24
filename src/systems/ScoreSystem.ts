@@ -1,7 +1,7 @@
-/** @file Score, kills and the saved best (campaign and endless kept apart). */
+/** @file Score, kills and the saved best (campaign and endless kept apart; a custom game has no record). */
 import Phaser from 'phaser';
 import { bus, Events, listen, type CatJailedPayload, type EnemyKilledPayload, type ScorePayload } from '../core/events';
-import type { RunMode } from '../core/run';
+import { recordModeOf, type RecordMode, type RunMode } from '../core/run';
 import { getDifficulty, getDifficultyId } from '../core/difficulty';
 import { loadBest, saveBest } from '../core/storage';
 
@@ -10,16 +10,19 @@ export class ScoreSystem {
   score = 0;
   kills = 0;
   readonly bestAtStart: number;
+  /** Which record this run competes for, or null (a custom game has none: its rules change every time). */
+  private readonly recordMode: RecordMode | null;
   private readonly off: Array<() => void> = [];
 
-  /** Campaign and endless keep separate records. */
+  /** Campaign and endless keep separate records; a custom game keeps none. */
   constructor(
     scene: Phaser.Scene,
-    private readonly mode: RunMode = 'campaign',
+    mode: RunMode = 'campaign',
     /** The combo's score factor (1 = none), read at every kill. */
     private readonly comboMultiplier: () => number = () => 1,
   ) {
-    this.bestAtStart = loadBest(mode, getDifficultyId());
+    this.recordMode = recordModeOf(mode);
+    this.bestAtStart = this.recordMode ? loadBest(this.recordMode, getDifficultyId()) : 0;
     this.off.push(
       listen<EnemyKilledPayload>(Events.EnemyKilled, ({ score }) => {
         this.score += Math.round(score * getDifficulty().score * this.comboMultiplier());
@@ -45,8 +48,9 @@ export class ScoreSystem {
 
   /** Call once at game over. Saves a new best and tells you if it was one. */
   finish(): boolean {
+    if (!this.recordMode) return false;
     const isNewBest = this.score > this.bestAtStart;
-    if (isNewBest) saveBest(this.score, this.mode, getDifficultyId());
+    if (isNewBest) saveBest(this.score, this.recordMode, getDifficultyId());
     return isNewBest;
   }
 

@@ -1,10 +1,12 @@
-/** @file Game over screen: score, kills, wave, best; again / menu input. */
+/** @file Game over screen: score, kills, wave, best; again / menu input. A custom game also ends here (won or lost): no record, and a way back to its setup screen. */
 import { texArgs } from '../assets/atlas';
 import Phaser from 'phaser';
 import { Tex } from '../assets/keys';
 import { GAME } from '../config/balance';
+import type { CustomSetup } from '../config/customGame';
 import { PHOTO_FRAME } from '../config/jokes';
 import { FONT } from '../config/style';
+import { CUSTOM_TEXT } from '../content/customGame';
 import { summaryLines, type RunSummary } from '../content/runStats';
 import { END_SCREEN_TEXT, ENDLESS_TEXT, GAME_OVER_LINES, GAME_OVER_TITLE, pick } from '../content/lines';
 import { usesTouchControls } from '../core/device';
@@ -21,6 +23,10 @@ export interface GameOverData {
   isNewBest: boolean;
   /** Which way this run was played (so "again" starts the same kind of run). */
   mode?: RunMode;
+  /** Custom games: the setup this run played, so "again" plays the same one. */
+  custom?: CustomSetup;
+  /** A custom game that was won (every wave held). Campaign wins go to the victory screen instead. */
+  won?: boolean;
   /** Time, best combo, hits... of the run (GameScene.endData). */
   summary?: RunSummary;
 }
@@ -47,14 +53,17 @@ export class GameOverScene extends Phaser.Scene {
     this.add.tileSprite(0, 0, width, height, ...texArgs(Tex.Grass)).setOrigin(0).setAlpha(0.45);
     this.add.rectangle(0, 0, width, height, 0x000000, 0.55).setOrigin(0);
 
-    const title = text(150, GAME_OVER_TITLE, 88, '#fff3d6', 12);
+    const custom = d.mode === 'custom';
+    const won = custom && d.won === true;
+    const title = won ? text(150, CUSTOM_TEXT.winTitle, 88, '#9be28f', 12) : text(150, GAME_OVER_TITLE, 88, '#fff3d6', 12);
     this.tweens.add({ targets: title, scale: { from: 0.6, to: 1 }, duration: 380, ease: 'Back.easeOut' });
-    text(222, pick(GAME_OVER_LINES), 28, '#ffd9a8', 5);
+    text(222, won ? CUSTOM_TEXT.winLine : pick(GAME_OVER_LINES), 28, '#ffd9a8', 5);
 
     text(330, `Scor: ${d.score}`, 64, '#f5c518', 10);
     text(405, `Valul ${d.wave}   •   ${d.kills} pisici`, 32);
     if (d.mode === 'endless') text(264, ENDLESS_TEXT.gameOverTitle, 26, '#f5c518', 5);
-    text(455, d.isNewBest ? 'RECORD NOU!' : `Record: ${d.best}`, 30, d.isNewBest ? '#9be28f' : '#ffffff', 6);
+    if (custom) text(264, CUSTOM_TEXT.gameOverTag, 26, '#c9a7ff', 5);
+    if (!custom) text(455, d.isNewBest ? 'RECORD NOU!' : `Record: ${d.best}`, 30, d.isNewBest ? '#9be28f' : '#ffffff', 6); // a custom game has no record
 
     if (d.summary) {
       const [first, second] = summaryLines(d.summary);
@@ -73,12 +82,15 @@ export class GameOverScene extends Phaser.Scene {
     const menuButton = padHitArea(this, menuText, touch ? 70 : 30, touch ? 16 : 8); // a roomy tap target around the little word
     this.tweens.add({ targets: prompt, alpha: 0.4, duration: 700, yoyo: true, repeat: -1 });
 
-    const again: RunOptions = { mode: d.mode ?? 'campaign' };
+    const again: RunOptions = custom ? { mode: 'custom', custom: d.custom } : { mode: d.mode ?? 'campaign' };
+    // A custom game: Enter (or a tap on the small line under the menu word) goes back to the setup screen, through the slot the victory screen uses for endless.
+    const editText = custom ? text(height - (touch ? 22 : 40), touch ? CUSTOM_TEXT.editRulesTouch : CUSTOM_TEXT.editRules, touch ? 28 : 22, '#c9a7ff', 5).setAlpha(0.9) : null;
+    const editButton = editText ? padHitArea(this, editText, touch ? 70 : 30, touch ? 10 : 6) : undefined;
     bindEndScreenInput(
       this,
       500, // so a frantic click from the fight doesn't skip this screen
-      { menu: menuButton },
-      { again: () => this.scene.start('GameScene', again), menu: () => this.scene.start('MenuScene') },
+      { menu: menuButton, endless: editButton },
+      { again: () => this.scene.start('GameScene', again), menu: () => this.scene.start('MenuScene'), endless: custom ? () => this.scene.start('CustomGameScene') : undefined },
       { again: 'R', menu: 'M', endless: 'ENTER' },
     );
   }

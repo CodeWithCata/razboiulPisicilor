@@ -1,14 +1,14 @@
 /** @file Guarded localStorage: best scores, mute, volumes, hints, unlocks, vibration, roll button spot. */
 import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../config/difficulty';
-import type { RunMode } from './run';
+import type { RecordMode } from './run';
 
 const KEY_PREFIX = 'varu-vs-pisicile:';
-const BEST_KEYS: Record<RunMode, string> = {
+const BEST_KEYS: Record<RecordMode, string> = {
   campaign: `${KEY_PREFIX}best`, // same key as before, so old records survive
   endless: `${KEY_PREFIX}best-endless`,
 };
 /** The record key: Normal keeps the old key (old records survive), the other difficulties get their own. */
-const bestKey = (mode: RunMode, difficulty: DifficultyId): string => (difficulty === DEFAULT_DIFFICULTY ? BEST_KEYS[mode] : `${BEST_KEYS[mode]}-${difficulty}`);
+const bestKey = (mode: RecordMode, difficulty: DifficultyId): string => (difficulty === DEFAULT_DIFFICULTY ? BEST_KEYS[mode] : `${BEST_KEYS[mode]}-${difficulty}`);
 const BEST_COMBO_KEY = `${KEY_PREFIX}best-combo`;
 const LIFETIME_KILLS_KEY = `${KEY_PREFIX}lifetime-kills`;
 const LIFETIME_RUNS_KEY = `${KEY_PREFIX}lifetime-runs`;
@@ -19,12 +19,16 @@ const AUTO_ATTACK_KEY = `${KEY_PREFIX}auto-attack`;
 const SEEN_CUTSCENES_KEY = `${KEY_PREFIX}cutscenes-seen`;
 const TUTORIAL_DONE_KEY = `${KEY_PREFIX}tutorial-done`;
 const INTRO_SEEN_KEY = `${KEY_PREFIX}intro-seen`;
+const WHATS_NEW_KEY = `${KEY_PREFIX}whats-new-seen`;
 const ALMANAC_SEEN_KEY = `${KEY_PREFIX}almanac-seen`;
 const DIFFICULTY_KEY = `${KEY_PREFIX}difficulty`;
+const CUSTOM_SETUP_KEY = `${KEY_PREFIX}custom-setup`;
 const DEBUG_INFO_KEY = `${KEY_PREFIX}debug-info`;
 const VIBRATION_KEY = `${KEY_PREFIX}vibration`;
 const ROLL_LAYOUT_KEY = `${KEY_PREFIX}roll-layout`; // v224, roll button only: read once as a fallback
 const TOUCH_LAYOUT_KEY = `${KEY_PREFIX}touch-layout`;
+const STATIC_STICK_KEY = `${KEY_PREFIX}static-stick`;
+const FPS_LIMIT_KEY = `${KEY_PREFIX}fps-limit`;
 const volumeKey = (kind: string): string => `${KEY_PREFIX}volume-${kind}`;
 
 /** localStorage can be blocked (private mode), so every access is guarded. */
@@ -58,11 +62,11 @@ export function saveAlmanacSeen(ids: readonly string[]): void {
   write(ALMANAC_SEEN_KEY, JSON.stringify(ids));
 }
 
-export function loadBest(mode: RunMode = 'campaign', difficulty: DifficultyId = DEFAULT_DIFFICULTY): number {
+export function loadBest(mode: RecordMode = 'campaign', difficulty: DifficultyId = DEFAULT_DIFFICULTY): number {
   return Number(read(bestKey(mode, difficulty))) || 0;
 }
 
-export function saveBest(score: number, mode: RunMode = 'campaign', difficulty: DifficultyId = DEFAULT_DIFFICULTY): void {
+export function saveBest(score: number, mode: RecordMode = 'campaign', difficulty: DifficultyId = DEFAULT_DIFFICULTY): void {
   write(bestKey(mode, difficulty), String(score));
 }
 
@@ -124,6 +128,18 @@ export function saveAutoAttack(on: boolean): void {
   write(AUTO_ATTACK_KEY, on ? '1' : '0');
 }
 
+/** The saved frame-rate limit (fps), or `fallback` if nothing valid is stored. */
+export function loadFpsLimit(fallback: number): number {
+  const raw = read(FPS_LIMIT_KEY);
+  if (raw === null) return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 && value <= 1000 ? value : fallback; // 0 = no limit
+}
+
+export function saveFpsLimit(fps: number): void {
+  write(FPS_LIMIT_KEY, String(fps));
+}
+
 /** Phone vibration (pause menu). On unless saved as off. */
 export function loadVibration(): boolean {
   return read(VIBRATION_KEY) !== '0';
@@ -131,6 +147,15 @@ export function loadVibration(): boolean {
 
 export function saveVibration(on: boolean): void {
   write(VIBRATION_KEY, on ? '1' : '0');
+}
+
+/** Whether the move stick stays at one fixed spot (button editor, phones). Floating (off) unless saved as on. */
+export function loadStaticStick(): boolean {
+  return read(STATIC_STICK_KEY) === '1';
+}
+
+export function saveStaticStick(on: boolean): void {
+  write(STATIC_STICK_KEY, on ? '1' : '0');
 }
 
 /** One button's saved size id and its spot as an offset (game px) from the default spot. */
@@ -180,6 +205,20 @@ export function saveDifficulty(id: DifficultyId): void {
   write(DIFFICULTY_KEY, id);
 }
 
+/** The custom game setup (row id -> index of the chosen value) as saved, or null if there is none or it is not an object. `core/customGame.ts` cleans it. */
+export function loadCustomSetup(): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(read(CUSTOM_SETUP_KEY) ?? 'null');
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCustomSetup(setup: Readonly<Record<string, number>>): void {
+  write(CUSTOM_SETUP_KEY, JSON.stringify(setup));
+}
+
 /** Whether the player turned on the fps / debug numbers (pause menu, phones). Off unless saved as on. */
 export function loadDebugInfo(): boolean {
   return read(DEBUG_INFO_KEY) === '1';
@@ -222,4 +261,15 @@ export function loadIntroSeen(): boolean {
 
 export function saveIntroSeen(): void {
   write(INTRO_SEEN_KEY, '1');
+}
+
+/** The id of the newest "what's new" card this device has seen (null = never saved). */
+export function loadWhatsNewSeen(): number | null {
+  const raw = read(WHATS_NEW_KEY);
+  const n = raw === null ? NaN : Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function saveWhatsNewSeen(id: number): void {
+  write(WHATS_NEW_KEY, String(id));
 }

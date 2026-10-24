@@ -15,7 +15,7 @@ export interface BuffStack {
  * Numbers are first guesses (never played): tune after a few runs.
  */
 export const BUFF_STACKS: Partial<Record<BuffKind, BuffStack>> = {
-  monster: { max: 4, damage: [2, 2.5, 3, 3.5] },
+  monster: { max: 4, damage: [2, 2.2, 2.4, 2.6] }, // (v242: was [2, 2.5, 3, 3.5]: x3 and x4 beat the golden belt by 20-40% and x3 one-shot base cats; now x2 = golden belt, x4 only +18%)
 };
 
 /** The floating word and the HUD badge label. */

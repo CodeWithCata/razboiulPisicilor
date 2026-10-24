@@ -1,8 +1,11 @@
 /** @file The last cat of a wave dies in slow motion for the WHOLE game (Varu, cats, physics, timers, tweens, particles) with a camera zoom, then it speeds back up. */
 import Phaser from 'phaser';
 import { isBossType } from '../config/balance';
+import { FINISHER_ZOOM } from '../config/hitFeel';
 import { BOSS_KILL, SLOW_MO } from '../config/slowMo';
 import { gameClock } from '../core/clock';
+import { prefersReducedMotion } from '../core/device';
+import { PunchEnvelope } from '../core/punchEnvelope';
 import { bus, Events, listen, type BossDefeatedPayload, type BossKillBurstPayload, type EnemyKilledPayload } from '../core/events';
 import type { Effects } from './Effects';
 
@@ -14,6 +17,8 @@ import type { Effects } from './Effects';
  * The beat itself is driven by REAL frame time (so it is the same length at any speed) and zooms the camera in a little.
  * Bosses have their own moment and are skipped. GameScene calls `stop()` when the run ends so nothing stays slowed.
  * The HUD (UIScene) is a different scene and stays at full speed on purpose.
+ * This class is the ONE owner of the camera zoom: the finisher's tiny push-in (`FINISHER_ZOOM`) is a second, short envelope that MULTIPLIES
+ * with the beat's zoom (`applyZoom`), so the two can never overwrite each other.
  */
 /** The numbers of one beat: the last cat of a wave (`SLOW_MO`) and a boss kill (`BOSS_KILL`) both have this shape. */
 interface Beat {
@@ -46,6 +51,11 @@ export class SlowMoSystem {
   private physicsScale = 1;
   /** Dev only (debug card): the speed the player picked; it multiplies whatever the slow-mo beat does. */
   private debugScale = 1;
+  /** The zoom the slow-mo beat asks for (1 = none) and the finisher's little push-in on top of it (real time, see `config/hitFeel.ts`). */
+  private beatZoom = 1;
+  private readonly punch = new PunchEnvelope(FINISHER_ZOOM);
+  /** Asked once per run: the player's system wants less motion, so the finisher does not push the camera in. */
+  private readonly reducedMotion = FINISHER_ZOOM.respectReducedMotion && prefersReducedMotion();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -70,6 +80,11 @@ export class SlowMoSystem {
       listen(Events.WaveCleared, () => {
         if (SLOW_MO.enabled && !this.lastKillWasBoss && gameClock.now - this.lastKillAt <= SLOW_MO.windowMs) this.startBeat(SLOW_MO, false);
       }),
+      listen(Events.FinisherHit, () => {
+        if (!FINISHER_ZOOM.enabled || this.reducedMotion || this.shutDown) return;
+        if (FINISHER_ZOOM.skipDuringBeat && this.elapsed >= 0) return; // a slow-mo beat already pushes the camera in
+        this.punch.trigger();
+      }),
     ];
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       off.forEach((f) => f());
@@ -78,12 +93,14 @@ export class SlowMoSystem {
       this.afterBeat.length = 0;
       this.shutDown = true;
       this.debugScale = 1; // a restarted run starts at normal speed
+      this.punch.reset();
       this.apply(1);
     });
   }
 
   /** `realDelta` = the frame time from Phaser's update (not scaled by anything). */
   update(realDelta: number): void {
+    if (this.punch.step(realDelta) && this.elapsed < 0) this.applyZoom(); // the finisher's push-in runs on its own when no beat does
     if (this.elapsed < 0) return;
     this.elapsed += realDelta;
     if (this.bossBeat) this.fireBursts();
@@ -98,7 +115,7 @@ export class SlowMoSystem {
       scale = minScale + (1 - minScale) * (u * u * (3 - 2 * u));
     } else {
       const done = this.afterBeat.splice(0);
-      this.stop();
+      this.endBeat(); // not `stop()`: a finisher push-in that happens to be running is allowed to finish
       done.forEach((f) => f());
       return;
     }
@@ -155,8 +172,14 @@ export class SlowMoSystem {
     bus.emit(Events.BossKillBurst, payload);
   }
 
-  /** Back to normal speed and zoom right now. */
+  /** Back to normal speed and zoom right now (the run ended or restarted): the finisher's push-in is dropped too. */
   stop(): void {
+    this.punch.reset();
+    this.endBeat();
+  }
+
+  /** The slow-mo beat is over: normal speed, no beat zoom, the camera back on Varu. */
+  private endBeat(): void {
     this.elapsed = -1;
     this.bossBeat = false;
     this.apply(1);
@@ -178,10 +201,17 @@ export class SlowMoSystem {
     cam.setFollowOffset((player.x - this.lastKillX) * f, (player.y - this.lastKillY) * f);
   }
 
-  /** Zoom the main camera, but only while it still exists (win/lose switches scenes and destroys it). */
+  /** The beat's zoom (1 = none). The camera gets it times the finisher's push-in (`applyZoom`). */
   private setZoom(zoom: number): void {
+    this.beatZoom = zoom;
+    this.applyZoom();
+  }
+
+  /** Zoom the main camera, but only while it still exists (win/lose switches scenes and destroys it). The only place that calls `setZoom` on it. */
+  private applyZoom(): void {
     if (this.shutDown) return;
-    this.scene.cameras?.main?.setZoom(zoom);
+    const push = 1 + (FINISHER_ZOOM.peak - 1) * this.punch.value;
+    this.scene.cameras?.main?.setZoom(this.beatZoom * push);
   }
 
   /**

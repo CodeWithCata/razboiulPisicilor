@@ -8,7 +8,7 @@ import { ARENA_RULES } from '../config/arena';
 import { ENEMIES, isBossType, LASER, SURRENDER, type EnemyStats, type EnemyType } from '../config/balance';
 import type { ArenaQuery } from '../core/arena';
 import { bus, Events, type CatPoppedPayload, type CatSurrenderPayload, type EnemyKilledPayload } from '../core/events';
-import { HIT_FEEL } from '../config/hitFeel';
+import { HIT_FEEL, HIT_SQUASH } from '../config/hitFeel';
 import { HIDEOUT } from '../config/props';
 import { ICE_CREAM } from '../config/iceCream';
 import { markSeen } from '../core/almanac';
@@ -21,6 +21,10 @@ import { NO_OBSTACLES } from '../world/SolidGrid';
 import { Actor } from './Actor';
 import type { Player } from './Player';
 import { hyp } from '../core/hyp';
+import { hitSquash, squashPower, type SquashOut } from '../core/hitSquash';
+
+/** Where `animate` reads the hit squash of ONE cat at a time (shared: it is filled and used inside the same call, so a frame allocates nothing). */
+const SQUASH_NOW: SquashOut = { x: 1, y: 1, lean: 0 };
 
 /** What a cat needs to know each frame. `lure` is set while the laser pointer is active. */
 export interface EnemyContext {
@@ -91,6 +95,12 @@ export abstract class Enemy extends Actor {
   private bumpReadyAt = 0;
   /** When the belt last warned this cat (see `flinch`). */
   private flinchAt = -Infinity;
+  /** The squash of the last hit that did not kill (see `startHitSquash`): when it landed, the direction it travelled (a unit vector), how hard and how heavy this cat is. `hitPower` 0 = none running. */
+  private hitSquashAt = -Infinity;
+  private hitDx = 0;
+  private hitDy = 0;
+  private hitPower = 0;
+  private hitWeight = 1;
   /** Set once the cat has given up (`surrender`). From then on it never thinks again, can't be hit and can't hurt. */
   private giveUp: GiveUp | null = null;
   /** Weather fog (`systems/Fog.ts` sets it every frame): 1 = seen, lower = hidden in the mist. Bosses always stay 1. */
@@ -627,8 +637,21 @@ export abstract class Enemy extends Actor {
       squash += pop.squash;
       swayRad += pop.wiggle;
     }
+    // A hit that did not kill: pressed along the way the blow came, with a little lean (`rotation` is still the true heading here, the sway is added below).
+    let hitX = 1;
+    let hitY = 1;
+    if (this.hitPower > 0) {
+      const sinceHit = gameClock.now - this.hitSquashAt;
+      if (hitSquash(SQUASH_NOW, sinceHit, this.hitDx, this.hitDy, this.rotation - Math.PI / 2, this.hitPower, this.hitWeight)) {
+        hitX = SQUASH_NOW.x;
+        hitY = SQUASH_NOW.y;
+        swayRad += SQUASH_NOW.lean;
+      } else if (sinceHit >= HIT_SQUASH.ms) {
+        this.hitPower = 0;
+      }
+    }
     const size = pop ? pop.size : 1;
-    this.setScale(this.baseScale * size * (1 + squash), this.baseScale * size * (1 - squash));
+    this.setScale(this.baseScale * size * (1 + squash) * hitX, this.baseScale * size * (1 - squash) * hitY);
     this.swayApplied = swayRad;
     this.rotation += swayRad;
   }
@@ -763,7 +786,31 @@ export abstract class Enemy extends Actor {
       this.destroy();
       return true;
     }
+    this.startHitSquash(fromX, fromY, knockback);
     this.applyKnockback(fromX, fromY, knockback * (1 - this.stats.knockbackResist));
     return false;
+  }
+
+  /**
+   * The cat survived a blow that came from (`fromX`, `fromY`): remember which way it travelled and how hard, and `animate` presses the cat
+   * flat along that line for a moment (numbers `HIT_SQUASH`). Heavy cats squash less. A blow from the cat's own spot (a crow from above)
+   * has no direction, so it presses along the way the cat faces.
+   */
+  private startHitSquash(fromX: number, fromY: number, knockback: number): void {
+    if (!HIT_SQUASH.enabled || !ANIM.enabled) return;
+    const dx = this.x - fromX;
+    const dy = this.y - fromY;
+    const len = hyp(dx, dy);
+    if (len > 1) {
+      this.hitDx = dx / len;
+      this.hitDy = dy / len;
+    } else {
+      const heading = this.rotation - Math.PI / 2;
+      this.hitDx = Math.cos(heading);
+      this.hitDy = Math.sin(heading);
+    }
+    this.hitPower = squashPower(knockback);
+    this.hitWeight = this.isBoss ? HIT_SQUASH.heavy.boss : this.enemyType === 'fat' ? HIT_SQUASH.heavy.fat : 1;
+    this.hitSquashAt = gameClock.now;
   }
 }

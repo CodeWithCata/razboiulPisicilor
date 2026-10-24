@@ -1,11 +1,12 @@
 /** @file The almanac screen (opened from the main menu, like the Suburban Almanac in Plants vs. Zombies): a grid of cards for every cat, boss and pickup, and a panel with the selected one. */
 import Phaser from 'phaser';
-import { ALMANAC, ALMANAC_ORDER } from '../config/almanac';
+import { ALMANAC, ALMANAC_ORDER, ALMANAC_TITLE_BOOK } from '../config/almanac';
 import { GAME } from '../config/balance';
 import { FONT } from '../config/style';
 import { ALMANAC_TEXT } from '../content/almanac';
 import { hasSeen } from '../core/almanac';
 import { usesTouchControls } from '../core/device';
+import { addAlmanacBook } from '../ui/AlmanacBook';
 import { AlmanacCards } from '../ui/AlmanacCards';
 import { AlmanacDetail } from '../ui/AlmanacDetail';
 import { createMenuButton } from '../ui/MenuButton';
@@ -30,6 +31,11 @@ export class AlmanacScene extends Phaser.Scene {
 
     const title = this.add.text(width / 2, oy + ALMANAC.titleY, ALMANAC_TEXT.title, { fontFamily: FONT, fontSize: '56px', color: '#f5c518', stroke: '#1b2340', strokeThickness: 10 }).setOrigin(0.5).setDepth(5);
     this.tweens.add({ targets: title, scale: { from: 0.8, to: 1 }, duration: 320, ease: 'Back.easeOut' });
+    // A book on each end of the title, so the screen says what it is before anyone reads it.
+    for (const side of [-1, 1] as const) {
+      const book = addAlmanacBook(this, width / 2 + side * (title.width / 2 + ALMANAC_TITLE_BOOK.gap), oy + ALMANAC.titleY, ALMANAC_TITLE_BOOK.h).setDepth(5).setAngle(side * 8);
+      this.tweens.add({ targets: book, scale: { from: 0.6, to: 1 }, duration: 320, ease: 'Back.easeOut' });
+    }
 
     const detail = new AlmanacDetail(this, ox, oy);
     const cards = new AlmanacCards(this, ox, oy, (id) => all || hasSeen(id), (id, seen) => detail.show(id, seen));

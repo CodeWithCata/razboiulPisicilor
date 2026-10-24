@@ -8,7 +8,7 @@ import { usesTouchControls } from '../core/device';
 import { Events, listen } from '../core/events';
 import { isMuted, toggleMuted } from '../core/mute';
 import { readRun, type RunOptions } from '../core/run';
-import { getAutoAttack, getDebugInfo, getVibration, getVolume, nudgeVolume, setVolume, toggleAutoAttack, toggleDebugInfo, toggleVibration, type VolumeKind } from '../core/settings';
+import { getAutoAttack, getDebugInfo, getFpsLevel, getFpsLimit, nudgeFpsLimit, setFpsLevel, getVibration, getVolume, nudgeVolume, setVolume, toggleAutoAttack, toggleDebugInfo, toggleVibration, type VolumeKind } from '../core/settings';
 import { GAME } from '../config/balance';
 import { COLORS } from '../config/style';
 import { createLogoWord } from '../ui/logoWord';
@@ -16,7 +16,7 @@ import { createSunburst, createVignette } from '../ui/menuBackdrop';
 import { createPauseScene, createPeekingCats } from '../ui/pause/PauseDecor';
 import { PauseRow, type PauseRowSpec } from '../ui/pause/PauseRow';
 
-type RowId = 'resume' | 'music' | 'sfx' | 'sound' | 'autoAttack' | 'debugInfo' | 'vibration' | 'touchButtons' | 'restart' | 'menu';
+type RowId = 'resume' | 'music' | 'sfx' | 'fps' | 'sound' | 'autoAttack' | 'debugInfo' | 'vibration' | 'touchButtons' | 'restart' | 'menu';
 
 interface RowDef extends PauseRowSpec {
   id: RowId;
@@ -30,6 +30,7 @@ const rowsFor = (touch: boolean): readonly RowDef[] => [
   { id: 'music', kind: 'volume', label: PAUSE_TEXT.music, groupStart: true },
   { id: 'sfx', kind: 'volume', label: PAUSE_TEXT.sfx },
   { id: 'sound', kind: 'toggle', label: PAUSE_TEXT.sound },
+  { id: 'fps', kind: 'volume', label: PAUSE_TEXT.fps }, // a slider like the volumes: one block per step of FPS_LIMIT.choices
   ...(touch
     ? [
         { id: 'autoAttack', kind: 'toggle', label: PAUSE_TEXT.autoAttack } satisfies RowDef,
@@ -150,7 +151,10 @@ export class PauseScene extends Phaser.Scene {
     } else if (is(PAUSE_KEYS.down)) {
       this.select((this.selected + 1) % this.defs.length);
     } else if (is(PAUSE_KEYS.left) || is(PAUSE_KEYS.right)) {
-      if (current.kind === 'volume') nudgeVolume(current.id as VolumeKind, is(PAUSE_KEYS.right) ? 1 : -1);
+      if (current.id === 'fps') {
+        nudgeFpsLimit(is(PAUSE_KEYS.right) ? 1 : -1);
+        this.refresh();
+      } else if (current.kind === 'volume') nudgeVolume(current.id as VolumeKind, is(PAUSE_KEYS.right) ? 1 : -1);
       else if (current.kind === 'toggle' && !e.repeat) this.flip(current.id);
     } else if (is(PAUSE_KEYS.confirm) && !e.repeat) {
       this.activate(this.selected);
@@ -179,6 +183,7 @@ export class PauseScene extends Phaser.Scene {
         break;
       case 'music':
       case 'sfx':
+      case 'fps':
         break; // volume rows are changed with the arrows or by clicking a block
       case 'restart':
       case 'menu':
@@ -210,6 +215,10 @@ export class PauseScene extends Phaser.Scene {
 
   private setLevel(id: RowId, level: number): void {
     if (id === 'music' || id === 'sfx') setVolume(id, level);
+    else if (id === 'fps') {
+      setFpsLevel(level);
+      this.refresh();
+    }
   }
 
   /** First press on Restart / Menu: ask to press again (and forget it after a moment). */
@@ -236,6 +245,10 @@ export class PauseScene extends Phaser.Scene {
       const row = this.rows[i];
       if (!row) return;
       if (def.id === 'music' || def.id === 'sfx') row.setLevel(getVolume(def.id));
+      if (def.id === 'fps') {
+        row.setLevel(getFpsLevel());
+        row.setLabel(`${PAUSE_TEXT.fps} ${getFpsLimit() > 0 ? getFpsLimit() : PAUSE_TEXT.fpsMax}`);
+      }
       if (def.id === 'sound') row.setValue(isMuted() ? PAUSE_TEXT.soundOff : PAUSE_TEXT.soundOn);
       if (def.id === 'autoAttack') row.setValue(getAutoAttack() ? PAUSE_TEXT.on : PAUSE_TEXT.off);
       if (def.id === 'vibration') row.setValue(getVibration() ? PAUSE_TEXT.on : PAUSE_TEXT.off);

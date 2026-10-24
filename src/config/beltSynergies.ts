@@ -38,7 +38,6 @@ export const BELT_SYNERGY_OFFER = {
 export const BELT_SYNERGY_LOOK = {
   borderColor: 0xff5ac8,
   selectedFill: 0xff9bdc,
-  badgeSize: 26,
   /** The pink "SINERGIE" pill that straddles the top edge of the card. */
   tag: { y: 0, w: 150, h: 34, size: 22, radius: 17, fill: 0xff5ac8, ink: '#1b2340' },
   /** The two fused upgrades, as two lines in the spot where a plain card shows its level numbers (offset from the card top). */

@@ -1,10 +1,12 @@
-/** @file One card of the belt upgrade screen: badge, name, what it does, level pips; gold when chosen. */
+/** @file One card of the belt upgrade screen: a little looping picture of what the upgrade does, name, what it does, level pips; gold when chosen. */
 import Phaser from 'phaser';
+import { UPGRADE_ART } from '../config/beltUpgradeArt';
 import { BELT_UPGRADE_LOOK as L, type BeltUpgradeId } from '../config/beltUpgrades';
 import { COLORS, FONT } from '../config/style';
 import { BELT_UPGRADE_TEXT, BELT_UPGRADE_UI } from '../content/beltUpgrades';
 import { beltUpgradeLevel, beltUpgradeMaxLevel, beltUpgradeValueAt } from '../core/beltUpgrades';
-import type { PickCard } from './PickCard';
+import { fitOneLine, type PickCard } from './PickCard';
+import { UpgradeIllustration } from './UpgradeIllustration';
 
 /** The upgrades whose number gets SMALLER when they improve (a shorter pause). */
 const FASTER: readonly BeltUpgradeId[] = ['quick', 'tornado'];
@@ -22,6 +24,7 @@ export class UpgradeCard implements PickCard {
   readonly id: BeltUpgradeId;
   private readonly back: Phaser.GameObjects.Graphics;
   private readonly pips: Phaser.GameObjects.Graphics;
+  private readonly art: UpgradeIllustration;
   private readonly texts: { name: Phaser.GameObjects.Text; body: Phaser.GameObjects.Text; change: Phaser.GameObjects.Text; level: Phaser.GameObjects.Text; key: Phaser.GameObjects.Text | null };
   private readonly level: number;
   private selected = false;
@@ -44,8 +47,10 @@ export class UpgradeCard implements PickCard {
     this.back = scene.add.graphics();
     this.pips = scene.add.graphics();
     const style = (size: number, color: string): Phaser.Types.GameObjects.Text.TextStyle => ({ fontFamily: FONT, fontSize: `${size}px`, color, stroke: '#1b2340', strokeThickness: 5, align: 'center' });
-    const badge = scene.add.text(0, top + L.badge.y, words.badge, style(L.badge.valueSize, '#f5c518')).setOrigin(0.5);
-    const name = scene.add.text(0, top + L.name.y, words.name, { ...style(L.name.size, L.colors.normal), wordWrap: { width: C.w - L.name.wrapPad * 2 } }).setOrigin(0.5);
+    this.art = new UpgradeIllustration(scene, id, top + UPGRADE_ART.stage.top + UPGRADE_ART.stage.h / 2); // what the upgrade does, as a small looping scene
+    this.art.update(0);
+    const name = scene.add.text(0, top + L.name.y, words.name, style(L.name.size, L.colors.normal)).setOrigin(0.5);
+    fitOneLine(name, C.w - L.name.wrapPad * 2);
     const body = scene.add
       .text(0, top + L.text.y, words.text, { ...style(L.text.size, L.colors.dim), strokeThickness: 3, lineSpacing: L.text.lineSpacing, wordWrap: { width: C.w - L.text.wrapPad * 2 } })
       .setOrigin(0.5, 0);
@@ -55,9 +60,14 @@ export class UpgradeCard implements PickCard {
     const key = keyLabel ? scene.add.text(0, top + C.h - L.key.fromBottom, keyLabel, { ...style(L.key.size, L.colors.dim), strokeThickness: 3 }).setOrigin(0.5) : null;
     this.texts = { name, body, change, level, key };
 
-    this.box = scene.add.container(x, y, [this.back, this.pips, badge, name, body, change, level, ...(key ? [key] : [])]).setDepth(L.depth + 2);
+    this.box = scene.add.container(x, y, [this.back, this.art.view, this.pips, name, body, change, level, ...(key ? [key] : [])]).setDepth(L.depth + 2);
     this.box.setSize(C.w, C.h);
     this.redraw();
+  }
+
+  /** Called every frame by the pick screen: plays the picture. */
+  update(timeMs: number): void {
+    this.art.update(timeMs);
   }
 
   setBaseScale(scale: number): void {
@@ -110,12 +120,6 @@ export class UpgradeCard implements PickCard {
     g.fillStyle(sel ? C.selectedFill : C.fill, sel ? 1 : C.alpha).fillRoundedRect(left, top, C.w, C.h, C.radius);
     g.lineStyle(C.borderWidth, sel ? COLORS.navy : C.borderColor, 1).strokeRoundedRect(left, top, C.w, C.h, C.radius);
     g.lineStyle(2, sel ? COLORS.navy : COLORS.cream, sel ? 0.25 : C.innerAlpha).strokeRoundedRect(left + C.innerInset, top + C.innerInset, C.w - C.innerInset * 2, C.h - C.innerInset * 2, C.radius - C.innerInset / 2);
-
-    // Badge: a round plate with the short word (belt buckle colors).
-    const B = L.badge;
-    g.fillStyle(sel ? COLORS.navy : B.fill, 1).fillCircle(0, top + B.y, B.radius);
-    g.lineStyle(B.ringWidth, sel ? COLORS.navy : B.ring, 1).strokeCircle(0, top + B.y, B.radius);
-    g.lineStyle(3, COLORS.gold, sel ? 1 : 0.35).strokeCircle(0, top + B.y, B.radius - 8);
 
     const T = this.texts;
     const ink = L.colors.selected;

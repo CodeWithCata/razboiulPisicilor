@@ -42,7 +42,7 @@ export const CROWD_LINES: Record<ShoutKind, readonly string[]> = {
   /** v147: the stands boo when Federer is stunned. */
   /** v170: the first bomber cat walks in. */
   bomber: ['Vine pisica cu bombe!', 'Atenție, bombardiera!', 'Aoleu, Pisica Bombardier!', 'Feriți-vă de petarde!'],
-  boo: ['Buuuu!', 'Arbitruuu!', 'Nu e corect!', 'Ridică-te, Federer!'],
+  boo: ['Buuuu!', 'Arbitruuu!', 'Nu e corect!', 'Ridică-te, Simona!'],
 };
 
 /**
@@ -95,12 +95,12 @@ export const SURRENDER_LINES = [
   'Nu mai merită.',
   "Zi-i lu' Varu că a câștigat.",
   'Am uitat fierul de călcat pornit.',
-  'Mă duc la mama, ea are crochete.',
+  'Mă duc la mama, ea are țigări.',
   'Retragere strategică (fug).',
   'Steag alb, frate!',
 ];
 /** Pisica Norocoasă (config/balance.ts LUCKY): the HUD banner when she appears, the words when she shows up and when she is caught, and what she shouts when she gets away. */
-/** Varu's belt knocked a bomber's petard back at her (v170). */
+/** Varu's umbrella sent a bomber's petard back at her (v170, umbrella only since v254). */
 export const PETARD_SWAT_WORDS = ['Înapoi la expeditor!', 'Ține-o tu!', 'Retur!', 'Livrare gratuită!', 'Prinde!'];
 
 /** The wave ended with a cat still in a bed cage (v170): the word over the bed, then the score line. */
@@ -132,7 +132,7 @@ export const UMBRELLA_WORDS = ['Pa, mingea!', 'Nu mă udă!', 'Umbrela e boss!',
 
 /** Shown when Varu grabs a pickup. */
 export const PICKUP_LABELS: Record<PickupKind, string> = {
-  crochete: 'Crochete! +viață',
+  crochete: 'Carpați! +viață',
   lapte: 'Lapte! Viteză!',
   monster: 'Monster! Forță!',
   goldenBelt: 'CUREAUA DE AUR!',
@@ -183,7 +183,7 @@ export const BELT_LABELS = {
  * >>> PLACEHOLDERS: swap in the real inside jokes and nicknames, nothing else needs to change.
  */
 export const CAT_CHATTER: Record<Exclude<EnemyType, BossType>, readonly string[]> = {
-  normal: ['Miau?', 'Am foame...', 'Ai crochete?', 'Eu doar mă plimb.', 'Frumoasă centură...', 'Mrrr.'],
+  normal: ['Miau?', 'Am foame...', 'Ai țigări?', 'Eu doar mă plimb.', 'Frumoasă centură...', 'Mrrr.'],
   fat: ['Mai e mâncare?', 'Nu alerg. Rulez.', 'Încă o gustare...', 'Sunt pufos, nu gras.', 'Cine a mișcat farfuria?'],
   ninja: ['Nu mă vezi.', 'Sunt în spatele tău.', 'Tăcere...', 'Ninja, ninja!'],
   kamikaze: ['Banzai!', 'Zâmbește!', 'Fără regrete!', 'Am lăsat aragazul pornit...'],
@@ -327,7 +327,7 @@ export const TOUCH_TEXT = {
   moveHint: 'MIȘCARE',
   /** Shown in the laser tap zone until the first tap. */
   laserHint: 'Atinge aici ca să pui laserul',
-  start: 'Atinge ecranul ca să începi',
+  start: 'Începe jocul', // the PLAY button: on a phone it is the only thing that starts a run (scenes/MenuScene.ts)
   help: 'stânga: mișcare  •  dreapta: lovește / învârte / aruncă / tumbă',
   /** The help line when auto-attack is switched on in the pause menu. */
   helpAuto: 'stânga: mișcare  •  Varu lovește singur  •  dreapta: învârte / aruncă / tumbă',

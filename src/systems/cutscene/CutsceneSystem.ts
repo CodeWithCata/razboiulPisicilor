@@ -68,6 +68,7 @@ export class CutsceneSystem {
     this.off = [
       listen<WavePayload>(Events.WaveStarted, (p) => this.fire({ on: 'waveStart', wave: p.wave })),
       listen<WavePayload>(Events.WaveCleared, (p) => this.fire({ on: 'waveCleared', wave: p.wave })),
+      listen(Events.BeltUpgradePicked, () => this.fire({ on: 'upgradePicked' })),
       listen<BossSpawnedPayload>(Events.BossSpawned, (p) => this.fire({ on: 'bossSpawned', boss: p.boss })),
       listen<BossDefeatedPayload>(Events.BossDefeated, (p) => this.fire({ on: 'bossDefeated', boss: p.boss })),
       listen(Events.PlayerDied, () => this.cancel()),

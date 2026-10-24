@@ -2,12 +2,12 @@
 import type { BeltUpgradeId } from '../config/beltUpgrades';
 import { BELT_SYNERGIES, type BeltSynergyId } from '../config/beltSynergies';
 
-export const BELT_UPGRADE_TEXT: Record<BeltUpgradeId, { name: string; badge: string; text: string }> = {
-  heavy: { name: 'Cataramă grea', badge: '+DMG', text: 'Fiecare lovitură doare mai tare: curea, învârtire și aruncare.' },
-  long: { name: 'Curea lungă', badge: '+RAZĂ', text: 'Cureaua ajunge mai departe: lovitură, învârtire și aruncare.' },
-  quick: { name: 'Mână iute', badge: '+VITEZĂ', text: 'Pauza dintre lovituri e mai scurtă. Mai multe curele pe secundă.' },
-  tornado: { name: 'Tornadă', badge: '+TORNADĂ', text: 'Învârtirea și aruncarea se reîncarcă mai repede.' },
-  knock: { name: 'Lovitură de bou', badge: '+ZBOR', text: 'Pisicile zboară mai departe când le nimerești.' },
+export const BELT_UPGRADE_TEXT: Record<BeltUpgradeId, { name: string; text: string }> = {
+  heavy: { name: 'Cataramă grea', text: 'Fiecare lovitură doare mai tare: curea, învârtire și aruncare.' },
+  long: { name: 'Curea lungă', text: 'Cureaua ajunge mai departe: lovitură, învârtire și aruncare.' },
+  quick: { name: 'Mână iute', text: 'Pauza dintre lovituri e mai scurtă. Mai multe curele pe secundă.' },
+  tornado: { name: 'Tornadă', text: 'Învârtirea și aruncarea se reîncarcă mai repede.' },
+  knock: { name: 'Lovitură de bou', text: 'Pisicile zboară mai departe când le nimerești.' },
 };
 
 export const BELT_UPGRADE_UI = {
@@ -21,12 +21,12 @@ export const BELT_UPGRADE_UI = {
 } as const;
 
 /** The rare 4th card: two matching upgrades fused into one bonus. */
-export const BELT_SYNERGY_TEXT: Record<BeltSynergyId, { name: string; badge: string; text: string }> = {
-  cyclone: { name: 'Ciclon', badge: '+SPIN', text: 'Învârtire mai mare și mai tare.' },
-  bombard: { name: 'Bombardă', badge: '+FINAL', text: 'Finalul doare și aruncă mult mai tare.' },
-  ironBeat: { name: 'Ritm de fier', badge: '+RITM', text: 'Ritm mai larg, iar finalul lovește mai tare.' },
-  eagleEye: { name: 'Ochi de vultur', badge: '+ȚINTĂ', text: 'Punct slab de șef deschis mai mult timp.' },
-  cowboy: { name: 'Cowboy', badge: '+LASO', text: 'Lovitura și finalul ajung mai departe.' },
+export const BELT_SYNERGY_TEXT: Record<BeltSynergyId, { name: string; text: string }> = {
+  cyclone: { name: 'Ciclon', text: 'Învârtire mai mare și mai tare.' },
+  bombard: { name: 'Bombardă', text: 'Finalul doare și aruncă mult mai tare.' },
+  ironBeat: { name: 'Ritm de fier', text: 'Ritm mai larg, iar finalul lovește mai tare.' },
+  eagleEye: { name: 'Ochi de vultur', text: 'Punct slab de șef deschis mai mult timp.' },
+  cowboy: { name: 'Cowboy', text: 'Lovitura și finalul ajung mai departe.' },
 };
 
 export const BELT_SYNERGY_UI = {

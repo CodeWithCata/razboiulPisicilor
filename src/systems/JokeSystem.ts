@@ -1,8 +1,6 @@
 /** @file Decides WHEN a joke is said (cooldowns, chances, streaks) and emits Events.Joke. */
 import Phaser from 'phaser';
 import { JOKE_RULES, JOKE_TUNING, type JokeCategory } from '../config/jokes';
-import { isBossType, type EnemyType } from '../config/balance';
-import { getWave } from '../config/waves';
 import { BOSS_INTRO_LINES, JOKE_LINES, fillLine } from '../content/jokes';
 import { pick } from '../content/lines';
 import type { Point } from '../core/arena';
@@ -37,14 +35,15 @@ export class JokeSystem {
   constructor(
     scene: Phaser.Scene,
     private readonly where: () => Point,
+    /** Does the wave that just started have a boss? (The wave system knows; custom games have their own waves.) */
+    private readonly isBossWave: () => boolean,
   ) {
     this.off.push(
       listen<PlayerHealthPayload>(Events.PlayerHealth, (p) => this.onHealth(p)),
       listen(Events.EnemyKilled, () => this.onKill()),
-      listen<WavePayload>(Events.WaveStarted, ({ wave }) => {
+      listen<WavePayload>(Events.WaveStarted, () => {
         // A boss wave gets its own intro joke instead.
-        const hasBoss = Object.keys(getWave(wave)).some((type) => isBossType(type as EnemyType));
-        if (!hasBoss) this.say('waveStart');
+        if (!this.isBossWave()) this.say('waveStart');
       }),
       listen<WavePayload>(Events.WaveCleared, () => {
         this.say('waveCleared');

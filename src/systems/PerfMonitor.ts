@@ -1,5 +1,6 @@
 /** @file Measures fps and slow frames for the on-phone debug panel. */
 import { PERF } from '../config/perf';
+import { slowAboveMs } from '../core/fpsLimit';
 import { hyp } from '../core/hyp';
 
 /** What the monitor measured since the last `take()`. */
@@ -49,7 +50,7 @@ export class PerfMonitor {
     this.sumMs += dt;
     this.minMs = Math.min(this.minMs, dt);
     this.maxMs = Math.max(this.maxMs, dt);
-    if (dt > PERF.slowFrameMs) this.slow += 1;
+    if (dt > slowAboveMs(PERF.slowFrameMs)) this.slow += 1;
     if (!walking) return;
     this.walkFrames += 1;
     this.stepSum += step;

@@ -12,14 +12,12 @@ import { CURSE_DODGE_WORDS, FAN_THROW_LINES, PETARD_SWAT_WORDS, PETARD_WORDS, pi
 import type { ArenaQuery, Point } from '../core/arena';
 import { gameClock } from '../core/clock';
 import { weightedPick } from '../core/random';
-import { distToSegment, isSwept } from '../core/sweep';
-import { bus, Events, listen, type BeltFlightPayload, type BeltSweepPayload, type BossDefeatedPayload, type BossSpawnedPayload, type ExplosionPayload, type FanLandedPayload, type FanThrowPayload, type PointPayload, type RallyHitPayload, type ThrowPetardPayload, type WavePayload } from '../core/events';
+import { bus, Events, listen, type BossDefeatedPayload, type BossSpawnedPayload, type ExplosionPayload, type FanLandedPayload, type FanThrowPayload, type PointPayload, type RallyHitPayload, type ThrowPetardPayload, type WavePayload } from '../core/events';
 import type { Enemy } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { WaveSystem } from './WaveSystem';
 import { flatHoop, hoopScale } from './flatShapes';
 import { hyp } from '../core/hyp';
-import { snapshotInto } from '../core/snapshot';
 
 /** What the system needs from the scene (GameScene hands these over; it only wires). */
 export interface FanThrowSources {
@@ -50,7 +48,7 @@ interface ItemLook {
   color: number;
 }
 
-/** Where a petard came from: the cat that threw it (null = a fan), the spot it was thrown from, and whether the belt already knocked it back. */
+/** Where a petard came from: the cat that threw it (null = a fan), the spot it was thrown from, and whether the umbrella already sent it back. */
 interface PetardTrip {
   by: Phaser.GameObjects.GameObject | null;
   origin: Point;
@@ -59,14 +57,14 @@ interface PetardTrip {
 
 const NO_TRIP: PetardTrip = { by: null, origin: { x: 0, y: 0 }, returned: false };
 
-/** A petard on the floor (squash, hop, fuse): the belt can still knock it back until it goes off. */
+/** A petard on the floor (squash, hop, fuse): an open umbrella can still send it back until it goes off. */
 interface Lying {
   x: number;
   y: number;
   item: Phaser.GameObjects.Image;
   ring: Phaser.GameObjects.Image;
   trip: PetardTrip;
-  /** It was knocked back (or the run ended): its tweens must do nothing any more. */
+  /** It was sent back (or the run ended): its tweens must do nothing any more. */
   cancelled: boolean;
 }
 
@@ -86,11 +84,8 @@ export class FanThrowSystem {
   private readonly dust: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly sparks: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly off: Array<() => void> = [];
-  /** Petards lying on the floor right now (v170: the belt can knock the cat-thrown ones back). */
+  /** Petards lying on the floor right now (v254: only an open umbrella can send the cat-thrown ones back). */
   private readonly lying: Lying[] = [];
-  /** Reused copies of `lying` for the belt handlers (see `snapshotInto`): swatting one removes it from `lying` mid-loop. */
-  private readonly sweepScratch: Lying[] = [];
-  private readonly flightScratch: Lying[] = [];
   /** Waves started in this run (an endless run counts from its own first wave) and throws let go so far (the first is always a gift). */
   private runWaves = 0;
   private thrown = 0;
@@ -150,8 +145,6 @@ export class FanThrowSystem {
       }),
       listen<RallyHitPayload>(Events.RallyHit, ({ hits }) => this.onRally(hits)),
       listen<ThrowPetardPayload>(Events.ThrowPetard, (e) => this.lobPetard(e)),
-      listen<BeltSweepPayload>(Events.BeltSweep, (p) => this.onSweep(p)),
-      listen<BeltFlightPayload>(Events.BeltFlight, (p) => this.onFlight(p)),
       listen(Events.GameOver, () => this.stop()),
       listen(Events.Victory, () => this.stop()),
     );
@@ -185,6 +178,7 @@ export class FanThrowSystem {
   }
 
   update(now: number): void {
+    this.umbrellaReturn();
     if (this.busy || now < this.dueAt) return;
     if (this.over || (this.forced === null && !this.src.waves.inWave) || now > this.giveUpAt) {
       this.cancel(); // that wave is over already, or no fan was ever near enough
@@ -258,32 +252,24 @@ export class FanThrowSystem {
     if (i >= 0) this.lying.splice(i, 1);
   }
 
-  /** The belt swings or spins around (p.x, p.y): a cat-thrown petard that lies inside the arc is knocked back. */
-  private onSweep(p: BeltSweepPayload): void {
-    if (this.lying.length === 0) return;
-    const reach = p.range + F.swat.hitRadiusPx;
-    const items = snapshotInto(this.lying, this.sweepScratch);
-    for (let i = 0; i < items.length; i++) {
-      const l = items[i]!;
+  /**
+   * v254: the belt can NOT send a bomber's petard back any more; only the umbrella can. Every frame, while the umbrella is open, a cat-thrown
+   * petard that lies where its blast would reach Varu (or the umbrella's cover) is thrown straight back at the cat that threw it.
+   */
+  private umbrellaReturn(): void {
+    const p = this.src.player;
+    if (this.over || !p.umbrella || !p.alive || this.lying.length === 0) return;
+    const reach = F.petard.radius + p.hitRadius;
+    for (let i = this.lying.length - 1; i >= 0; i--) {
+      const l = this.lying[i];
+      if (!l || l.cancelled || l.trip.returned || !l.trip.by) continue; // a fan's petard, or one already sent back, stays
       if (hyp(l.x - p.x, l.y - p.y) > reach) continue;
-      if (!isSwept(Math.atan2(l.y - p.y, l.x - p.x), p.startAngle, p.swept)) continue;
-      this.swat(l);
+      this.swat(l); // removes `l` from `lying`: walking the list backwards keeps the loop safe
+      bus.emit(Events.UmbrellaBlock, { x: p.x, y: p.y }); // the canopy bumps, sparks and a sound
     }
-    this.sweepScratch.length = 0;
   }
 
-  /** The thrown belt flew from (prevX, prevY) to (x, y) this frame. */
-  private onFlight(p: BeltFlightPayload): void {
-    if (this.lying.length === 0) return;
-    const items = snapshotInto(this.lying, this.flightScratch);
-    for (let i = 0; i < items.length; i++) {
-      const l = items[i]!;
-      if (distToSegment(l.x, l.y, p.prevX, p.prevY, p.x, p.y) <= p.radius + F.swat.hitRadiusPx) this.swat(l);
-    }
-    this.flightScratch.length = 0;
-  }
-
-  /** The belt hit a lying petard: if a cat threw it (and it was not knocked back yet) it flies back to her with a fresh fuse. */
+  /** The umbrella met a lying petard: if a cat threw it (and it was not sent back yet) it flies back to her with a fresh fuse. */
   private swat(l: Lying): void {
     if (this.over || l.cancelled || l.trip.returned || !l.trip.by) return;
     const S = F.swat;

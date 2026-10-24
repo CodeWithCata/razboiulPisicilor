@@ -4,9 +4,8 @@ import { ARENA_RULES, CAMERA, WORLD } from '../config/arena';
 import { CULL } from '../config/culling';
 import { PAUSE, PAUSE_KEYS } from '../config/pause';
 import { BELT_UPGRADE_OFFER } from '../config/beltUpgrades';
-import { FINAL_WAVE } from '../config/waves';
 import { BELT_SYNERGY_TEXT, BELT_SYNERGY_UI, BELT_UPGRADE_TEXT, BELT_UPGRADE_UI } from '../content/beltUpgrades';
-import { anyUpgradeOpen, beltUpgradeDue, resetBeltUpgrades, rollBeltChoices } from '../core/beltUpgrades';
+import { anyUpgradeOpen, resetBeltUpgrades, rollBeltChoices } from '../core/beltUpgrades';
 import { eligibleSynergies, isBeltSynergyId, resetBeltSynergies, rollSynergy } from '../core/beltSynergies';
 import type { UpgradeSceneData } from './UpgradeScene';
 import { BELT, ENEMIES, WAVE_TIMING, isBossType, type EnemyType, type PickupKind } from '../config/balance';
@@ -65,7 +64,9 @@ import { SurrenderSystem } from '../systems/SurrenderSystem';
 import { announcePickup, applyPickup } from '../systems/pickupEffects';
 import { CurseSystem } from '../systems/CurseSystem';
 import { PowerUpSystem } from '../systems/PowerUpSystem';
-import { getDifficulty, getDifficultyId } from '../core/difficulty';
+import { getDifficulty, getDifficultyId, setRunDifficulty } from '../core/difficulty';
+import { customDifficulty } from '../core/customRules';
+import { planFor, type WavePlan } from '../core/wavePlan';
 import { DodgeSystem } from '../systems/DodgeSystem';
 import { UmbrellaSystem } from '../systems/UmbrellaSystem';
 import { ScooterSystem } from '../systems/ScooterSystem';
@@ -151,18 +152,22 @@ export class GameScene extends Phaser.Scene {
   private debug: DebugCheats | null = null;
   private hitStop!: HitStop;
   private run: RunOptions = readRun(undefined);
+  /** Where this run starts and ends, what each wave holds and when a belt upgrade is due (campaign, endless or custom). */
+  private plan!: WavePlan;
   private gameOver = false;
 
   constructor() {
     super('GameScene');
   }
 
-  /** `{ mode: 'endless' }` starts the endless run (unlocked by winning). No data = the normal campaign. */
+  /** `{ mode: 'endless' }` starts the endless run (unlocked by winning), `{ mode: 'custom', custom }` a custom game. No data = the normal campaign. */
   init(data: Partial<RunOptions>): void {
     this.run = readRun(data);
   }
 
   create(): void {
+    this.plan = planFor(this.run);
+    setRunDifficulty(this.run.mode === 'custom' && this.run.custom ? customDifficulty(this.run.custom) : null); // a custom game plays on its own numbers until it ends
     this.gameOver = false;
     this.pendingHides = 0;
     this.bomberAnnounced = false;
@@ -217,11 +222,11 @@ export class GameScene extends Phaser.Scene {
     this.umbrella = new UmbrellaSystem(this, this.player); // the umbrella buff: canopy over Varu, stops petards and the ball rain
     this.scooter = new ScooterSystem(this, this.player, this.enemies); // the scooter buff: scooter under Varu, bumps the cats that touch him
     new IceCreamSystem(this, this.enemies); // the ice cream: freezes the cats around him
-    new JokeSystem(this, () => ({ x: this.player.x, y: this.player.y }));
+    new JokeSystem(this, () => ({ x: this.player.x, y: this.player.y }), () => this.waves.isBossWave);
     this.lowHp = new LowHpSystem(this); // heartbeat while Varu is low on health
     this.pinball = new PinballSystem(); // a flung cat hurts the cat it slams into
     this.chatter = new CatChatter(this, this.enemies); // cats say things now and then
-    this.dayNight = new DayNight(this, this.run.mode, this.obstacles); // afternoon to night over the waves, lamps at night (solid)
+    this.dayNight = new DayNight(this, this.plan, this.obstacles); // afternoon to night over the waves, lamps at night (solid)
     new LampSystem(this, this.player, this.dayNight.lamps); // the lamps can be broken
     this.blackout = new Blackout(this, this.player, this.enemies, this.dayNight.lamps); // the emo cat's lights out: dark with soft circles of light
     const weather = new Weather(this); // rolls fog / rain / clear once per wave BEFORE Fog and Rain are built (they only listen)
@@ -245,7 +250,7 @@ export class GameScene extends Phaser.Scene {
     this.enemyContext = { player: this.player, lure: null, projectiles: this.projectiles.group, enemies: this.enemies };
     this.flow = new FlowField(this.arena.grid);
     this.combo = new ComboSystem(this, () => this.waves.inWave); // kill chain: a score multiplier that a hit on Varu breaks
-    this.waves = new WaveSystem((type) => this.spawnWaveCat(type), () => this.waveCatCount(), this.run.mode);
+    this.waves = new WaveSystem((type) => this.spawnWaveCat(type), () => this.waveCatCount(), this.plan);
     this.stats = new RunStats(this); // numbers for the end screens
     new BonusSystem(this, {
       addScore: (points) => this.score.add(points),
@@ -306,7 +311,9 @@ export class GameScene extends Phaser.Scene {
 
     // Cats push each other apart (flying cats pass over); touching a cat hurts Varu.
     this.physics.add.collider(this.enemies, this.enemies, undefined, (a, b) => {
-      const [first, second] = [a as Enemy, b as Enemy];
+      const first = a as Enemy; // no `[a, b]` pair array here: this runs for every touching pair, every frame
+      const second = b as Enemy;
+      if (first.culled && second.culled) return false; // both are far off screen (not drawn): nobody sees them push each other
       if (first.flies || second.flies || first.ignoresCats || second.ignoresCats) return false;
       this.pinball.check(first, second); // runs before the physics pushes them apart, so a flung cat still has its speed
       return true;
@@ -349,7 +356,8 @@ export class GameScene extends Phaser.Scene {
         if (!this.cutscene.fire({ on: 'bossLastWords', boss }, fall)) fall();
       }),
       listen<BossDefeatedPayload>(Events.BossDefeated, ({ final }) => {
-        if (final) this.scatterCats();
+        // The last boss of the campaign takes every cat with her. A custom game only ends at its last wave: an earlier Federer is just a boss.
+        if (final && (this.run.mode !== 'custom' || this.waves.isFinalWave)) this.scatterCats();
       }),
       listen(Events.Victory, () => this.onVictory()),
       listen(Events.EnemyKilled, () => {
@@ -360,7 +368,7 @@ export class GameScene extends Phaser.Scene {
         this.player.heal((WAVE_TIMING.clearHeal + (late ? WAVE_TIMING.lateHeal.bonus : 0)) * getDifficulty().heal);
         this.effects.floatText(this.player.x, this.player.y - 56, pick(WAVE_CLEARED_LINES), '#9be28f', 26);
         // Belt upgrade pick (waves 3, 6, 9, 12 and 14; endless: every 3rd wave). The next wave waits until the screen has been and gone.
-        if (beltUpgradeDue(wave, this.run.mode, FINAL_WAVE) && (anyUpgradeOpen() || eligibleSynergies().length > 0)) {
+        if (this.plan.upgradeDue(wave) && (anyUpgradeOpen() || eligibleSynergies().length > 0)) {
           this.waves.postpone(gameClock.now, BELT_UPGRADE_OFFER.delayMs + 600);
           this.time.delayedCall(BELT_UPGRADE_OFFER.delayMs, () => this.openUpgrades(wave));
         }
@@ -383,6 +391,7 @@ export class GameScene extends Phaser.Scene {
     this.setupPause();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       off.forEach((f) => f());
+      setRunDifficulty(null); // the next run (and the menu) read the chosen difficulty again
       this.cutscene.destroy();
       this.scene.stop('UIScene');
       this.scene.stop('CutsceneScene');
@@ -648,6 +657,7 @@ export class GameScene extends Phaser.Scene {
     addLifetime(this.score.kills);
     const summary: RunSummary = {
       difficulty: getDifficultyId(),
+      difficultyName: getDifficulty().name,
       timeMs: this.stats.timeMs,
       bestCombo: this.combo.best,
       comboRecord: Math.max(comboRecord, this.combo.best),
@@ -655,7 +665,7 @@ export class GameScene extends Phaser.Scene {
       hits: this.stats.hits,
       perfectDodges: this.stats.perfectDodges,
     };
-    return { score: this.score.score, kills: this.score.kills, wave: this.waves.wave, best: this.score.best, isNewBest: this.score.finish(), mode: this.run.mode, summary };
+    return { score: this.score.score, kills: this.score.kills, wave: this.waves.wave, best: this.score.best, isNewBest: this.score.finish(), mode: this.run.mode, custom: this.run.custom, summary };
   }
 
   /** The last boss fell: a 'victory' cutscene (if the content has one) plays first, then the victory screen. */
@@ -687,7 +697,9 @@ export class GameScene extends Phaser.Scene {
     const silence: MusicPayload = { track: null };
     bus.emit(Events.MusicTrack, silence);
     const data = this.endData();
-    this.time.delayedCall(1300, () => this.scene.start('VictoryScene', data));
+    // A custom game ends on the plain end screen (won): the campaign's hidden message stays a secret and endless stays locked.
+    if (this.run.mode === 'custom') this.time.delayedCall(1300, () => this.scene.start('GameOverScene', { ...data, won: true }));
+    else this.time.delayedCall(1300, () => this.scene.start('VictoryScene', data));
   }
 
   /** Esc opens the pause menu; so does losing window focus. GameScene and UIScene freeze, PauseScene draws on top. */

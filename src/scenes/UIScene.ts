@@ -10,11 +10,13 @@ import { ENDLESS } from '../config/waves';
 import { MARTI_13 } from '../config/curses';
 import { showWaveFanfare } from '../ui/WaveFanfare';
 import { FONT } from '../config/style';
+import { CUSTOM_TEXT } from '../content/customGame';
 import { ENDLESS_TEXT, LUCKY_TEXT, MARTI_13_TEXT, PICKUP_LABELS, TOUCH_TEXT } from '../content/lines';
 import { usesTouchControls } from '../core/device';
 import { readMs } from '../core/readingTime';
 import { getAutoAttack } from '../core/settings';
-import { readRun, type RunOptions } from '../core/run';
+import { readRun, recordModeOf, type RunOptions } from '../core/run';
+import { planFor } from '../core/wavePlan';
 import { getDifficulty, getDifficultyId } from '../core/difficulty';
 import { DEFAULT_DIFFICULTY } from '../config/difficulty';
 import { loadBest } from '../core/storage';
@@ -62,6 +64,8 @@ export class UIScene extends Phaser.Scene {
   private bestText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
   private run: RunOptions = readRun(undefined);
+  /** The last wave of this run (custom HUD: "Valul 4 / 10"), or null when it has none. */
+  private finalWave: number | null = null;
   private bossBar!: BossBar;
   private buffBadges!: BuffBadges;
   private beltBadges!: BeltBadges;
@@ -74,6 +78,7 @@ export class UIScene extends Phaser.Scene {
 
   init(data: Partial<RunOptions>): void {
     this.run = readRun(data);
+    this.finalWave = planFor(this.run).finalWave;
   }
 
   create(): void {
@@ -93,7 +98,9 @@ export class UIScene extends Phaser.Scene {
     this.bossBar = new BossBar(this);
     this.add.text(HUD.name.x, HUD.name.y, 'VARU', { ...style, fontSize: `${HUD.name.size}px` });
     this.scoreText = this.add.text(GAME.width - HUD.margin, HUD.score.y, 'Scor: 0', { ...style, fontSize: `${HUD.score.size}px` }).setOrigin(1, 0);
-    this.bestText = this.add.text(GAME.width - HUD.margin, HUD.best.y, loadBest(this.run.mode, getDifficultyId()) > 0 ? `Record: ${loadBest(this.run.mode, getDifficultyId())}` : '', { ...style, fontSize: `${touch ? HUD.touch.bestSize : HUD.best.size}px`, strokeThickness: HUD.best.strokeThickness }).setOrigin(1, 0).setAlpha(HUD.best.alpha);
+    const recordMode = recordModeOf(this.run.mode); // a custom game has no record
+    const record = recordMode ? loadBest(recordMode, getDifficultyId()) : 0;
+    this.bestText = this.add.text(GAME.width - HUD.margin, HUD.best.y, record > 0 ? `Record: ${record}` : '', { ...style, fontSize: `${touch ? HUD.touch.bestSize : HUD.best.size}px`, strokeThickness: HUD.best.strokeThickness }).setOrigin(1, 0).setAlpha(HUD.best.alpha);
     this.waveText = this.add.text(GAME.width / 2, HUD.wave.y, '', { ...style, fontSize: `${HUD.wave.size}px` }).setOrigin(0.5, 0);
     if (touch) {
       // The reminder is wrapped to fit between the two thumbs and fades away after the first seconds of the run.
@@ -189,10 +196,13 @@ export class UIScene extends Phaser.Scene {
       listen<WavePayload>(Events.WaveStarted, ({ wave }) => {
         this.surrenderedWave = false;
         const endless = this.run.mode === 'endless';
-        const tag = getDifficultyId() === DEFAULT_DIFFICULTY ? '' : ` · ${getDifficulty().name}`; // Ușor / Greu / Coșmar shows next to the wave
-        this.waveText.setText((endless ? `Valul ${wave} · ${ENDLESS_TEXT.hud}` : `Valul ${wave}`) + tag);
+        const custom = this.run.mode === 'custom';
+        const tag = getDifficultyId() === DEFAULT_DIFFICULTY || custom ? '' : ` · ${getDifficulty().name}`; // Ușor / Greu / Coșmar shows next to the wave
+        if (custom) this.waveText.setText(`${CUSTOM_TEXT.hudWave(wave, this.finalWave)} · ${CUSTOM_TEXT.hudTag}`); // "Valul 4 / 10 · Personalizat"
+        else this.waveText.setText((endless ? `Valul ${wave} · ${ENDLESS_TEXT.hud}` : `Valul ${wave}`) + tag);
         this.banner(`VALUL ${wave}`, HUD.banner.color);
         if (wave === MARTI_13.wave) this.banner(MARTI_13_TEXT.banner, HUD.banner.marti13Color, GAME.height / 2 + HUD.banner.marti13YOffset, HUD.banner.marti13Size);
+        if (custom && wave === 1) this.banner(CUSTOM_TEXT.banner, HUD.banner.endlessColor, GAME.height / 2 + HUD.banner.endlessYOffset, HUD.banner.endlessSize);
         if (endless && wave === ENDLESS.startWave) this.banner(ENDLESS_TEXT.banner, HUD.banner.endlessColor, GAME.height / 2 + HUD.banner.endlessYOffset, HUD.banner.endlessSize);
       }),
     ];
