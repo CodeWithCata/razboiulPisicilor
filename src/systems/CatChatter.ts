@@ -3,11 +3,12 @@ import Phaser from 'phaser';
 import { isBossType } from '../config/balance';
 import type { BubbleKind } from '../config/bubble';
 import { CHATTER } from '../config/chatter';
+import { MUSTARD_EGG } from '../config/easterEgg';
 import { READING } from '../config/reading';
 import { CAT_BUMPED_LINES, CAT_CHATTER, HIDEOUT_SLEEPY_TAUNTS, HIDEOUT_TAUNTS, pick } from '../content/lines';
 import { gameClock } from '../core/clock';
 import { readMs } from '../core/readingTime';
-import { Events, listen, type CatBumpPayload, type CatPoppedPayload, type ShoutPayload } from '../core/events';
+import { Events, listen, type CatBumpPayload, type CatPoppedPayload, type MustardEggPayload, type ShoutPayload } from '../core/events';
 import type { Enemy } from '../entities/Enemy';
 import { CatBubble } from '../ui/CatBubble';
 
@@ -45,6 +46,7 @@ export class CatChatter {
       listen<CatBumpPayload>(Events.CatBump, (e) => this.onBump(e)),
       listen<CatPoppedPayload>(Events.CatPopped, (e) => this.onPopped(e)),
       listen<ShoutPayload>(Events.BossShout, (e) => this.onShout(e)),
+      listen<MustardEggPayload>(Events.MustardEgg, (e) => this.onMustardEgg(e)),
     ];
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       off.forEach((f) => f());
@@ -138,6 +140,27 @@ export class CatChatter {
     this.add(text, 'shout', boss ?? null, x, y, boss ? boss.y - y : 0, now);
   }
 
+  /**
+   * The mustard Easter egg: every cat on screen (the ones nearest the middle, at most `MUSTARD_EGG.maxBubbles`) shows the same line at once.
+   * Chatter bubbles that were already up go away first so the cats do not talk twice, and normal chatter waits until the joke is over.
+   */
+  private onMustardEgg({ line }: MustardEggPayload): void {
+    const now = gameClock.now;
+    for (let i = this.bubbles.length - 1; i >= 0; i--) {
+      if (this.bubbles[i]!.kind !== 'talk') continue;
+      this.bubbles[i]!.view.destroy();
+      this.bubbles.splice(i, 1);
+    }
+    const view = this.scene.cameras.main.worldView;
+    const away = (cat: Enemy): number => Phaser.Math.Distance.Squared(cat.x, cat.y, view.centerX, view.centerY);
+    const cats = (this.enemies.getChildren() as Enemy[])
+      .filter((cat) => cat.active && cat.alive && !cat.caged && this.onScreen(cat.x, cat.y))
+      .sort((a, b) => away(a) - away(b))
+      .slice(0, MUSTARD_EGG.maxBubbles);
+    for (const cat of cats) this.add(line, 'talk', cat, cat.x, cat.y, cat.displayHeight / 2, now, MUSTARD_EGG.lifeMs);
+    this.nextAt = Math.max(this.nextAt, now + MUSTARD_EGG.lifeMs); // no new chatter while the joke is up
+  }
+
   private say(line: string, cat: Enemy | null, x: number, y: number, now: number): void {
     this.add(line, 'talk', cat, x, y, cat ? cat.displayHeight / 2 : 0, now);
   }
@@ -149,7 +172,8 @@ export class CatChatter {
     return x >= view.x + pad && x <= view.right - pad && y >= view.y + pad && y <= view.bottom - pad;
   }
 
-  private add(line: string, kind: BubbleKind, cat: Enemy | null, x: number, y: number, lift: number, now: number): void {
+  /** `talkLifeMs` = how long a chatter bubble stays instead of `CHATTER.lifeMs` (a shout always uses `CHATTER.shout.lifeMs`). */
+  private add(line: string, kind: BubbleKind, cat: Enemy | null, x: number, y: number, lift: number, now: number, talkLifeMs: number = CHATTER.lifeMs): void {
     if (!this.onScreen(cat ? cat.x : x, cat ? cat.y - lift : y)) return; // the speaker is off screen: no bubble at all
     const view = new CatBubble(this.scene, line, kind, CHATTER.look.depth);
     const shout = kind === 'shout';
@@ -162,7 +186,7 @@ export class CatChatter {
       lift,
       bornAt: now,
       goneAt: -1,
-      lifeMs: readMs(line, shout ? CHATTER.shout.lifeMs : CHATTER.lifeMs, READING.bubbleMaxMs), // long lines stay long enough to be read
+      lifeMs: readMs(line, shout ? CHATTER.shout.lifeMs : talkLifeMs, READING.bubbleMaxMs), // long lines stay long enough to be read
       fadeMs: shout ? CHATTER.shout.fadeMs : CHATTER.fadeMs,
     };
     this.bubbles.push(bubble);

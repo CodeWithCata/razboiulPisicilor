@@ -81,6 +81,14 @@ export class BeltSystem {
     this.player.hiddenInTornado = this.sweep.hidesBody;
   }
 
+  /** A cutscene starts: drop any swing, spin or thrown belt in progress (its strap must not stay frozen on screen) and put the belt back in his fist. */
+  halt(): void {
+    this.cancelAll();
+    this.player.beltInHand = true;
+    this.player.spinTurn = 0;
+    this.player.hiddenInTornado = false;
+  }
+
   /** Dev helper: make every attack ready right now. */
   resetCooldowns(): void {
     this.readyAt.swing = 0;

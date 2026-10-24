@@ -36,6 +36,7 @@ import { TouchOverlay } from '../input/touch/TouchOverlay';
 import { BeltSystem } from '../systems/BeltSystem';
 import { BallLobSystem } from '../systems/BallLobSystem';
 import { CatChatter } from '../systems/CatChatter';
+import { MustardEgg } from '../systems/MustardEgg';
 import { CrowRainSystem } from '../systems/CrowRainSystem';
 import { Blackout } from '../systems/Blackout';
 import { DayNight } from '../systems/DayNight';
@@ -50,6 +51,8 @@ import { Weather } from '../systems/Weather';
 import { WeatherCurses } from '../systems/WeatherCurses';
 import { Effects } from '../systems/Effects';
 import { CutsceneSystem } from '../systems/cutscene/CutsceneSystem';
+import { ENDING_VIDEO } from '../config/endingVideo';
+import { playEndingVideo } from '../ui/EndingVideo';
 import { HitStop } from '../systems/HitStop';
 import { HitFeel } from '../systems/HitFeel';
 import { JokeSystem } from '../systems/JokeSystem';
@@ -134,6 +137,8 @@ export class GameScene extends Phaser.Scene {
   private weatherCurses!: WeatherCurses;
   private slowMo!: SlowMoSystem;
   private cutscene!: CutsceneSystem;
+  /** True while the ending video plays (update does nothing). */
+  private endingPlaying = false;
   private surrender!: SurrenderSystem;
   private lucky!: LuckyCatSystem;
   private fanThrow!: FanThrowSystem;
@@ -169,6 +174,7 @@ export class GameScene extends Phaser.Scene {
     this.plan = planFor(this.run);
     setRunDifficulty(this.run.mode === 'custom' && this.run.custom ? customDifficulty(this.run.custom) : null); // a custom game plays on its own numbers until it ends
     this.gameOver = false;
+    this.endingPlaying = false;
     this.pendingHides = 0;
     this.bomberAnnounced = false;
     this.curses = null;
@@ -226,6 +232,7 @@ export class GameScene extends Phaser.Scene {
     this.lowHp = new LowHpSystem(this); // heartbeat while Varu is low on health
     this.pinball = new PinballSystem(); // a flung cat hurts the cat it slams into
     this.chatter = new CatChatter(this, this.enemies); // cats say things now and then
+    new MustardEgg(this); // Easter egg: the first mustard barrel makes every cat ask who "belit mauștarul"
     this.dayNight = new DayNight(this, this.plan, this.obstacles); // afternoon to night over the waves, lamps at night (solid)
     new LampSystem(this, this.player, this.dayNight.lamps); // the lamps can be broken
     this.blackout = new Blackout(this, this.player, this.enemies, this.dayNight.lamps); // the emo cat's lights out: dark with soft circles of light
@@ -446,6 +453,7 @@ export class GameScene extends Phaser.Scene {
     const dt = gameClock.scaled(delta);
     this.arena.crowd.update(SLOW_MO.slowCrowd ? dt : delta); // before the game over return: the crowd roars or sulks on the end screens too
     if (this.gameOver) return;
+    if (this.endingPlaying) return; // the ending video covers the screen
     // A cutscene holds the game still: only the director runs (in real time) and Varu walks on its scripted input.
     if (this.cutscene.active) {
       this.cutscene.update(delta);
@@ -683,8 +691,26 @@ export class GameScene extends Phaser.Scene {
       this.slowMo.whenBossBeatEnds(() => this.onVictory());
       return;
     }
-    if (this.cutscene.fire({ on: 'victory' }, () => this.finishVictory())) return;
-    this.finishVictory();
+    if (this.cutscene.fire({ on: 'victory' }, () => this.playEnding())) return;
+    this.playEnding();
+  }
+
+  /** After the victory scene (if any): the campaign's ending video, then the victory screen. Custom and endless runs skip the video. */
+  private playEnding(): void {
+    if (this.gameOver) return;
+    if (!ENDING_VIDEO.enabled || this.run.mode !== 'campaign') {
+      this.finishVictory();
+      return;
+    }
+    this.endingPlaying = true; // the game is held still under the black overlay
+    this.slowMo.stop();
+    this.hitStop.cancel();
+    this.physics.pause();
+    this.touchOverlay?.setHidden(true);
+    playEndingVideo(() => {
+      this.endingPlaying = false;
+      this.finishVictory();
+    });
   }
 
   private finishVictory(): void {
@@ -738,6 +764,7 @@ export class GameScene extends Phaser.Scene {
     this.slowMo.stop();
     this.hitStop.cancel();
     this.projectiles.clearAll();
+    this.belt.halt(); // the Start click can swing the belt just before the first scene: no strap may stay frozen over Varu
     this.player.setVelocity(0, 0);
     this.touchOverlay?.setHidden(true);
   }
@@ -769,7 +796,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private openPause(): void {
-    if (this.gameOver || this.scene.isPaused() || !this.scene.isActive()) return;
+    if (this.gameOver || this.endingPlaying || this.scene.isPaused() || !this.scene.isActive()) return;
     this.hitStop.cancel();
     this.scene.pause();
     this.scene.pause('UIScene');

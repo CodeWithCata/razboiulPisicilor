@@ -98,6 +98,7 @@ export const Events = {
   PropCracked: 'prop:cracked', // PropCrackedPayload (a rock got a new crack)
   PropThinned: 'prop:thinned', // PropThinnedPayload (a bush got a size smaller: a few leaves fly)
   PropDestroyed: 'prop:destroyed', // PropDestroyedPayload (a bush, rock, box... was smashed for good)
+  MustardEgg: 'egg:mustard', // MustardEggPayload (the first mustard barrel broke: every cat asks the question, a voice says it)
   ArenaChanged: 'arena:changed', // the solid tiles changed (a prop was destroyed): path finding must rebuild
   PropAmbient: 'prop:ambient', // PropAmbientPayload (a prop does something by itself)
   Victory: 'game:victory',
@@ -351,6 +352,11 @@ export interface PropThinnedPayload extends PointPayload {
   stage: number;
   /** Which BUSH_VARIANTS look the bush has (the leaves take its color). */
   variant: number;
+}
+
+/** The mustard Easter egg went off (`systems/MustardEgg.ts`): CatChatter shows the line over the cats, AudioSystem says it out loud. */
+export interface MustardEggPayload {
+  line: string;
 }
 
 export interface PropDestroyedPayload extends PointPayload {

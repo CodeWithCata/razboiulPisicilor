@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { musicKey, sfxKey, type MusicId, type SoundId } from '../assets/audioKeys';
 import { AUDIO_MANIFEST, MUSIC_MANIFEST } from '../assets/audioManifest';
 import { AUDIO } from '../config/audio';
+import { MUSTARD_EGG } from '../config/easterEgg';
 import { BAD_PICKUP_FX } from '../config/pickups';
 import { PROP_LOOK } from '../config/props';
 import { Cooldowns } from '../core/cooldown';
@@ -16,6 +17,7 @@ import {
   type HeartbeatPayload,
   type IdleHabitPayload,
   type MusicPayload,
+  type MustardEggPayload,
   type MutePayload,
   type PropDestroyedPayload,
   type PropHitPayload,
@@ -25,6 +27,7 @@ import { isMuted, toggleMuted } from '../core/mute';
 import { getVolume } from '../core/settings';
 import { MusicPlayer } from './audio/MusicPlayer';
 import { SoundBank } from './audio/SoundBank';
+import { speak, stopSpeaking } from './audio/Voice';
 
 interface PlayOptions {
   /** Multiplies the pitch (1 = normal). */
@@ -189,7 +192,11 @@ export class AudioSystem {
       listen<CutsceneBlipPayload>(Events.CutsceneBlip, ({ pitch }) => this.play('blip', { pitch })), // a cutscene voice: one chirp per typed letter
       listen<CutsceneSfxPayload>(Events.CutsceneSfx, ({ id }) => this.play(id)), // a cutscene asked for a sound
       listen(Events.PropCracked, () => this.play('thud', { pitch: 0.6 })),
-      listen<MutePayload>(Events.MuteChanged, () => this.applyMute()),
+      listen<MustardEggPayload>(Events.MustardEgg, ({ line }) => this.say(line)), // the mustard Easter egg: a voice asks who did it
+      listen<MutePayload>(Events.MuteChanged, () => {
+        this.applyMute();
+        if (isMuted()) stopSpeaking(); // a line being said stops with the mute
+      }),
       listen<VolumePayload>(Events.VolumeChanged, ({ kind }) => {
         this.applyVolumes();
         if (kind === 'sfx') this.play('pickup'); // a little "ding" so you can hear the new effects level
@@ -216,6 +223,13 @@ export class AudioSystem {
       return;
     }
     this.bank?.play(id, rate, volume);
+  }
+
+  /** Say a line out loud with the device's voice (`systems/audio/Voice.ts`), at the effects volume the player chose. Nothing when muted. */
+  private say(line: string): void {
+    if (isMuted()) return;
+    const voice = MUSTARD_EGG.voice;
+    speak(line, { ...voice, volume: voice.volume * AUDIO.masterVolume * getVolume('sfx') });
   }
 
   /** Cache keys of the real recordings for a sound that actually loaded (a missing file just falls back to the placeholder). */
@@ -270,6 +284,7 @@ export class AudioSystem {
 
   private destroy(): void {
     this.stopMusic();
+    stopSpeaking();
     this.off.forEach((f) => f());
     this.off.length = 0;
   }
