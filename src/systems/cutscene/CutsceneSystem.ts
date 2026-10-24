@@ -17,6 +17,7 @@ import {
   type CutsceneEndPayload,
   type CutsceneLinePayload,
   type CutsceneStartPayload,
+  type PickupPayload,
   type WavePayload,
 } from '../../core/events';
 import type { RunMode } from '../../core/run';
@@ -69,6 +70,9 @@ export class CutsceneSystem {
       listen<WavePayload>(Events.WaveStarted, (p) => this.fire({ on: 'waveStart', wave: p.wave })),
       listen<WavePayload>(Events.WaveCleared, (p) => this.fire({ on: 'waveCleared', wave: p.wave })),
       listen(Events.BeltUpgradePicked, () => this.fire({ on: 'upgradePicked' })),
+      listen(Events.BomberArrived, () => this.fire({ on: 'bomberArrived' })),
+      listen<PickupPayload>(Events.PickupCollected, (p) => this.fire({ on: 'pickup', kind: p.kind })),
+      listen(Events.TennisArrived, () => this.fire({ on: 'tennisArrived' })),
       listen<BossSpawnedPayload>(Events.BossSpawned, (p) => this.fire({ on: 'bossSpawned', boss: p.boss })),
       listen<BossDefeatedPayload>(Events.BossDefeated, (p) => this.fire({ on: 'bossDefeated', boss: p.boss })),
       listen(Events.PlayerDied, () => this.cancel()),

@@ -156,6 +156,21 @@ export const MYSTERY_REVEAL_WORD = 'SURPRIZĂ!';
 /** The word that pops up over Varu when the question mark gave a BAD pickup (the label of the bad pickup follows). */
 export const BAD_LUCK_WORD = 'GHINION!';
 
+/**
+ * Other things the pickup can shout (chosen at random, together with the normal label in PICKUP_LABELS). Add more lines here.
+ * Use pickupLabel(kind) to get one. The banner of the crow rain keeps the fixed label.
+ */
+export const PICKUP_LABEL_ALTS: Partial<Record<PickupKind, readonly string[]>> = {
+  crow: ['Ia uite, mă, cade Rapidul!', 'Rapidul se duce în liga a doua!'],
+  goldenBelt: ['Mâna fantomă!'],
+};
+
+/** A random label for a pickup: the normal one or one of its alternatives. */
+export function pickupLabel(kind: PickupKind): string {
+  const alts = PICKUP_LABEL_ALTS[kind];
+  return alts && alts.length > 0 ? pick([PICKUP_LABELS[kind], ...alts]) : PICKUP_LABELS[kind];
+}
+
 /** Short names for the HUD timers. */
 export const BUFF_NAMES: Record<BuffKind, string> = {
   lapte: 'Lapte',

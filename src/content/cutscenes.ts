@@ -23,6 +23,8 @@ export const SPEAKERS: Readonly<Record<string, SpeakerDef>> = {
   queen: { name: BOSS_TEXT.queen.name, color: '#e9a6ff', tex: Tex.BossQueen, photo: 'queen', blipPitch: 0.8 },
   mafia: { name: BOSS_TEXT.mafia.name, color: '#b9b2c9', tex: Tex.BossMafia, photo: 'mafia', blipPitch: 0.65 },
   federer: { name: BOSS_TEXT.federer.name, color: '#9be28f', tex: Tex.BossFederer, photo: 'federer', blipPitch: 1.25 },
+  bomber: { name: 'Bombardierul', color: '#ffb36b', tex: Tex.CatBomber, blipPitch: 0.75 },
+  tennis: { name: 'Pisica de tenis', color: '#d9f27a', tex: Tex.CatTennis, blipPitch: 1.2 },
   cat: { name: 'Pisică', color: '#ffd9a8', tex: Tex.CatNormal, blipPitch: 1.4 },
   /** No name tag, no picture: a narrator box. */
   narrator: { name: '', color: '#fff3d6', blipPitch: 0.9 },
@@ -124,6 +126,50 @@ export const CUTSCENES: Readonly<Record<string, CutsceneScript>> = {
       { do: 'wait', ms: 300 },
     ],
   },
+  /** THE FIRST BOMBER CAT of the run walks in: a stand-in cat walks up to Varu, introduces itself and promises to blow him up too. (The real bomber waits, the game is held during a scene.) */
+  bomberDebut: {
+    steps: [
+      { do: 'camera', to: { at: 'varu' }, zoom: 1.35, ms: 700 },
+      { do: 'show', id: 'bomber', tex: Tex.CatBomber, at: { at: 'varu', dx: 420, dy: -40 }, size: 90, fadeMs: 300 },
+      { do: 'move', actor: 'bomber', to: { at: 'varu', dx: 130, dy: -20 }, ms: 1000, face: true },
+      { do: 'face', actor: 'varu', toward: { at: 'bomber' } },
+      { do: 'emote', actor: 'bomber', kind: 'pop' },
+      { do: 'say', who: 'bomber', text: 'Sunt bombardierul. Am bubuit blocul de la școala 2 și o să te bubui și pe tine.' },
+      { do: 'hide', id: 'bomber', fadeMs: 400 },
+      { do: 'wait', ms: 300 },
+    ],
+  },
+  /** THE FIRST TENNIS CAT of the run walks in: a stand-in cat walks up to Varu and says it trained for tennis all its life, on the campus. (The real one waits, the game is held during a scene.) */
+  tennisDebut: {
+    steps: [
+      { do: 'camera', to: { at: 'varu' }, zoom: 1.35, ms: 700 },
+      { do: 'show', id: 'tennis', tex: Tex.CatTennis, at: { at: 'varu', dx: 420, dy: -40 }, size: 90, fadeMs: 300 },
+      { do: 'move', actor: 'tennis', to: { at: 'varu', dx: 130, dy: -20 }, ms: 1000, face: true },
+      { do: 'face', actor: 'varu', toward: { at: 'tennis' } },
+      { do: 'emote', actor: 'tennis', kind: 'pop' },
+      { do: 'say', who: 'tennis', text: 'M-am antrenat toată viața la tenis, în campus.' },
+      { do: 'hide', id: 'tennis', fadeMs: 400 },
+      { do: 'wait', ms: 300 },
+    ],
+  },
+  /** THE FIRST CARPATI of the run: Varu is surprised the game has them. */
+  firstCarpati: {
+    steps: [
+      { do: 'camera', to: { at: 'varu' }, zoom: 1.35, ms: 500 },
+      { do: 'emote', actor: 'varu', kind: 'pop' },
+      { do: 'say', who: 'varu', text: 'Bă, au Carpați în jocul ăsta!' },
+      { do: 'wait', ms: 200 },
+    ],
+  },
+  /** THE FIRST MILK of the run: he drinks it and judges the taste. */
+  firstMilk: {
+    steps: [
+      { do: 'camera', to: { at: 'varu' }, zoom: 1.35, ms: 500 },
+      { do: 'say', who: 'varu', text: '*Gustă*! Cam vâscos!' },
+      { do: 'say', who: 'varu', text: 'Sigur e lapte?' },
+      { do: 'wait', ms: 200 },
+    ],
+  },
   /** The older, generic opening: still used for the endless and custom games (the story is the campaign's). */
   introArena: {
     steps: [
@@ -191,6 +237,9 @@ export const CUTSCENES: Readonly<Record<string, CutsceneScript>> = {
       { do: 'emote', actor: 'boss', kind: 'shake' },
       { do: 'say', who: 'narrator', text: '*Simona vede cureaua și începe să se panicheze.*', auto: true },
       { do: 'say', who: 'federer', text: 'O să te distrug!' },
+      { do: 'say', who: 'varu', text: 'Știi gluma cu tenis?' },
+      { do: 'say', who: 'federer', text: 'Ce tenis?' },
+      { do: 'say', who: 'varu', text: 'Trage-mă de penis, hahaha!' },
       { do: 'shake' },
     ],
   },
@@ -241,6 +290,10 @@ export const CUTSCENE_TRIGGERS: readonly CutsceneTriggerDef[] = [
   // After the first wave of the campaign (once per run; the next wave starts by itself when the scene is over or skipped).
   { when: { on: 'waveCleared', wave: 1 }, mode: 'campaign', play: 'afterWave1', repeat: 'run' },
   // After the first belt upgrade pick (wave 3's screen) and after wave 5, campaign only (the next wave starts by itself when the scene is over or skipped).
+  { when: { on: 'pickup', kind: 'crochete' }, play: 'firstCarpati', repeat: 'run' },
+  { when: { on: 'pickup', kind: 'lapte' }, play: 'firstMilk', repeat: 'run' },
+  { when: { on: 'bomberArrived' }, play: 'bomberDebut', repeat: 'run' },
+  { when: { on: 'tennisArrived' }, play: 'tennisDebut', repeat: 'run' },
   { when: { on: 'upgradePicked' }, mode: 'campaign', play: 'firstUpgrade', repeat: 'run' },
   { when: { on: 'waveCleared', wave: 5 }, mode: 'campaign', play: 'afterWave5', repeat: 'run' },
   { when: { on: 'waveStart', wave: 13 }, mode: 'campaign', play: 'wave13', repeat: 'run' },

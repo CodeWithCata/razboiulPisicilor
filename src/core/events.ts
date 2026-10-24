@@ -35,6 +35,7 @@ export const Events = {
   LuckyGone: 'lucky:gone', // PointPayload (she got away: a line and a sound; catching her is a normal EnemyKilled with type 'lucky')
   FanThrow: 'fan:throw', // FanThrowPayload (a fan in the stands let go of something: the whoosh, the crowd cheers)
   BomberArrived: 'bomber:arrived', // PointPayload (the FIRST bomber cat of the run walks in: the crowd shouts, a sting plays)
+  TennisArrived: 'tennis:arrived', // PointPayload (the FIRST tennis cat of the run walks in: the tennis debut cutscene starts)
   PetardSwatted: 'petard:swatted', // PointPayload (Varu's umbrella sent a bomber's petard back at her: a cheer, a sound)
   ThrowPetard: 'petard:throw', // ThrowPetardPayload (the bomber cat lobs a petard: FanThrowSystem flies it and sets it off, same as the fans' petards)
   FanLanded: 'fan:landed', // FanLandedPayload (it hit the floor: a gift pops out, or a petard starts to hiss)

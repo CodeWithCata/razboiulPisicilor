@@ -36,7 +36,7 @@ import {
 import { gameClock } from '../core/clock';
 import { readMs } from '../core/readingTime';
 import { READING } from '../config/reading';
-import { JAIL_WORDS, BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, MONSTER_STACK_WORDS, PICKUP_LABELS, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, UMBRELLA_WORDS, DODGE_WORDS, SCOOTER_WORDS, ICE_WORDS, pick } from '../content/lines';
+import { JAIL_WORDS, BACKFLIP_WORDS, BALL_LAND_WORDS, BUMP_WORDS, IDLE_HABIT_WORDS, CROW_MISS_LINES, CROW_SCREAM, HIT_WORDS, BAD_LUCK_WORD, MONSTER_STACK_WORDS, pickupLabel, POOF_WORDS, SMOKE_LINES, SURRENDER_LINES, LUCKY_ESCAPE_LINES, LUCKY_TEXT, UMBRELLA_WORDS, DODGE_WORDS, SCOOTER_WORDS, ICE_WORDS, pick } from '../content/lines';
 import { BELT_CHAIN } from '../config/finisher';
 import { WEAK_POINT } from '../config/weakPoint';
 import { FINISHER_WORDS, WEAK_POINT_TEXT } from '../content/juice';
@@ -181,7 +181,7 @@ export class Effects {
       listen<ExplosionPayload>(Events.Explosion, (e) => this.explosion(e)),
       listen<PickupPayload>(Events.PickupCollected, ({ kind, x, y }) => {
         this.sparks.explode(14, x, y);
-        this.floatText(x, y - 34, PICKUP_LABELS[kind], css(PICKUP_VISUALS[kind].color), 30);
+        this.floatText(x, y - 34, pickupLabel(kind), css(PICKUP_VISUALS[kind].color), 30);
       }),
       listen<BuffStackedPayload>(Events.BuffStacked, ({ kind, stacks, max, x, y }) => {
         const S = STACK_FX;
@@ -196,7 +196,7 @@ export class Effects {
         this.sparks.explode(B.sparks, x, y);
         this.shake(B.shake.ms, B.shake.intensity);
         this.floatText(x, y + B.word.offsetY, BAD_LUCK_WORD, B.word.color, B.word.size);
-        this.floatText(x, y - 34, PICKUP_LABELS[kind], color, 30);
+        this.floatText(x, y - 34, pickupLabel(kind), color, 30);
       }),
       listen<CrowImpactPayload>(Events.CrowImpact, (e) => this.crowImpact(e)),
       listen<BallLandedPayload>(Events.BallLanded, (e) => this.ballLanded(e)),

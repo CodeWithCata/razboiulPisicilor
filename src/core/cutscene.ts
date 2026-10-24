@@ -1,7 +1,7 @@
 /** @file Cutscene scripts as data (the step types, triggers) and the pure step runner (sequence / parallel, skip = fast-forward). No Phaser. */
 import type { MusicId, SoundId } from '../assets/audioKeys';
 import type { TexKey } from '../assets/keys';
-import type { BossType } from '../config/balance';
+import type { BossType, PickupKind } from '../config/balance';
 import type { EaseName } from './ease';
 import type { RunMode } from './run';
 
@@ -60,6 +60,12 @@ export type CutsceneTrigger =
   | { on: 'waveCleared'; wave: number }
   /** Varu picked a belt upgrade on the upgrade screen (the scene starts once the game is running again). */
   | { on: 'upgradePicked' }
+  /** The first bomber cat of the run walks in (`Events.BomberArrived`). */
+  | { on: 'bomberArrived' }
+  /** The first tennis cat of the run walks in (`Events.TennisArrived`). */
+  | { on: 'tennisArrived' }
+  /** Varu picked up (and used) a pickup of this kind (`Events.PickupCollected`). */
+  | { on: 'pickup'; kind: PickupKind }
   | { on: 'bossSpawned'; boss?: BossType }
   | { on: 'bossDefeated'; boss?: BossType }
   /** The killing blow landed: the boss is on 1 HP and talks before it falls (config/cutscene.ts `BOSS_LAST_WORDS`). */
@@ -82,6 +88,7 @@ export interface CutsceneTriggerDef {
 export function triggerMatches(when: CutsceneTrigger, event: CutsceneTrigger): boolean {
   if (when.on !== event.on) return false;
   if ('wave' in when) return 'wave' in event && when.wave === event.wave;
+  if ('kind' in when) return 'kind' in event && event.kind === when.kind;
   if ('boss' in when && when.boss !== undefined) return 'boss' in event && event.boss === when.boss;
   return true;
 }

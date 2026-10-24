@@ -6,12 +6,14 @@ import { AUDIO } from '../config/audio';
 import { MUSTARD_EGG } from '../config/easterEgg';
 import { BAD_PICKUP_FX } from '../config/pickups';
 import { PROP_LOOK } from '../config/props';
+import { VOICE } from '../config/voice';
 import { Cooldowns } from '../core/cooldown';
 import {
   Events,
   listen,
   type CrowImpactPayload,
   type CutsceneBlipPayload,
+  type CutsceneLinePayload,
   type CutsceneSfxPayload,
   type FanLandedPayload,
   type HeartbeatPayload,
@@ -27,6 +29,7 @@ import { isMuted, toggleMuted } from '../core/mute';
 import { getVolume } from '../core/settings';
 import { MusicPlayer } from './audio/MusicPlayer';
 import { SoundBank } from './audio/SoundBank';
+import { VoicePlayer } from './audio/VoicePlayer';
 import { speak, stopSpeaking } from './audio/Voice';
 
 interface PlayOptions {
@@ -52,6 +55,10 @@ export class AudioSystem {
   private readonly sfxBus: GainNode | null;
   private readonly bank: SoundBank | null;
   private readonly music: MusicPlayer | null;
+  /** Recorded cutscene lines (`assets/voiceManifest.ts`). Null when the browser has no Web Audio. */
+  private readonly voice: VoicePlayer | null;
+  /** The cutscene line on screen has a recording: its typed-letter blips stay quiet. */
+  private voiceSpeaking = false;
   private readonly cooldowns = new Cooldowns();
   private readonly off: Array<() => void> = [];
   private track: MusicId | null = null;
@@ -69,12 +76,14 @@ export class AudioSystem {
       this.sfxBus.connect(this.master);
       this.bank = new SoundBank(this.ctx, this.sfxBus);
       this.music = new MusicPlayer(this.ctx, this.musicBus);
+      this.voice = new VoicePlayer(this.ctx, this.sfxBus);
     } else {
       this.master = null;
       this.musicBus = null;
       this.sfxBus = null;
       this.bank = null;
       this.music = null;
+      this.voice = null;
     }
 
     this.applyMute();
@@ -189,13 +198,21 @@ export class AudioSystem {
       listen(Events.LuckyGone, () => this.play('boing', { pitch: AUDIO.pitch.luckyGone })), // and a boing when she gets away
       listen(Events.CatSurrender, () => this.play('miau', { pitch: AUDIO.pitch.surrender })), // a small, high, sad "miau" as the white flag goes up
       listen<HeartbeatPayload>(Events.Heartbeat, ({ intensity }) => this.play('heartbeat', { gain: 0.65 + 0.35 * intensity })),
-      listen<CutsceneBlipPayload>(Events.CutsceneBlip, ({ pitch }) => this.play('blip', { pitch })), // a cutscene voice: one chirp per typed letter
+      listen<CutsceneBlipPayload>(Events.CutsceneBlip, ({ pitch }) => {
+        if (!this.voiceSpeaking) this.play('blip', { pitch }); // a cutscene voice: one chirp per typed letter (a recorded line speaks for itself)
+      }),
+      listen<CutsceneLinePayload>(Events.CutsceneLine, ({ speaker, text }) => this.sayRecorded(speaker, text)),
+      listen(Events.CutsceneLineEnd, () => this.stopRecorded()), // the box moved on or the scene was skipped
+      listen(Events.CutsceneEnd, () => this.stopRecorded()),
       listen<CutsceneSfxPayload>(Events.CutsceneSfx, ({ id }) => this.play(id)), // a cutscene asked for a sound
       listen(Events.PropCracked, () => this.play('thud', { pitch: 0.6 })),
       listen<MustardEggPayload>(Events.MustardEgg, ({ line }) => this.say(line)), // the mustard Easter egg: a voice asks who did it
       listen<MutePayload>(Events.MuteChanged, () => {
         this.applyMute();
-        if (isMuted()) stopSpeaking(); // a line being said stops with the mute
+        if (isMuted()) {
+          stopSpeaking(); // a line being said stops with the mute
+          this.stopRecorded();
+        }
       }),
       listen<VolumePayload>(Events.VolumeChanged, ({ kind }) => {
         this.applyVolumes();
@@ -223,6 +240,16 @@ export class AudioSystem {
       return;
     }
     this.bank?.play(id, rate, volume);
+  }
+
+  /** A cutscene line starts: play its recording if there is one (the blips then stay quiet). Nothing when muted. */
+  private sayRecorded(speaker: string, text: string): void {
+    this.voiceSpeaking = !isMuted() && (this.voice?.play(speaker, text, VOICE.volume) ?? false);
+  }
+
+  private stopRecorded(): void {
+    this.voiceSpeaking = false;
+    this.voice?.stop();
   }
 
   /** Say a line out loud with the device's voice (`systems/audio/Voice.ts`), at the effects volume the player chose. Nothing when muted. */
@@ -285,6 +312,7 @@ export class AudioSystem {
   private destroy(): void {
     this.stopMusic();
     stopSpeaking();
+    this.stopRecorded();
     this.off.forEach((f) => f());
     this.off.length = 0;
   }

@@ -149,6 +149,8 @@ export class GameScene extends Phaser.Scene {
   private pendingHides = 0;
   /** The first bomber cat of the run has been announced (`Events.BomberArrived`). */
   private bomberAnnounced = false;
+  /** The first tennis cat of the run has been announced (`Events.TennisArrived`). */
+  private tennisAnnounced = false;
   private pickups!: PickupSystem;
   private enemyContext!: EnemyContext;
   /** Walking distances to whatever the cats chase (Varu or the laser dot). */
@@ -177,6 +179,7 @@ export class GameScene extends Phaser.Scene {
     this.endingPlaying = false;
     this.pendingHides = 0;
     this.bomberAnnounced = false;
+    this.tennisAnnounced = false;
     this.curses = null;
     gameClock.reset(this.time.now); // game time starts here; it stops while the pause menu is open
     resetBeltUpgrades(); // a new run starts with a plain belt
@@ -584,6 +587,10 @@ export class GameScene extends Phaser.Scene {
     if (type === 'bomber' && !this.bomberAnnounced) {
       this.bomberAnnounced = true;
       bus.emit(Events.BomberArrived, { x: enemy.x, y: enemy.y });
+    }
+    if (type === 'tennis' && !this.tennisAnnounced) {
+      this.tennisAnnounced = true;
+      bus.emit(Events.TennisArrived, { x: enemy.x, y: enemy.y });
     }
     return enemy;
   }
