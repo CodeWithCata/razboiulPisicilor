@@ -1,6 +1,6 @@
 /** @file Cutscene content: who speaks (names, colors, voices), the scripts themselves (the story opening, the boss entrances and last words) and what triggers them. */
 import { Tex, type PhotoId, type TexKey } from '../assets/keys';
-import type { CutsceneScript, CutsceneStep, CutsceneTriggerDef } from '../core/cutscene';
+import type { CutsceneScript, CutsceneTriggerDef } from '../core/cutscene';
 import { BOSS_LAST_WORDS } from '../config/cutscene';
 import { BOSS_TEXT } from './bosses';
 
@@ -28,35 +28,10 @@ export const SPEAKERS: Readonly<Record<string, SpeakerDef>> = {
   narrator: { name: '', color: '#fff3d6', blipPitch: 0.9 },
 };
 
-/** A short boss entrance: the camera goes to the boss, the boss talks, Varu answers, the ground shakes. */
-function bossEntrance(who: 'queen' | 'mafia' | 'federer', line: string, reply: string): CutsceneScript {
-  const steps: CutsceneStep[] = [
-    { do: 'camera', to: { at: 'boss' }, zoom: 1.3, ms: 800 },
-    { do: 'say', who, text: line },
-    { do: 'emote', actor: 'boss', kind: 'pop' },
-    { do: 'say', who: 'varu', text: reply, auto: true },
-    { do: 'shake' },
-  ];
-  return { steps };
-}
-
-/** A boss's last words: the camera goes to the boss, it talks, Varu answers, it says one more thing, then it falls (the game does that when the scene ends). */
-function bossLastWords(who: 'queen' | 'mafia' | 'federer', line: string, reply: string, lastLine: string): CutsceneScript {
-  return {
-    steps: [
-      { do: 'camera', to: { at: 'boss' }, zoom: 1.5, ms: 700 },
-      { do: 'say', who, text: line },
-      { do: 'emote', actor: 'boss', kind: 'pop' },
-      { do: 'say', who: 'varu', text: reply, auto: true },
-      { do: 'say', who, text: lastLine },
-    ],
-  };
-}
-
 /**
  * THE CUTSCENES. One entry per scene, written as steps (types and every step: `core/cutscene.ts`,
  * the how-to: `docs/CUTSCENES.md`). Words go right here in the `say` steps (Romanian).
- * `story` is the real opening; the boss scenes are still simple placeholders: change or delete them freely.
+ * `story` is the real opening; the boss scenes are written from the owner's dictation.
  */
 export const CUTSCENES: Readonly<Record<string, CutsceneScript>> = {
   /**
@@ -139,6 +114,16 @@ export const CUTSCENES: Readonly<Record<string, CutsceneScript>> = {
       { do: 'wait', ms: 300 },
     ],
   },
+  /** WAVE 13 (campaign): Varu feels he is close to something great, and realises he is already in the campus he wants to get back to. */
+  wave13: {
+    steps: [
+      { do: 'camera', to: { at: 'varu' }, zoom: 1.35, ms: 700 },
+      { do: 'emote', actor: 'varu', kind: 'pop' },
+      { do: 'say', who: 'varu', text: 'Wow! Cred că mă apropii de ceva măreț.' },
+      { do: 'say', who: 'varu', text: 'Vreau să ajung înapoi în campus, dar sunt deja în campus.' },
+      { do: 'wait', ms: 300 },
+    ],
+  },
   /** The older, generic opening: still used for the endless and custom games (the story is the campaign's). */
   introArena: {
     steps: [
@@ -190,8 +175,26 @@ export const CUTSCENES: Readonly<Record<string, CutsceneScript>> = {
       { do: 'shake' },
     ],
   },
-  federerEntrance: bossEntrance('federer', 'Șase-zero. Ți-am spus eu.', 'Încă nu am servit.'),
-  // Last words (PLACEHOLDER lines: rewrite them with the real inside jokes).
+  /** SIMONA MIAULEP (the tennis boss) ENTERS: she lists who Varu already beat, challenges him to tennis, they trade insults, Varu shows his belt, she panics and swears to destroy him. */
+  federerEntrance: {
+    steps: [
+      { do: 'camera', to: { at: 'boss' }, zoom: 1.3, ms: 800 },
+      { do: 'say', who: 'federer', text: 'Ai ajuns până aici. Ai învins-o pe Ioana. Ai învins-o și pe AnatasYOU.' },
+      { do: 'emote', actor: 'boss', kind: 'pop' },
+      { do: 'say', who: 'federer', text: 'Iar acum trebuie să mă învingi pe mine la un meci de tenis.' },
+      { do: 'say', who: 'varu', text: 'Doar atât? Sună foarte ușor.' },
+      { do: 'say', who: 'federer', text: 'E mai greu decât crezi tu. Tu n-ai fost niciodată bun la tenis.' },
+      { do: 'say', who: 'varu', text: 'Vom vedea noi. O să-ți dau 6 puncte. Și o să dau și 6-6 cu zarul ca să te speli.' },
+      { do: 'say', who: 'federer', text: 'Nu mai vorbi prostii, băiatule. Nimeni nu m-a învins la o partidă de tenis.' },
+      { do: 'say', who: 'federer', text: 'Eu sunt Simona Miaulep. Apleacă-te în fața mea, sclavule.' },
+      { do: 'say', who: 'varu', text: 'Bine, tu o fi Simona Miaulep, dar ai uitat ceva. Eu am cureaua și tu n-ai cureaua.' },
+      { do: 'emote', actor: 'boss', kind: 'shake' },
+      { do: 'say', who: 'narrator', text: '*Simona vede cureaua și începe să se panicheze.*', auto: true },
+      { do: 'say', who: 'federer', text: 'O să te distrug!' },
+      { do: 'shake' },
+    ],
+  },
+  // Last words (queen, emo and Simona are written from the owner's dictation).
   /** THE QUEEN'S LAST WORDS: the killing blow landed and she stands on 1 HP; she cannot believe a kid beat her, Varu brags about his belt, she says "Au!", he says goodbye, and she falls when the scene ends. */
   queenLastWords: {
     steps: [
@@ -214,7 +217,19 @@ export const CUTSCENES: Readonly<Record<string, CutsceneScript>> = {
       { do: 'say', who: 'varu', text: 'Oare dă cu zarul 6-6 ca să se spele?', auto: true },
     ],
   },
-  federerLastWords: bossLastWords('federer', 'Mi-ai returnat toate mingile... Bravo.', 'Mulțumesc. Aproape renunțam.', 'Joc, set... și meci. Pentru tine.'),
+  /** SIMONA MIAULEP'S LAST WORDS: Varu says it was too easy, she cannot believe it, he explains who waits for him at home and begs to be sent back, she agrees (the curses fell) and says goodbye. */
+  federerLastWords: {
+    steps: [
+      { do: 'camera', to: { at: 'boss' }, zoom: 1.5, ms: 700 },
+      { do: 'say', who: 'varu', text: 'Prea ușor.' },
+      { do: 'say', who: 'federer', text: 'Cum? Cum de ai putut să mă învingi?' },
+      { do: 'say', who: 'varu', text: 'Am pe cineva acasă care mă așteaptă și îmi aduce aminte foarte mult de tine. Și de Regina Ioana. Și de acea pisică drăguță, AnatasYOU.' },
+      { do: 'say', who: 'varu', text: 'Te rog, trimite-mă acasă.' },
+      { do: 'emote', actor: 'boss', kind: 'pop' },
+      { do: 'say', who: 'federer', text: 'Prea bine. Blestemele ei au picat. Farmecele, am vrut să zic.' },
+      { do: 'say', who: 'federer', text: 'La revedere, tânăr blond.' },
+    ],
+  },
 };
 
 /** WHEN a scene plays: an event of the run -> a key of CUTSCENES. */
@@ -228,6 +243,7 @@ export const CUTSCENE_TRIGGERS: readonly CutsceneTriggerDef[] = [
   // After the first belt upgrade pick (wave 3's screen) and after wave 5, campaign only (the next wave starts by itself when the scene is over or skipped).
   { when: { on: 'upgradePicked' }, mode: 'campaign', play: 'firstUpgrade', repeat: 'run' },
   { when: { on: 'waveCleared', wave: 5 }, mode: 'campaign', play: 'afterWave5', repeat: 'run' },
+  { when: { on: 'waveStart', wave: 13 }, mode: 'campaign', play: 'wave13', repeat: 'run' },
   { when: { on: 'bossSpawned', boss: 'queen' }, play: 'queenEntrance' },
   { when: { on: 'bossSpawned', boss: 'mafia' }, play: 'mafiaEntrance' },
   { when: { on: 'bossSpawned', boss: 'federer' }, play: 'federerEntrance' },
